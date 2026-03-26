@@ -361,6 +361,47 @@ function RatingTrackingSection() {
   );
 }
 
+// ── Aggregate Data Opt-In (Sprint 8) ──────────────────────────────────────
+
+function AggregateDataSettings({
+  settings,
+  onSave,
+}: {
+  settings: import("@/lib/storage").UserSettings;
+  onSave: (s: import("@/lib/storage").UserSettings) => void;
+}) {
+  const enabled = settings.contributeAnonymousData ?? false;
+
+  function handleToggle(val: boolean) {
+    const updated = { ...settings, contributeAnonymousData: val };
+    onSave(updated);
+  }
+
+  return (
+    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
+      <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.5rem" }}>
+        📊 Anonymized Usage Data
+      </div>
+      <p style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.6, marginBottom: "0.85rem" }}>
+        Help improve percentile rankings for everyone. When enabled, anonymous solve rate and
+        speed data is stored locally for future Supabase sync. No account data, no PII,
+        no puzzle IDs — only aggregate statistics.
+      </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ color: "#64748b", fontSize: "0.85rem" }}>
+          Contribute anonymous data
+        </span>
+        <Toggle enabled={enabled} onChange={handleToggle} />
+      </div>
+      {enabled && (
+        <div style={{ marginTop: "0.75rem", color: "#4ade80", fontSize: "0.78rem" }}>
+          ✓ Contributing — data stored in localStorage under <code style={{ backgroundColor: "#0d1621", padding: "0.1rem 0.3rem", borderRadius: "3px" }}>ctt_aggregate_contribution</code>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Settings Component ────────────────────────────────────────────────
 
 export default function Settings() {
@@ -424,6 +465,12 @@ export default function Settings() {
 
       {/* Rating Tracking Section — Sprint 4 */}
       <RatingTrackingSection />
+
+      {/* Sprint 8: Aggregate Data Opt-In */}
+      <AggregateDataSettings
+        settings={getUserSettings()}
+        onSave={(s) => { saveUserSettings(s); }}
+      />
 
       {/* PGN Upload Section */}
       <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>

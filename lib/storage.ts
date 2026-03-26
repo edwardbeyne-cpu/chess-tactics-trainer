@@ -771,12 +771,19 @@ export function updateQuestProgress(
 export interface UserSettings {
   chesscomUsername: string;
   lichessUsername: string;
-  trackChesscom: boolean;   // Sprint 7: opt-in toggle
-  trackLichess: boolean;    // Sprint 7: opt-in toggle
+  trackChesscom: boolean;              // Sprint 7: opt-in toggle
+  trackLichess: boolean;               // Sprint 7: opt-in toggle
+  contributeAnonymousData: boolean;    // Sprint 8: opt-in aggregate data collection
 }
 
 function defaultUserSettings(): UserSettings {
-  return { chesscomUsername: "", lichessUsername: "", trackChesscom: false, trackLichess: false };
+  return {
+    chesscomUsername: "",
+    lichessUsername: "",
+    trackChesscom: false,
+    trackLichess: false,
+    contributeAnonymousData: false,
+  };
 }
 
 export function getUserSettings(): UserSettings {
@@ -789,6 +796,7 @@ export function getUserSettings(): UserSettings {
       lichessUsername: data.lichessUsername ?? "",
       trackChesscom: data.trackChesscom ?? false,
       trackLichess: data.trackLichess ?? false,
+      contributeAnonymousData: data.contributeAnonymousData ?? false,
     };
   } catch {
     return defaultUserSettings();

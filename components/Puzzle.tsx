@@ -25,12 +25,23 @@ import {
   getPuzzleFailCount,
   checkAndAwardAchievements,
   updateTacticsRating,
+  getTacticsRatingData,
   type Achievement,
 } from "@/lib/storage";
+
+// Helper: get current tactics rating for aggregate tracking
+function getTacticsRatingDataForAgg(): number {
+  if (typeof window === "undefined") return 800;
+  return getTacticsRatingData().tacticsRating;
+}
 import type { SM2Outcome } from "@/lib/storage";
 import AchievementToast from "./AchievementToast";
+import SocialProofBanner from "./SocialProofBanner";
 import { fetchPuzzleByTheme, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
-import { startTrial } from "@/lib/trial";
+import { startTrial, hasActiveSubscription } from "@/lib/trial";
+import { isSocialProofSuppressed } from "@/lib/socialProof";
+import { recordAggregateAttempt, updateWeeklyRatingGain } from "@/lib/aggregate";
+import { getSubscriptionTier } from "@/lib/percentile";
 import ChessBoard from "./ChessBoard";
 
 // ── Mode: lichess (live), classic (static), or mixed ──────────────────────
@@ -535,6 +546,7 @@ export default function Puzzle() {
   // Session puzzle count for social proof
   const sessionCountRef = useRef(0);
   const [showSocialProof, setShowSocialProof] = useState(false);
+  const [socialProofType, setSocialProofType] = useState<"fifth-puzzle" | "failed-puzzle">("fifth-puzzle");
 
   // Sprint 7: Tactics rating milestone toast
   const [ratingMilestoneToast, setRatingMilestoneToast] = useState<{ rating: number } | null>(null);
@@ -736,16 +748,39 @@ export default function Puzzle() {
 
     // Sprint 7: Update in-app ELO tactics rating
     if (currentPuzzle?.rating) {
-      const { milestoneHit } = updateTacticsRating(currentPuzzle.rating, isSolved);
+      const { delta, milestoneHit } = updateTacticsRating(currentPuzzle.rating, isSolved);
       if (milestoneHit !== null) {
         setRatingMilestoneToast({ rating: milestoneHit });
         setTimeout(() => setRatingMilestoneToast(null), 5000);
       }
+      // Sprint 8: aggregate rating gain
+      updateWeeklyRatingGain(delta);
     }
 
-    // Social proof every 5 puzzles
-    if (sessionState.puzzleCount > 0 && sessionState.puzzleCount % 5 === 0) {
-      setShowSocialProof(true);
+    // Sprint 8: Record aggregate contribution (opt-in)
+    const subTier = getSubscriptionTier();
+    const sessionStateForAgg = getSessionState();
+    recordAggregateAttempt({
+      patternName: themeName,
+      patternTier: tier,
+      solved: isSolved,
+      solveTimeMs: solveTimeMs > 0 ? solveTimeMs : null,
+      subscriptionTier: subTier,
+      currentRating: getTacticsRatingDataForAgg(),
+      puzzlesInSession: sessionStateForAgg.puzzleCount,
+    });
+
+    // Sprint 8: Social proof — show after every 5th puzzle (free users only)
+    const isFree = !hasActiveSubscription();
+    if (isFree && !isSocialProofSuppressed()) {
+      if (sessionState.puzzleCount > 0 && sessionState.puzzleCount % 5 === 0) {
+        setSocialProofType("fifth-puzzle");
+        setShowSocialProof(true);
+      } else if (!isSolved) {
+        // Show fail prompt if no other prompt shown yet this session
+        setSocialProofType("failed-puzzle");
+        setShowSocialProof(true);
+      }
     }
   }
 
@@ -828,25 +863,13 @@ export default function Puzzle() {
         </div>
       )}
 
-      {/* Social proof banner every 5 puzzles */}
+      {/* Sprint 8: Social proof banner (free users, max once per session) */}
       {showSocialProof && (
-        <div style={{
-          backgroundColor: "#0a1525",
-          border: "1px solid #1e3a5c",
-          borderRadius: "10px",
-          padding: "0.8rem 1.25rem",
-          marginBottom: "1rem",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "1rem",
-        }}>
-          <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
-            💡 Improver users solve 40% more puzzles per session — unlock unlimited training.
-            <a href="/pricing" style={{ color: "#4ade80", marginLeft: "0.5rem", textDecoration: "none" }}>Start 30-day free trial →</a>
-          </span>
-          <button onClick={() => setShowSocialProof(false)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "1rem" }}>✕</button>
-        </div>
+        <SocialProofBanner
+          type={socialProofType}
+          onDismiss={() => setShowSocialProof(false)}
+          onUpgrade={() => { setShowSocialProof(false); window.location.href = "/pricing"; }}
+        />
       )}
 
       {/* Mode toggle */}

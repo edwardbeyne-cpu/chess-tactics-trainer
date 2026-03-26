@@ -17,6 +17,7 @@ import {
 import type { SM2Outcome } from "@/lib/storage";
 import type { Puzzle } from "@/data/puzzles";
 import { fetchPuzzleById, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
+import { hasActiveSubscription } from "@/lib/trial";
 import ChessBoard from "./ChessBoard";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -423,6 +424,7 @@ export default function Review() {
   }
 
   if (queue.length === 0) {
+    const isFreeUser = !hasActiveSubscription();
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
         <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review Queue</h1>
@@ -431,25 +433,58 @@ export default function Review() {
           <div style={{ color: "#4ade80", fontSize: "1.25rem", fontWeight: "bold", marginBottom: "0.5rem" }}>No puzzles due today!</div>
           <div style={{ color: "#94a3b8" }}>Solve new puzzles and come back when reviews are scheduled.</div>
         </div>
-        {/* Social proof for free users — show what SRS provides */}
-        <div style={{ backgroundColor: "#0a1525", border: "1px solid #1e3a5c", borderRadius: "12px", padding: "1.5rem", marginTop: "1.5rem" }}>
-          <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>🧠</div>
-          <div style={{ color: "#e2e8f0", fontWeight: "bold", marginBottom: "0.5rem" }}>
-            How Spaced Repetition Works
+
+        {/* Sprint 8: Social proof callout for free users */}
+        {isFreeUser && (
+          <div style={{
+            backgroundColor: "#0a1520",
+            border: "1px solid #1e3a5c",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            marginTop: "1.5rem",
+          }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>🧠</div>
+            <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.5rem" }}>
+              Improver users review an average of 12 puzzles per day and improve 2× faster.
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.65, marginBottom: "0.75rem" }}>
+              Your missed puzzles are being forgotten right now. Without spaced repetition, you&apos;ll
+              retain only 20% of patterns after 30 days (Ebbinghaus forgetting curve, 1885).
+              Improver users on SM-2 retain 80%.
+            </div>
+            <a
+              href="/pricing"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#4ade80",
+                color: "#0f1a0a",
+                padding: "0.6rem 1.25rem",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "bold",
+                fontSize: "0.9rem",
+              }}
+            >
+              Unlock spaced repetition →
+            </a>
           </div>
-          <div style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.65, marginBottom: "1rem" }}>
-            Your missed puzzles are scheduled for review at optimal intervals using the SM-2 algorithm —
-            the same system used by medical students. Research shows spaced repetition improves
-            long-term retention by <strong style={{ color: "#4ade80" }}>up to 400%</strong> vs random practice.
+        )}
+
+        {/* Non-free: show the educational SRS callout */}
+        {!isFreeUser && (
+          <div style={{ backgroundColor: "#0a1525", border: "1px solid #1e3a5c", borderRadius: "12px", padding: "1.5rem", marginTop: "1.5rem" }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>🧠</div>
+            <div style={{ color: "#e2e8f0", fontWeight: "bold", marginBottom: "0.5rem" }}>
+              How Spaced Repetition Works
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.65 }}>
+              Your missed puzzles are scheduled at optimal intervals using the SM-2 algorithm.
+              Research shows spaced repetition improves long-term retention by{" "}
+              <strong style={{ color: "#4ade80" }}>up to 400%</strong> vs random practice (Wozniak SM-2, 1987).
+            </div>
           </div>
-          <div style={{ color: "#94a3b8", fontSize: "0.85rem", marginBottom: "1rem" }}>
-            Improver users with full SM-2 review queues retain <strong style={{ color: "#4ade80" }}>80% of learned patterns</strong> after
-            30 days vs 20% without spaced repetition (Ebbinghaus, 1885 — replicated across hundreds of studies).
-          </div>
-          <a href="/pricing" style={{ display: "inline-block", backgroundColor: "#4ade80", color: "#0f0f1a", padding: "0.6rem 1.25rem", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "0.9rem" }}>
-            Start 30-day free trial →
-          </a>
-        </div>
+        )}
+
         {allQueued.length > 0 && <UpcomingQueue allQueued={allQueued} />}
       </div>
     );

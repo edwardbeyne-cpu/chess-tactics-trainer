@@ -26,6 +26,8 @@ import {
   type Quest,
   type RatingSnapshot,
 } from "@/lib/storage";
+import { hasActiveSubscription } from "@/lib/trial";
+import DashboardSocialProof from "./DashboardSocialProof";
 
 // Dynamically import recharts-based chart (avoids SSR issues)
 const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
@@ -555,6 +557,11 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Sprint 8: Social proof comparison card (free users only) */}
+      {!hasActiveSubscription() && (
+        <DashboardSocialProof onUpgrade={() => { window.location.href = "/pricing"; }} />
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
         {/* Streak Card */}

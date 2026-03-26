@@ -5,6 +5,14 @@ import patterns, { type Pattern } from "@/data/patterns";
 import puzzles from "@/data/puzzles";
 import { getAttempts, getAllPatternStats, type PatternStat } from "@/lib/storage";
 import { calculatePatternRank, getNextRankProgress, RANK_DEFINITIONS } from "@/lib/srs";
+import {
+  calcPercentile,
+  topPercentLabel,
+  getCommunityAvgTimeSec,
+  getSubscriptionTier,
+  canSeePercentile,
+} from "@/lib/percentile";
+import BellCurve from "./BellCurve";
 
 // ── Color helpers ─────────────────────────────────────────────────────────
 
@@ -92,11 +100,13 @@ function PatternCard({
   sm2Stat,
   locked,
   lockMessage,
+  subscriptionTier,
 }: {
   pattern: Pattern;
   sm2Stat?: PatternStat;
   locked: boolean;
   lockMessage?: string;
+  subscriptionTier: ReturnType<typeof getSubscriptionTier>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const legacyStats = useMemo(() => getLegacyPatternStats(pattern), [pattern]);
@@ -116,6 +126,15 @@ function PatternCard({
   const rank = calculatePatternRank(totalAttempts, solveRate, avgSolveTimeMs);
   const nextProgress = getNextRankProgress(totalAttempts, solveRate, avgSolveTimeMs);
 
+  // Sprint 8: Percentile data
+  const MIN_ATTEMPTS_FOR_PERCENTILE = 10;
+  const canShowPercentile = canSeePercentile(subscriptionTier, pattern.tier);
+  const hasEnoughAttempts = (sm2Stat?.totalAttempts ?? 0) >= MIN_ATTEMPTS_FOR_PERCENTILE;
+  const percentile = canShowPercentile && hasEnoughAttempts && hasSM2
+    ? calcPercentile(pattern.name, solveRate)
+    : null;
+  const communityAvgSec = getCommunityAvgTimeSec(pattern.name);
+
   if (locked) {
     return (
       <div style={{
@@ -123,12 +142,12 @@ function PatternCard({
         border: "1px solid #1e2a3a",
         borderRadius: "12px",
         padding: "1.25rem",
-        opacity: 0.6,
+        opacity: 0.75,
         cursor: "default",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <span style={{ fontSize: "1.5rem", filter: "grayscale(100%)" }}>{pattern.icon}</span>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <span style={{ color: "#64748b", fontWeight: "bold", fontSize: "0.95rem" }}>
                 🔒 {pattern.name}
@@ -136,6 +155,18 @@ function PatternCard({
             </div>
             <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.25rem" }}>
               {lockMessage ?? "Complete previous tier to unlock"}
+            </div>
+            {/* Sprint 8: Social proof on locked cards */}
+            <div style={{
+              color: "#f59e0b",
+              fontSize: "0.7rem",
+              marginTop: "0.5rem",
+              backgroundColor: "#1a1508",
+              borderRadius: "4px",
+              padding: "0.3rem 0.5rem",
+              display: "inline-block",
+            }}>
+              📈 Improver users who master this pattern gain an average of +43 rating points
             </div>
           </div>
         </div>
@@ -175,6 +206,36 @@ function PatternCard({
               )}
               {/* Rank Badge */}
               {totalAttempts > 0 && <RankBadge rank={rank} />}
+              {/* Sprint 8: Percentile badge */}
+              {canShowPercentile && hasEnoughAttempts && percentile !== null && (
+                <span style={{
+                  backgroundColor: "#0a1f12",
+                  color: "#4ade80",
+                  border: "1px solid #1a4a2a",
+                  borderRadius: "4px",
+                  padding: "0.1rem 0.4rem",
+                  fontSize: "0.65rem",
+                  fontWeight: "bold",
+                }}>
+                  {topPercentLabel(percentile)}
+                </span>
+              )}
+              {/* Free user teaser on unlocked patterns */}
+              {subscriptionTier === "free" && totalAttempts >= MIN_ATTEMPTS_FOR_PERCENTILE && (
+                <span style={{
+                  backgroundColor: "#1a1508",
+                  color: "#f59e0b",
+                  border: "1px solid #4a3a0a",
+                  borderRadius: "4px",
+                  padding: "0.1rem 0.4rem",
+                  fontSize: "0.62rem",
+                  cursor: "help",
+                }}
+                  title="Upgrade to see how you rank against other players"
+                >
+                  📊 Rank hidden
+                </span>
+              )}
             </div>
 
             {hasSM2 ? (
@@ -234,6 +295,57 @@ function PatternCard({
           <p style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.6, margin: 0, marginBottom: "0.75rem" }}>
             {pattern.description}
           </p>
+
+          {/* Sprint 8: Percentile detail section */}
+          {canShowPercentile && hasSM2 && (
+            <div style={{ marginBottom: "0.85rem" }}>
+              {hasEnoughAttempts && percentile !== null ? (
+                <div style={{
+                  backgroundColor: "#0a1520",
+                  border: "1px solid #1e3a5c",
+                  borderRadius: "8px",
+                  padding: "0.85rem",
+                  marginBottom: "0.5rem",
+                }}>
+                  <div style={{ color: "#4ade80", fontSize: "1rem", fontWeight: "bold", marginBottom: "0.3rem" }}>
+                    You&apos;re in the {topPercentLabel(percentile)} for {pattern.name}
+                  </div>
+                  <BellCurve
+                    patternName={pattern.name}
+                    userSolveRate={solveRate}
+                    percentile={percentile}
+                    width={280}
+                    height={110}
+                  />
+                  {communityAvgSec !== null && (
+                    <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.5rem" }}>
+                      Players at your level average ~{communityAvgSec}s on this pattern
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: "#475569", fontSize: "0.75rem", marginBottom: "0.5rem", fontStyle: "italic" }}>
+                  📊 Not enough data yet — solve {MIN_ATTEMPTS_FOR_PERCENTILE - (sm2Stat?.totalAttempts ?? 0)} more puzzles to see your percentile rank
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Free user upgrade teaser in expanded view */}
+          {subscriptionTier === "free" && totalAttempts >= MIN_ATTEMPTS_FOR_PERCENTILE && (
+            <div style={{
+              backgroundColor: "#1a1508",
+              border: "1px solid #4a3a0a",
+              borderRadius: "8px",
+              padding: "0.7rem",
+              marginBottom: "0.75rem",
+              fontSize: "0.78rem",
+              color: "#94a3b8",
+            }}>
+              📊 <a href="/pricing" style={{ color: "#f59e0b", textDecoration: "none", fontWeight: "bold" }}>Upgrade to see how you rank against other players</a>
+            </div>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
             <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
               <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.2rem" }}>TOTAL ATTEMPTS</div>
@@ -279,6 +391,7 @@ function TierSection({
   sm2Stats,
   locked,
   progressToUnlock,
+  subscriptionTier,
 }: {
   tier: number;
   tierPatterns: Pattern[];
@@ -286,6 +399,7 @@ function TierSection({
   sm2Stats: Map<string, PatternStat>;
   locked: boolean;
   progressToUnlock?: { at70: number; total: number; prevTier: number };
+  subscriptionTier: ReturnType<typeof getSubscriptionTier>;
 }) {
   const colors = TIER_COLORS[tier];
   return (
@@ -339,6 +453,7 @@ function TierSection({
               sm2Stat={sm2Stat}
               locked={locked}
               lockMessage={`Complete Tier ${tier - 1} to unlock`}
+              subscriptionTier={subscriptionTier}
             />
           );
         })}
@@ -351,6 +466,7 @@ function TierSection({
 
 export default function Patterns() {
   const tiers = [1, 2, 3];
+  const subscriptionTier = useMemo(() => getSubscriptionTier(), []);
 
   const { tierData, sm2StatsMap } = useMemo(() => {
     const allSM2Stats = getAllPatternStats();
@@ -433,6 +549,7 @@ export default function Patterns() {
           sm2Stats={sm2StatsMap}
           locked={tier > 1 ? (tierLockInfo[tier]?.locked ?? false) : false}
           progressToUnlock={tierLockInfo[tier]?.progress}
+          subscriptionTier={subscriptionTier}
         />
       ))}
     </div>
