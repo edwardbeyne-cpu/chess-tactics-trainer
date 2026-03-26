@@ -9,6 +9,7 @@ import {
   type StoredPGN,
   getUserSettings,
   saveUserSettings,
+  fetchAndSavePlatformRatings,
 } from "@/lib/storage";
 
 // TODO Sprint 4: run Stockfish on each position to identify tactical moments
@@ -89,6 +90,38 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// ── Toggle Switch ──────────────────────────────────────────────────────────
+
+function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!enabled)}
+      style={{
+        width: "44px",
+        height: "24px",
+        borderRadius: "12px",
+        border: "none",
+        cursor: "pointer",
+        backgroundColor: enabled ? "#4ade80" : "#2e3a5c",
+        position: "relative",
+        transition: "background-color 0.2s",
+        flexShrink: 0,
+      }}
+    >
+      <div style={{
+        width: "18px",
+        height: "18px",
+        borderRadius: "9px",
+        backgroundColor: "white",
+        position: "absolute",
+        top: "3px",
+        left: enabled ? "23px" : "3px",
+        transition: "left 0.2s",
+      }} />
+    </button>
+  );
+}
+
 // ── Rating Tracking Section ────────────────────────────────────────────────
 
 function RatingTrackingSection() {
@@ -96,11 +129,34 @@ function RatingTrackingSection() {
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState<"chesscom" | "lichess" | null>(null);
   const [testResult, setTestResult] = useState<{ platform: string; success: boolean; message: string } | null>(null);
+  const [fetching, setFetching] = useState(false);
 
-  async function handleSave() {
-    saveUserSettings(settings);
+  async function handleSave(newSettings = settings) {
+    saveUserSettings(newSettings);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  async function handleToggleChesscom(enabled: boolean) {
+    const newSettings = { ...settings, trackChesscom: enabled };
+    setSettings(newSettings);
+    saveUserSettings(newSettings);
+    if (enabled && newSettings.chesscomUsername) {
+      setFetching(true);
+      await fetchAndSavePlatformRatings();
+      setFetching(false);
+    }
+  }
+
+  async function handleToggleLichess(enabled: boolean) {
+    const newSettings = { ...settings, trackLichess: enabled };
+    setSettings(newSettings);
+    saveUserSettings(newSettings);
+    if (enabled && newSettings.lichessUsername) {
+      setFetching(true);
+      await fetchAndSavePlatformRatings();
+      setFetching(false);
+    }
   }
 
   async function testChesscom() {
@@ -151,103 +207,133 @@ function RatingTrackingSection() {
         📈 Rating Tracking
       </h2>
       <p style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
-        Connect your Chess.com and/or Lichess accounts to track your rating progress over time.
-        Both are optional — if not connected, no rating section will appear on your dashboard.
-        No login required — just your username.
+        Optionally connect your Chess.com and/or Lichess accounts to overlay your platform ratings on the dashboard chart.
+        Both are disabled by default. No login required — just your username.
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {/* Chess.com */}
-        <div>
-          <label style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: "bold", display: "block", marginBottom: "0.5rem" }}>
-            ♟ Chess.com Username
-          </label>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <input
-              type="text"
-              value={settings.chesscomUsername}
-              onChange={(e) => setSettings({ ...settings, chesscomUsername: e.target.value.trim() })}
-              placeholder="e.g. hikaru"
-              style={{
-                flex: 1,
-                backgroundColor: "#162030",
-                border: "1px solid #2e3a5c",
-                borderRadius: "8px",
-                padding: "0.6rem 0.9rem",
-                color: "#e2e8f0",
-                fontSize: "0.9rem",
-              }}
-            />
-            <button
-              onClick={testChesscom}
-              disabled={!settings.chesscomUsername || testing === "chesscom"}
-              style={{
-                backgroundColor: settings.chesscomUsername ? "#2e75b6" : "#162030",
-                color: settings.chesscomUsername ? "white" : "#4a6a8a",
-                border: "none", borderRadius: "8px",
-                padding: "0.6rem 1rem",
-                cursor: settings.chesscomUsername ? "pointer" : "not-allowed",
-                fontSize: "0.85rem",
-              }}
-            >
-              {testing === "chesscom" ? "Testing..." : "Test"}
-            </button>
-            {settings.chesscomUsername && (
-              <button
-                onClick={() => setSettings({ ...settings, chesscomUsername: "" })}
-                style={{ backgroundColor: "#1a0a0a", color: "#ef4444", border: "1px solid #ef444440", borderRadius: "8px", padding: "0.6rem 0.75rem", cursor: "pointer", fontSize: "0.85rem" }}
-              >
-                Clear
-              </button>
-            )}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* ── Chess.com Section ── */}
+        <div style={{ backgroundColor: "#162030", borderRadius: "10px", padding: "1.25rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div>
+              <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: "bold" }}>♟ Track Chess.com rating</div>
+              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.15rem" }}>
+                Shows bullet, blitz, rapid ratings on your dashboard
+              </div>
+            </div>
+            <Toggle enabled={settings.trackChesscom} onChange={handleToggleChesscom} />
           </div>
+          {settings.trackChesscom && (
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem" }}>
+              <input
+                type="text"
+                value={settings.chesscomUsername}
+                onChange={(e) => setSettings({ ...settings, chesscomUsername: e.target.value.trim() })}
+                placeholder="Chess.com username (e.g. hikaru)"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#0d1621",
+                  border: "1px solid #2e3a5c",
+                  borderRadius: "8px",
+                  padding: "0.6rem 0.9rem",
+                  color: "#e2e8f0",
+                  fontSize: "0.9rem",
+                }}
+              />
+              <button
+                onClick={testChesscom}
+                disabled={!settings.chesscomUsername || testing === "chesscom"}
+                style={{
+                  backgroundColor: settings.chesscomUsername ? "#2e75b6" : "#1a2535",
+                  color: settings.chesscomUsername ? "white" : "#4a6a8a",
+                  border: "none", borderRadius: "8px",
+                  padding: "0.6rem 1rem",
+                  cursor: settings.chesscomUsername ? "pointer" : "not-allowed",
+                  fontSize: "0.85rem", whiteSpace: "nowrap",
+                }}
+              >
+                {testing === "chesscom" ? "Testing..." : "Test"}
+              </button>
+              <button
+                onClick={() => handleSave({ ...settings })}
+                style={{
+                  backgroundColor: "#4ade80",
+                  color: "#0f0f1a",
+                  border: "none", borderRadius: "8px",
+                  padding: "0.6rem 1rem",
+                  cursor: "pointer",
+                  fontSize: "0.85rem", fontWeight: "bold",
+                }}
+              >
+                Save
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Lichess */}
-        <div>
-          <label style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: "bold", display: "block", marginBottom: "0.5rem" }}>
-            🔵 Lichess Username
-          </label>
-          <div style={{ display: "flex", gap: "0.75rem" }}>
-            <input
-              type="text"
-              value={settings.lichessUsername}
-              onChange={(e) => setSettings({ ...settings, lichessUsername: e.target.value.trim() })}
-              placeholder="e.g. DrNykterstein"
-              style={{
-                flex: 1,
-                backgroundColor: "#162030",
-                border: "1px solid #2e3a5c",
-                borderRadius: "8px",
-                padding: "0.6rem 0.9rem",
-                color: "#e2e8f0",
-                fontSize: "0.9rem",
-              }}
-            />
-            <button
-              onClick={testLichess}
-              disabled={!settings.lichessUsername || testing === "lichess"}
-              style={{
-                backgroundColor: settings.lichessUsername ? "#2e75b6" : "#162030",
-                color: settings.lichessUsername ? "white" : "#4a6a8a",
-                border: "none", borderRadius: "8px",
-                padding: "0.6rem 1rem",
-                cursor: settings.lichessUsername ? "pointer" : "not-allowed",
-                fontSize: "0.85rem",
-              }}
-            >
-              {testing === "lichess" ? "Testing..." : "Test"}
-            </button>
-            {settings.lichessUsername && (
-              <button
-                onClick={() => setSettings({ ...settings, lichessUsername: "" })}
-                style={{ backgroundColor: "#1a0a0a", color: "#ef4444", border: "1px solid #ef444440", borderRadius: "8px", padding: "0.6rem 0.75rem", cursor: "pointer", fontSize: "0.85rem" }}
-              >
-                Clear
-              </button>
-            )}
+        {/* ── Lichess Section ── */}
+        <div style={{ backgroundColor: "#162030", borderRadius: "10px", padding: "1.25rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div>
+              <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: "bold" }}>🔵 Track Lichess rating</div>
+              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.15rem" }}>
+                Shows bullet, blitz, rapid, classical ratings on your dashboard
+              </div>
+            </div>
+            <Toggle enabled={settings.trackLichess} onChange={handleToggleLichess} />
           </div>
+          {settings.trackLichess && (
+            <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.75rem" }}>
+              <input
+                type="text"
+                value={settings.lichessUsername}
+                onChange={(e) => setSettings({ ...settings, lichessUsername: e.target.value.trim() })}
+                placeholder="Lichess username (e.g. DrNykterstein)"
+                style={{
+                  flex: 1,
+                  backgroundColor: "#0d1621",
+                  border: "1px solid #2e3a5c",
+                  borderRadius: "8px",
+                  padding: "0.6rem 0.9rem",
+                  color: "#e2e8f0",
+                  fontSize: "0.9rem",
+                }}
+              />
+              <button
+                onClick={testLichess}
+                disabled={!settings.lichessUsername || testing === "lichess"}
+                style={{
+                  backgroundColor: settings.lichessUsername ? "#2e75b6" : "#1a2535",
+                  color: settings.lichessUsername ? "white" : "#4a6a8a",
+                  border: "none", borderRadius: "8px",
+                  padding: "0.6rem 1rem",
+                  cursor: settings.lichessUsername ? "pointer" : "not-allowed",
+                  fontSize: "0.85rem", whiteSpace: "nowrap",
+                }}
+              >
+                {testing === "lichess" ? "Testing..." : "Test"}
+              </button>
+              <button
+                onClick={() => handleSave({ ...settings })}
+                style={{
+                  backgroundColor: "#4ade80",
+                  color: "#0f0f1a",
+                  border: "none", borderRadius: "8px",
+                  padding: "0.6rem 1rem",
+                  cursor: "pointer",
+                  fontSize: "0.85rem", fontWeight: "bold",
+                }}
+              >
+                Save
+              </button>
+            </div>
+          )}
         </div>
+
+        {fetching && (
+          <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Fetching ratings...</div>
+        )}
 
         {testResult && (
           <div style={{
@@ -262,27 +348,14 @@ function RatingTrackingSection() {
           </div>
         )}
 
-        <button
-          onClick={handleSave}
-          style={{
-            backgroundColor: saved ? "#0a1f12" : "#4ade80",
-            color: saved ? "#4ade80" : "#0f0f1a",
-            border: saved ? "1px solid #1a4a2a" : "none",
-            borderRadius: "8px",
-            padding: "0.7rem 1.5rem",
-            cursor: "pointer",
-            fontWeight: "bold",
-            fontSize: "0.9rem",
-            alignSelf: "flex-start",
-          }}
-        >
-          {saved ? "✅ Saved!" : "Save Settings"}
-        </button>
+        {saved && (
+          <div style={{ color: "#4ade80", fontSize: "0.85rem" }}>✅ Settings saved!</div>
+        )}
       </div>
 
       <div style={{ marginTop: "1.25rem", backgroundColor: "#162030", borderRadius: "8px", padding: "0.75rem 1rem", fontSize: "0.8rem", color: "#475569" }}>
         💡 Ratings are fetched once per day (23-hour cooldown). Both APIs are public — no API keys required.
-        Rating history will appear on your dashboard once connected.
+        Disabled platforms are completely hidden from your dashboard.
       </div>
     </div>
   );

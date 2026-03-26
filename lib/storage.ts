@@ -8,6 +8,8 @@ const STREAK_KEY = "ctt_streak";
 const QUESTS_KEY = "ctt_quests";
 const RATINGS_KEY = "ctt_ratings";
 const SETTINGS_KEY = "ctt_settings";
+const TACTICS_RATING_KEY = "ctt_tactics_rating";
+const PLATFORM_RATINGS_KEY = "ctt_platform_ratings";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy SRS interval ladder (Sprint 2 system — kept for backward compat)
@@ -769,15 +771,27 @@ export function updateQuestProgress(
 export interface UserSettings {
   chesscomUsername: string;
   lichessUsername: string;
+  trackChesscom: boolean;   // Sprint 7: opt-in toggle
+  trackLichess: boolean;    // Sprint 7: opt-in toggle
+}
+
+function defaultUserSettings(): UserSettings {
+  return { chesscomUsername: "", lichessUsername: "", trackChesscom: false, trackLichess: false };
 }
 
 export function getUserSettings(): UserSettings {
-  if (typeof window === "undefined") return { chesscomUsername: "", lichessUsername: "" };
+  if (typeof window === "undefined") return defaultUserSettings();
   try {
-    const data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") as UserSettings | null;
-    return data ?? { chesscomUsername: "", lichessUsername: "" };
+    const data = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") as Partial<UserSettings> | null;
+    if (!data) return defaultUserSettings();
+    return {
+      chesscomUsername: data.chesscomUsername ?? "",
+      lichessUsername: data.lichessUsername ?? "",
+      trackChesscom: data.trackChesscom ?? false,
+      trackLichess: data.trackLichess ?? false,
+    };
   } catch {
-    return { chesscomUsername: "", lichessUsername: "" };
+    return defaultUserSettings();
   }
 }
 
@@ -846,11 +860,13 @@ export function shouldFetchRatings(): boolean {
 export async function fetchAndSaveRatings(): Promise<void> {
   if (typeof window === "undefined") return;
   const settings = getUserSettings();
-  if (!settings.chesscomUsername && !settings.lichessUsername) return;
+  const fetchChesscom = settings.trackChesscom && !!settings.chesscomUsername;
+  const fetchLichess = settings.trackLichess && !!settings.lichessUsername;
+  if (!fetchChesscom && !fetchLichess) return;
 
   const snapshot: RatingSnapshot = { date: getTodayKey() };
 
-  if (settings.chesscomUsername) {
+  if (fetchChesscom) {
     try {
       const res = await fetch(
         `https://api.chess.com/pub/player/${settings.chesscomUsername}/stats`,
@@ -867,11 +883,11 @@ export async function fetchAndSaveRatings(): Promise<void> {
         };
       }
     } catch {
-      // Ignore fetch errors
+      // Ignore fetch errors — last known snapshot remains
     }
   }
 
-  if (settings.lichessUsername) {
+  if (fetchLichess) {
     try {
       const res = await fetch(
         `https://lichess.org/api/user/${settings.lichessUsername}`,
@@ -897,6 +913,214 @@ export async function fetchAndSaveRatings(): Promise<void> {
   if (snapshot.chesscom || snapshot.lichess) {
     saveRatingSnapshot(snapshot);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 — Platform Ratings (separate storage, respects opt-in toggle)
+// Used by dashboard to show Chess.com / Lichess overlays
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PlatformRatingSnapshot {
+  date: string; // YYYY-MM-DD
+  bullet?: number;
+  blitz?: number;
+  rapid?: number;
+  classical?: number;
+  puzzle?: number;
+}
+
+export interface PlatformRatingsData {
+  chesscom: PlatformRatingSnapshot[];
+  lichess: PlatformRatingSnapshot[];
+  lastFetchedAt: string | null;
+}
+
+export function getPlatformRatingsData(): PlatformRatingsData {
+  if (typeof window === "undefined") return { chesscom: [], lichess: [], lastFetchedAt: null };
+  try {
+    const data = JSON.parse(localStorage.getItem(PLATFORM_RATINGS_KEY) || "null") as PlatformRatingsData | null;
+    return data ?? { chesscom: [], lichess: [], lastFetchedAt: null };
+  } catch {
+    return { chesscom: [], lichess: [], lastFetchedAt: null };
+  }
+}
+
+function savePlatformRatingsData(data: PlatformRatingsData): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PLATFORM_RATINGS_KEY, JSON.stringify(data));
+}
+
+export function shouldFetchPlatformRatings(): boolean {
+  const data = getPlatformRatingsData();
+  if (!data.lastFetchedAt) return true;
+  const hoursSince = (Date.now() - new Date(data.lastFetchedAt).getTime()) / 3600000;
+  return hoursSince >= 23;
+}
+
+export async function fetchAndSavePlatformRatings(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const settings = getUserSettings();
+  const data = getPlatformRatingsData();
+  const today = getTodayKey();
+
+  if (settings.trackChesscom && settings.chesscomUsername) {
+    try {
+      const res = await fetch(
+        `https://api.chess.com/pub/player/${settings.chesscomUsername}/stats`,
+        { headers: { Accept: "application/json" } }
+      );
+      if (res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const json: any = await res.json();
+        const snap: PlatformRatingSnapshot = {
+          date: today,
+          bullet: json?.chess_bullet?.last?.rating,
+          blitz: json?.chess_blitz?.last?.rating,
+          rapid: json?.chess_rapid?.last?.rating,
+          puzzle: json?.tactics?.highest?.rating,
+        };
+        const filtered = data.chesscom.filter((s) => s.date !== today);
+        filtered.push(snap);
+        data.chesscom = filtered.slice(-365);
+      }
+    } catch { /* silent */ }
+  }
+
+  if (settings.trackLichess && settings.lichessUsername) {
+    try {
+      const res = await fetch(
+        `https://lichess.org/api/user/${settings.lichessUsername}`,
+        { headers: { Accept: "application/json" } }
+      );
+      if (res.ok) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const json: any = await res.json();
+        const perfs = json?.perfs ?? {};
+        const snap: PlatformRatingSnapshot = {
+          date: today,
+          bullet: perfs?.bullet?.rating,
+          blitz: perfs?.blitz?.rating,
+          rapid: perfs?.rapid?.rating,
+          classical: perfs?.classical?.rating,
+          puzzle: perfs?.puzzle?.rating,
+        };
+        const filtered = data.lichess.filter((s) => s.date !== today);
+        filtered.push(snap);
+        data.lichess = filtered.slice(-365);
+      }
+    } catch { /* silent */ }
+  }
+
+  data.lastFetchedAt = new Date().toISOString();
+  savePlatformRatingsData(data);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 — In-App ELO Tactics Rating
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TacticsRatingEntry {
+  date: string;   // ISO date string YYYY-MM-DD
+  rating: number;
+}
+
+export interface TacticsRatingData {
+  tacticsRating: number;
+  tacticsRatingStart: number;    // initial snapshot (set once)
+  tacticsRatingHistory: TacticsRatingEntry[];
+  totalPuzzlesRated: number;     // used for K-factor calc (<30 = new user)
+  lastMilestoneAt: number;       // last 50-pt milestone rating
+}
+
+function defaultTacticsRating(): TacticsRatingData {
+  return {
+    tacticsRating: 800,
+    tacticsRatingStart: 800,
+    tacticsRatingHistory: [],
+    totalPuzzlesRated: 0,
+    lastMilestoneAt: 800,
+  };
+}
+
+export function getTacticsRatingData(): TacticsRatingData {
+  if (typeof window === "undefined") return defaultTacticsRating();
+  try {
+    const data = JSON.parse(localStorage.getItem(TACTICS_RATING_KEY) || "null") as TacticsRatingData | null;
+    return data ?? defaultTacticsRating();
+  } catch {
+    return defaultTacticsRating();
+  }
+}
+
+function saveTacticsRatingData(data: TacticsRatingData): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(TACTICS_RATING_KEY, JSON.stringify(data));
+}
+
+/**
+ * ELO update formula:
+ *   E = 1 / (1 + 10^((opponentRating - playerRating) / 400))
+ *   newRating = playerRating + K * (score - E)
+ * score: 1 for win, 0 for loss
+ * K: 32 for new users (<30 puzzles), 16 for established
+ */
+function calculateEloChange(
+  playerRating: number,
+  puzzleRating: number,
+  won: boolean,
+  totalPuzzlesRated: number
+): number {
+  const K = totalPuzzlesRated < 30 ? 32 : 16;
+  const expected = 1 / (1 + Math.pow(10, (puzzleRating - playerRating) / 400));
+  const score = won ? 1 : 0;
+  return Math.round(K * (score - expected));
+}
+
+export interface EloUpdateResult {
+  newRating: number;
+  delta: number;
+  milestoneHit: number | null; // the milestone rating if a 50-pt milestone was crossed
+}
+
+/**
+ * Update tactics rating after a puzzle attempt.
+ * puzzleRating: Lichess puzzle rating (difficulty)
+ * won: true if solved (first try or retry), false if failed/hint
+ * Returns the new rating, delta, and any milestone hit.
+ */
+export function updateTacticsRating(puzzleRating: number, won: boolean): EloUpdateResult {
+  if (typeof window === "undefined") return { newRating: 800, delta: 0, milestoneHit: null };
+
+  const data = getTacticsRatingData();
+  const delta = calculateEloChange(data.tacticsRating, puzzleRating, won, data.totalPuzzlesRated);
+  const newRating = Math.max(100, data.tacticsRating + delta); // floor at 100
+
+  // Append to history (one entry per day — replace today's if exists)
+  const today = getTodayKey();
+  const histFiltered = data.tacticsRatingHistory.filter((h) => h.date !== today);
+  histFiltered.push({ date: today, rating: newRating });
+  // Keep last 365 days
+  const trimmedHistory = histFiltered.slice(-365);
+
+  // Check for 50-pt milestone
+  // A milestone fires when we cross a new 50-point multiple from lastMilestoneAt
+  const prevMilestoneBase = Math.floor(data.lastMilestoneAt / 50) * 50;
+  const newMilestoneBase = Math.floor(newRating / 50) * 50;
+  let milestoneHit: number | null = null;
+  if (won && newMilestoneBase > prevMilestoneBase) {
+    milestoneHit = newMilestoneBase;
+  }
+
+  const updated: TacticsRatingData = {
+    tacticsRating: newRating,
+    tacticsRatingStart: data.tacticsRatingStart, // never changes after init
+    tacticsRatingHistory: trimmedHistory,
+    totalPuzzlesRated: data.totalPuzzlesRated + 1,
+    lastMilestoneAt: milestoneHit !== null ? newRating : data.lastMilestoneAt,
+  };
+
+  saveTacticsRatingData(updated);
+  return { newRating, delta, milestoneHit };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

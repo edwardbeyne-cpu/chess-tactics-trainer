@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import {
   getAttempts,
   getDuePuzzleIds,
@@ -18,10 +19,16 @@ import {
   getRatingData,
   fetchAndSaveRatings,
   shouldFetchRatings,
+  getTacticsRatingData,
+  fetchAndSavePlatformRatings,
+  shouldFetchPlatformRatings,
   type DailyQuests,
   type Quest,
   type RatingSnapshot,
 } from "@/lib/storage";
+
+// Dynamically import recharts-based chart (avoids SSR issues)
+const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
 
 function getActivityColor(count: number): string {
   if (count === 0) return "#0d1621";
@@ -269,6 +276,57 @@ function StreakCard({ streak, freezes }: { streak: number; freezes: number }) {
   );
 }
 
+// ── Tactics Rating Card (Sprint 7) ────────────────────────────────────────
+
+function TacticsRatingCard() {
+  const [data, setData] = useState(() => getTacticsRatingData());
+
+  useEffect(() => {
+    // Refresh when window gains focus (puzzles may have been solved)
+    const handler = () => setData(getTacticsRatingData());
+    window.addEventListener("focus", handler);
+    const interval = setInterval(() => setData(getTacticsRatingData()), 10000);
+    return () => { window.removeEventListener("focus", handler); clearInterval(interval); };
+  }, []);
+
+  const delta = data.tacticsRating - data.tacticsRatingStart;
+  const deltaColor = delta >= 0 ? "#4ade80" : "#ef4444";
+  const deltaStr = delta >= 0 ? `+${delta}` : String(delta);
+
+  return (
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+    }}>
+      <div style={{ color: "#94a3b8", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.5rem" }}>
+        ♟ Your Tactics Rating
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem" }}>
+        <div style={{ color: "#4ade80", fontSize: "2.5rem", fontWeight: "bold", lineHeight: 1 }}>
+          {data.tacticsRating}
+        </div>
+        {delta !== 0 && (
+          <div style={{ color: deltaColor, fontSize: "1rem", fontWeight: "bold" }}>
+            ({deltaStr} since you started)
+          </div>
+        )}
+      </div>
+      {data.totalPuzzlesRated === 0 && (
+        <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
+          Solve your first puzzle to start your rating!
+        </div>
+      )}
+      {data.totalPuzzlesRated > 0 && (
+        <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
+          Based on {data.totalPuzzlesRated} rated puzzle{data.totalPuzzlesRated !== 1 ? "s" : ""} · Started at {data.tacticsRatingStart}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Rating History Chart ───────────────────────────────────────────────────
 
 function RatingMiniChart({
@@ -341,36 +399,42 @@ function RatingTrackingPanel() {
   const settings = useMemo(() => getUserSettings(), []);
 
   useEffect(() => {
-    if (!settings.chesscomUsername && !settings.lichessUsername) return;
-    if (!shouldFetchRatings()) return;
-    fetchAndSaveRatings().then(() => {
-      setRatingData(getRatingData());
-    });
+    // Legacy rating sync (backwards compat)
+    if ((settings.chesscomUsername || settings.lichessUsername) && shouldFetchRatings()) {
+      fetchAndSaveRatings().then(() => setRatingData(getRatingData()));
+    }
+    // Sprint 7: platform ratings sync
+    if ((settings.trackChesscom || settings.trackLichess) && shouldFetchPlatformRatings()) {
+      fetchAndSavePlatformRatings();
+    }
   }, [settings]);
 
-  const hasChesscom = !!settings.chesscomUsername;
-  const hasLichess = !!settings.lichessUsername;
-  if (!hasChesscom && !hasLichess) return null;
+  const hasChesscom = settings.trackChesscom && !!settings.chesscomUsername;
+  const hasLichess = settings.trackLichess && !!settings.lichessUsername;
+  // Legacy: also show if username is set without toggle (backwards compat)
+  const legacyChesscom = !settings.trackChesscom && !!settings.chesscomUsername;
+  const legacyLichess = !settings.trackLichess && !!settings.lichessUsername;
+  if (!hasChesscom && !hasLichess && !legacyChesscom && !legacyLichess) return null;
 
   const snapshots = ratingData.snapshots;
 
   return (
     <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem", marginTop: "1rem" }}>
-      <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", marginBottom: "1rem" }}>📈 Rating Progress</h2>
+      <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", marginBottom: "1rem" }}>🏆 Platform Ratings</h2>
       {snapshots.length === 0 ? (
         <div style={{ color: "#64748b", fontSize: "0.85rem" }}>Fetching ratings...</div>
       ) : (
         <div>
-          {hasChesscom && (
+          {(hasChesscom || legacyChesscom) && (
             <div>
               <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.25rem", textTransform: "uppercase" }}>Chess.com</div>
               <RatingMiniChart snapshots={snapshots} platform="chesscom" ratingKey="blitz" label="Blitz" color="#f59e0b" />
               <RatingMiniChart snapshots={snapshots} platform="chesscom" ratingKey="rapid" label="Rapid" color="#4ade80" />
             </div>
           )}
-          {hasLichess && (
+          {(hasLichess || legacyLichess) && (
             <div>
-              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.25rem", textTransform: "uppercase", marginTop: hasChesscom ? "0.5rem" : 0 }}>Lichess</div>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.25rem", textTransform: "uppercase", marginTop: (hasChesscom || legacyChesscom) ? "0.5rem" : 0 }}>Lichess</div>
               <RatingMiniChart snapshots={snapshots} platform="lichess" ratingKey="blitz" label="Blitz" color="#60a5fa" />
               <RatingMiniChart snapshots={snapshots} platform="lichess" ratingKey="rapid" label="Rapid" color="#a855f7" />
             </div>
@@ -472,6 +536,11 @@ export default function Dashboard() {
         <XPBar />
       </div>
 
+      {/* Tactics Rating — Sprint 7 */}
+      <div style={{ marginBottom: "1rem" }}>
+        <TacticsRatingCard />
+      </div>
+
       {/* Stats grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1rem" }}>
         {stats.map((stat) => (
@@ -492,6 +561,11 @@ export default function Dashboard() {
         <StreakCard streak={streak} freezes={streakData.freezesAvailable} />
         {/* Daily Quests */}
         <DailyQuestsPanel />
+      </div>
+
+      {/* Rating History Chart — Sprint 7 */}
+      <div style={{ marginBottom: "1rem" }}>
+        <RatingHistoryChart />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1rem" }}>

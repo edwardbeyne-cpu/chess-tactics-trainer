@@ -24,6 +24,7 @@ import {
   isPuzzleNemesis,
   getPuzzleFailCount,
   checkAndAwardAchievements,
+  updateTacticsRating,
   type Achievement,
 } from "@/lib/storage";
 import type { SM2Outcome } from "@/lib/storage";
@@ -535,6 +536,9 @@ export default function Puzzle() {
   const sessionCountRef = useRef(0);
   const [showSocialProof, setShowSocialProof] = useState(false);
 
+  // Sprint 7: Tactics rating milestone toast
+  const [ratingMilestoneToast, setRatingMilestoneToast] = useState<{ rating: number } | null>(null);
+
   const selectedPatternObj = patterns.find((p) => p.name === selectedPattern);
 
   // Get patterns eligible for Mixed Mode (10+ attempts)
@@ -730,6 +734,15 @@ export default function Puzzle() {
       }
     }
 
+    // Sprint 7: Update in-app ELO tactics rating
+    if (currentPuzzle?.rating) {
+      const { milestoneHit } = updateTacticsRating(currentPuzzle.rating, isSolved);
+      if (milestoneHit !== null) {
+        setRatingMilestoneToast({ rating: milestoneHit });
+        setTimeout(() => setRatingMilestoneToast(null), 5000);
+      }
+    }
+
     // Social proof every 5 puzzles
     if (sessionState.puzzleCount > 0 && sessionState.puzzleCount % 5 === 0) {
       setShowSocialProof(true);
@@ -779,6 +792,40 @@ export default function Puzzle() {
       )}
       {xpToast !== null && (
         <XPToast xp={xpToast} onDone={() => setXpToast(null)} />
+      )}
+
+      {/* Sprint 7: Tactics Rating Milestone Toast */}
+      {ratingMilestoneToast && (
+        <div
+          onClick={() => setRatingMilestoneToast(null)}
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            right: "24px",
+            backgroundColor: "#1a1a2e",
+            border: "2px solid #4ade80",
+            borderRadius: "14px",
+            padding: "1rem 1.25rem",
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            cursor: "pointer",
+            maxWidth: "320px",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+            animation: "slideUpIn 0.4s ease",
+          }}
+        >
+          <span style={{ fontSize: "2.5rem", flexShrink: 0 }}>🎉</span>
+          <div>
+            <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.1rem" }}>
+              Rating Milestone!
+            </div>
+            <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
+              +50 milestone! Your tactics rating hit {ratingMilestoneToast.rating}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Social proof banner every 5 puzzles */}
