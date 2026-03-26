@@ -11,6 +11,8 @@ import {
   saveUserSettings,
   fetchAndSavePlatformRatings,
 } from "@/lib/storage";
+import BoardThemeSettings from "./BoardThemeSettings";
+import DataExport from "./DataExport";
 
 // TODO Sprint 4: run Stockfish on each position to identify tactical moments
 
@@ -463,6 +465,9 @@ export default function Settings() {
         Settings
       </h1>
 
+      {/* Sprint 9: Board & Piece Themes */}
+      <BoardThemeSettings />
+
       {/* Rating Tracking Section — Sprint 4 */}
       <RatingTrackingSection />
 
@@ -471,6 +476,9 @@ export default function Settings() {
         settings={getUserSettings()}
         onSave={(s) => { saveUserSettings(s); }}
       />
+
+      {/* Sprint 9: Data Export */}
+      <DataExport />
 
       {/* PGN Upload Section */}
       <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>

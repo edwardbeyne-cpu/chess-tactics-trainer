@@ -9,6 +9,7 @@ const navItems = [
   { href: "/app/review", label: "Review" },
   { href: "/app/patterns", label: "Patterns" },
   { href: "/app/achievements", label: "🏆 Achievements" },
+  { href: "/app/import", label: "📂 Import" },
   { href: "/app/settings", label: "Settings" },
 ];
 

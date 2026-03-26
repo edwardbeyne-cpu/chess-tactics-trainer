@@ -27,7 +27,9 @@ import {
   type RatingSnapshot,
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
+import { getSubscriptionTier } from "@/lib/storage";
 import DashboardSocialProof from "./DashboardSocialProof";
+import Link from "next/link";
 
 // Dynamically import recharts-based chart (avoids SSR issues)
 const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
@@ -623,6 +625,40 @@ export default function Dashboard() {
 
           {/* Rating Tracking */}
           <RatingTrackingPanel />
+
+          {/* Sprint 9: Weekly Report link for Serious users */}
+          {getSubscriptionTier() >= 2 && (
+            <div style={{
+              backgroundColor: "#0a1f12",
+              border: "1px solid #1a4a2a",
+              borderRadius: "12px",
+              padding: "1rem 1.25rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+            }}>
+              <div>
+                <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}>📧 Weekly Report</div>
+                <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.15rem" }}>Preview your email digest</div>
+              </div>
+              <Link
+                href="/app/weekly-report"
+                style={{
+                  backgroundColor: "#4ade80",
+                  color: "#0f0f1a",
+                  padding: "0.4rem 0.85rem",
+                  borderRadius: "6px",
+                  textDecoration: "none",
+                  fontWeight: "bold",
+                  fontSize: "0.8rem",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Preview →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

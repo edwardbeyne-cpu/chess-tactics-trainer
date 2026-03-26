@@ -11,6 +11,12 @@ const SETTINGS_KEY = "ctt_settings";
 const TACTICS_RATING_KEY = "ctt_tactics_rating";
 const PLATFORM_RATINGS_KEY = "ctt_platform_ratings";
 
+// Sprint 9 keys
+const PERSONAL_PUZZLES_KEY = "ctt_personal_puzzles";
+const BOARD_THEME_KEY = "ctt_board_theme";
+const PIECE_STYLE_KEY = "ctt_piece_style";
+const PGN_IMPORT_USAGE_KEY = "ctt_pgn_import_usage";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy SRS interval ladder (Sprint 2 system — kept for backward compat)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1414,4 +1420,359 @@ export function checkAndAwardAchievements(params: {
   }
 
   return earned;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — Personal Puzzles (from PGN import)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PersonalPuzzle {
+  id: string;
+  fen: string;             // FEN of the position
+  moveNumber: number;
+  playerColor: "white" | "black";
+  pgn: string;             // Original PGN snippet
+  source: string;          // e.g. "mygame.pgn"
+  flaggedReason: string;   // e.g. "Hanging piece detected"
+  addedAt: string;         // ISO timestamp
+  solved: boolean;
+}
+
+export function getPersonalPuzzles(): PersonalPuzzle[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(PERSONAL_PUZZLES_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+export function addPersonalPuzzle(puzzle: PersonalPuzzle): void {
+  if (typeof window === "undefined") return;
+  const puzzles = getPersonalPuzzles();
+  // Deduplicate by FEN
+  if (!puzzles.some((p) => p.fen === puzzle.fen)) {
+    puzzles.push(puzzle);
+    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
+  }
+}
+
+export function addPersonalPuzzles(newPuzzles: PersonalPuzzle[]): number {
+  if (typeof window === "undefined") return 0;
+  const existing = getPersonalPuzzles();
+  const existingFens = new Set(existing.map((p) => p.fen));
+  const toAdd = newPuzzles.filter((p) => !existingFens.has(p.fen));
+  if (toAdd.length > 0) {
+    const merged = [...existing, ...toAdd];
+    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(merged));
+  }
+  return toAdd.length;
+}
+
+export function markPersonalPuzzleSolved(id: string): void {
+  if (typeof window === "undefined") return;
+  const puzzles = getPersonalPuzzles();
+  const idx = puzzles.findIndex((p) => p.id === id);
+  if (idx >= 0) {
+    puzzles[idx].solved = true;
+    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
+  }
+}
+
+export function clearPersonalPuzzles(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(PERSONAL_PUZZLES_KEY);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — PGN Import Usage Tracking (for Improver tier: 1 game/month)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PGNImportUsage {
+  monthKey: string;  // YYYY-MM
+  count: number;
+}
+
+export function getPGNImportUsage(): PGNImportUsage {
+  if (typeof window === "undefined") return { monthKey: "", count: 0 };
+  try {
+    const stored = JSON.parse(localStorage.getItem(PGN_IMPORT_USAGE_KEY) || "null") as PGNImportUsage | null;
+    const monthKey = new Date().toISOString().slice(0, 7);
+    if (!stored || stored.monthKey !== monthKey) {
+      return { monthKey, count: 0 };
+    }
+    return stored;
+  } catch {
+    return { monthKey: new Date().toISOString().slice(0, 7), count: 0 };
+  }
+}
+
+export function incrementPGNImportUsage(): void {
+  if (typeof window === "undefined") return;
+  const usage = getPGNImportUsage();
+  usage.count++;
+  localStorage.setItem(PGN_IMPORT_USAGE_KEY, JSON.stringify(usage));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — Board & Piece Theme Preferences
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BoardTheme = "classic" | "blue" | "green" | "dark" | "purple";
+export type PieceStyle = "standard" | "neo" | "alpha";
+
+export interface BoardThemeConfig {
+  light: string;  // CSS color for light squares
+  dark: string;   // CSS color for dark squares
+  name: string;
+  emoji: string;
+}
+
+export const BOARD_THEMES: Record<BoardTheme, BoardThemeConfig> = {
+  classic: { name: "Classic", emoji: "♟", light: "#f0d9b5", dark: "#b58863" },
+  blue:    { name: "Blue",    emoji: "🔵", light: "#dee3e6", dark: "#8ca2ad" },
+  green:   { name: "Green",   emoji: "🟢", light: "#ffffdd", dark: "#86a666" },
+  dark:    { name: "Dark",    emoji: "⬛", light: "#9e9e9e", dark: "#424242" },
+  purple:  { name: "Purple",  emoji: "🟣", light: "#f0e6ff", dark: "#9b72cf" },
+};
+
+export const PIECE_STYLES: Record<PieceStyle, { name: string; description: string }> = {
+  standard: { name: "Standard", description: "Default chess pieces" },
+  neo:      { name: "Neo",      description: "Modern minimal design" },
+  alpha:    { name: "Alpha",    description: "High-contrast letter style" },
+};
+
+// Tier access: Free=1(classic only), Improver=3(classic+blue+green), Serious=all
+export const THEME_TIER_ACCESS: Record<BoardTheme, number> = {
+  classic: 0,  // free
+  blue:    1,  // improver
+  green:   1,  // improver
+  dark:    2,  // serious
+  purple:  2,  // serious
+};
+
+export const PIECE_TIER_ACCESS: Record<PieceStyle, number> = {
+  standard: 0, // free
+  neo:      2, // serious
+  alpha:    2, // serious
+};
+
+export function getBoardTheme(): BoardTheme {
+  if (typeof window === "undefined") return "classic";
+  return (localStorage.getItem(BOARD_THEME_KEY) as BoardTheme) || "classic";
+}
+
+export function saveBoardTheme(theme: BoardTheme): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(BOARD_THEME_KEY, theme);
+}
+
+export function getPieceStyle(): PieceStyle {
+  if (typeof window === "undefined") return "standard";
+  return (localStorage.getItem(PIECE_STYLE_KEY) as PieceStyle) || "standard";
+}
+
+export function savePieceStyle(style: PieceStyle): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PIECE_STYLE_KEY, style);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — Subscription tier helper
+// tier: 0=free/trial, 1=improver, 2=serious
+// For now, we simulate tiers via localStorage flags for demo purposes
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getSubscriptionTier(): number {
+  if (typeof window === "undefined") return 0;
+  const tier = localStorage.getItem("ctt_sub_tier");
+  if (tier === "2") return 2;  // Serious
+  if (tier === "1") return 1;  // Improver
+  // Check legacy subscription flag
+  const legacy = localStorage.getItem("subscription_status");
+  if (legacy === "active") return 2; // default to Serious for paid users
+  return 0; // Free
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — Weekly Report Data
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WeeklyReportData {
+  weekStart: string;  // YYYY-MM-DD (Monday)
+  weekEnd: string;    // YYYY-MM-DD (Sunday)
+  puzzlesSolvedThisWeek: number;
+  puzzlesSolvedLastWeek: number;
+  ratingThisWeek: number | null;
+  ratingLastWeek: number | null;
+  ratingChange: number | null;
+  currentStreak: number;
+  longestStreak: number;
+  topStrongestPatterns: Array<{ theme: string; solveRate: number; attempts: number }>;
+  topWeakestPatterns: Array<{ theme: string; solveRate: number; attempts: number }>;
+  personalizedTip: string;
+}
+
+function getWeekBounds(offsetWeeks = 0): { start: string; end: string } {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon, ...
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday - offsetWeeks * 7);
+  monday.setHours(0, 0, 0, 0);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+  return {
+    start: monday.toISOString().slice(0, 10),
+    end: sunday.toISOString().slice(0, 10),
+  };
+}
+
+const PATTERN_TIPS: Record<string, string> = {
+  FORK:   "Forks are all about seeing two-attack moves. Practice scanning for squares where your knight or queen can simultaneously attack two pieces.",
+  PIN:    "Pins immobilize pieces. Look for opportunities to align a sliding piece (bishop, rook, queen) through an enemy piece toward a more valuable one.",
+  SKEWER: "Skewers force the stronger piece to move, exposing the weaker one. Think about where your rooks and bishops can pierce through your opponent's lineup.",
+  DISCOVERED_ATTACK: "Discovered attacks are devastating because your opponent can't respond to both threats. Practice moving one piece to unleash another.",
+  BACK_RANK: "Back rank threats often end games suddenly. Keep one piece defending your back rank or push a pawn to give your king an escape square.",
+  DOUBLE_CHECK: "Double checks are unstoppable — only a king move can escape. Look for positions where you can move a piece to reveal an additional check.",
+  DEFLECTION: "Deflection removes a key defender. Ask yourself: which piece is holding something critical for my opponent?",
+  DECOY: "A decoy lures a piece to a square where it becomes vulnerable or overloaded. Think about sacrifices that gain you a tactical advantage.",
+  DEFAULT: "Focus on pattern recognition — the more puzzles you solve in this category, the more the patterns will jump out at you in real games.",
+};
+
+function getTipForPattern(theme: string): string {
+  return PATTERN_TIPS[theme.toUpperCase()] ?? PATTERN_TIPS.DEFAULT;
+}
+
+export function generateWeeklyReport(): WeeklyReportData {
+  const thisWeek = getWeekBounds(0);
+  const lastWeek = getWeekBounds(1);
+
+  const allAttempts = getSM2Attempts();
+
+  // Count puzzles solved per week
+  function countSolvedInRange(start: string, end: string): number {
+    return allAttempts.filter((a) => {
+      const date = a.timestamp.slice(0, 10);
+      return date >= start && date <= end &&
+        (a.outcome === "solved-first-try" || a.outcome === "solved-after-retry");
+    }).length;
+  }
+
+  const puzzlesSolvedThisWeek = countSolvedInRange(thisWeek.start, thisWeek.end);
+  const puzzlesSolvedLastWeek = countSolvedInRange(lastWeek.start, lastWeek.end);
+
+  // Rating data
+  const tacticsData = getTacticsRatingData();
+  const ratingHistory = tacticsData.tacticsRatingHistory;
+  
+  function getRatingAtDate(dateStr: string): number | null {
+    const entry = ratingHistory.filter((h) => h.date <= dateStr).slice(-1)[0];
+    return entry?.rating ?? null;
+  }
+
+  const ratingThisWeek = getRatingAtDate(thisWeek.end) ?? tacticsData.tacticsRating ?? null;
+  const ratingLastWeek = getRatingAtDate(lastWeek.end);
+  const ratingChange = ratingThisWeek !== null && ratingLastWeek !== null
+    ? ratingThisWeek - ratingLastWeek
+    : null;
+
+  // Pattern stats
+  const patternStats = getAllPatternStats().filter((s) => s.totalAttempts >= 3);
+  const sorted = [...patternStats].sort((a, b) => b.solveRate - a.solveRate);
+  
+  const topStrongest = sorted.slice(0, 3).map((s) => ({
+    theme: s.theme,
+    solveRate: s.solveRate,
+    attempts: s.totalAttempts,
+  }));
+
+  const topWeakest = [...sorted].reverse().slice(0, 3).map((s) => ({
+    theme: s.theme,
+    solveRate: s.solveRate,
+    attempts: s.totalAttempts,
+  }));
+
+  // Streak
+  const streakData = getStreakData();
+
+  // Tip
+  const weakestTheme = topWeakest[0]?.theme ?? "";
+  const personalizedTip = getTipForPattern(weakestTheme);
+
+  return {
+    weekStart: thisWeek.start,
+    weekEnd: thisWeek.end,
+    puzzlesSolvedThisWeek,
+    puzzlesSolvedLastWeek,
+    ratingThisWeek,
+    ratingLastWeek,
+    ratingChange,
+    currentStreak: streakData.currentStreak,
+    longestStreak: streakData.longestStreak,
+    topStrongestPatterns: topStrongest,
+    topWeakestPatterns: topWeakest,
+    personalizedTip,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 9 — Data Export
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function exportHistoryAsCSV(): string {
+  const attempts = getSM2Attempts();
+  const header = ["puzzleId", "outcome", "timestamp", "theme", "rating", "solve_time_ms", "tier"].join(",");
+  const rows = attempts.map((a) => [
+    a.puzzleId,
+    a.outcome,
+    a.timestamp,
+    a.theme ?? "",
+    a.rating ?? "",
+    a.solve_time_ms ?? "",
+    a.tier ?? "",
+  ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+  return [header, ...rows].join("\n");
+}
+
+export function exportStatsAsJSON(): string {
+  const patternStats = getAllPatternStats();
+  const xpData = getXPData();
+  const streakData = getStreakData();
+  const tacticsData = getTacticsRatingData();
+  const achievements = getAchievements().filter((a) => a.earnedAt !== null);
+  const personalPuzzles = getPersonalPuzzles();
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    summary: {
+      totalAttempts: getTotalAttempts(),
+      totalXP: xpData.totalXP,
+      level: xpData.level,
+      currentStreak: streakData.currentStreak,
+      longestStreak: streakData.longestStreak,
+      tacticsRating: tacticsData.tacticsRating,
+      totalPuzzlesRated: tacticsData.totalPuzzlesRated,
+    },
+    patternStats,
+    achievements,
+    personalPuzzles: personalPuzzles.length,
+    ratingHistory: tacticsData.tacticsRatingHistory,
+  };
+
+  return JSON.stringify(payload, null, 2);
+}
+
+export function downloadFile(filename: string, content: string, mimeType: string): void {
+  if (typeof window === "undefined") return;
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
