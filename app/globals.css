@@ -113,3 +113,32 @@ piece.black.rook    { background-image: url("data:image/svg+xml,<svg xmlns='http
 piece.black.bishop  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♝</text></svg>"); }
 piece.black.knight  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♞</text></svg>"); }
 piece.black.pawn    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♟</text></svg>"); }
+
+/* ── Sprint 6 Animations ──────────────────────────────────────────────────── */
+
+@keyframes slideUpIn {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes pulse {
+  0%   { transform: scale(0.9); }
+  50%  { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes bossGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+  50%       { box-shadow: 0 0 30px rgba(239, 68, 68, 0.9); }
+}
+
+/* Chessground drawable brushes */
+.cg-wrap svg.cg-shapes circle,
+.cg-wrap svg.cg-shapes path {
+  pointer-events: none;
+}

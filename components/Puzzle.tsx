@@ -14,8 +14,20 @@ import {
   updateQuestProgress,
   updateStreak,
   getLevelName,
+  getXPData,
+  getAchievements,
+  earnAchievement,
+  updateSessionState,
+  getSessionState,
+  recordPuzzleFail,
+  recordPuzzleWin,
+  isPuzzleNemesis,
+  getPuzzleFailCount,
+  checkAndAwardAchievements,
+  type Achievement,
 } from "@/lib/storage";
 import type { SM2Outcome } from "@/lib/storage";
+import AchievementToast from "./AchievementToast";
 import { fetchPuzzleByTheme, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
 import { startTrial } from "@/lib/trial";
 import ChessBoard from "./ChessBoard";
@@ -23,6 +35,159 @@ import ChessBoard from "./ChessBoard";
 // ── Mode: lichess (live), classic (static), or mixed ──────────────────────
 
 type PuzzleMode = "lichess" | "classic" | "mixed";
+
+// ── Boss Puzzle Announcement ───────────────────────────────────────────────
+
+function BossAnnouncement({ onReady }: { onReady: () => void }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000,
+    }}>
+      <div style={{
+        backgroundColor: "#1a0a0a",
+        border: "2px solid #ef4444",
+        borderRadius: "20px",
+        padding: "3rem",
+        textAlign: "center",
+        maxWidth: "420px",
+        animation: "pulse 0.5s ease-in-out",
+      }}>
+        <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>⚔️</div>
+        <div style={{ color: "#ef4444", fontSize: "1.8rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+          BOSS PUZZLE
+        </div>
+        <div style={{ color: "#e2e8f0", fontSize: "1rem", marginBottom: "0.5rem" }}>
+          Test everything you&apos;ve learned.
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
+          This puzzle is rated 200+ above your average.<br />Defeat it for <span style={{ color: "#ffd700" }}>2× XP</span>.
+        </div>
+        <button onClick={onReady} style={{
+          backgroundColor: "#ef4444", color: "white", border: "none",
+          borderRadius: "10px", padding: "0.9rem 2rem",
+          cursor: "pointer", fontWeight: "bold", fontSize: "1rem",
+        }}>
+          I&apos;m Ready ⚔️
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Nemesis Puzzle Announcement ────────────────────────────────────────────
+
+function NemesisAnnouncement({ failCount, onReady }: { failCount: number; onReady: () => void }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1000,
+    }}>
+      <div style={{
+        backgroundColor: "#150a1e",
+        border: "2px solid #a855f7",
+        borderRadius: "20px",
+        padding: "3rem",
+        textAlign: "center",
+        maxWidth: "420px",
+      }}>
+        <div style={{ fontSize: "4rem", marginBottom: "1rem" }}>👹</div>
+        <div style={{ color: "#a855f7", fontSize: "1.8rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+          NEMESIS PUZZLE
+        </div>
+        <div style={{ color: "#e2e8f0", fontSize: "1rem", marginBottom: "0.5rem" }}>
+          You&apos;ve faced this puzzle <strong style={{ color: "#ef4444" }}>{failCount} times</strong> and failed every time.
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
+          Ready to beat it? Win for <span style={{ color: "#ffd700" }}>3× XP</span>.
+        </div>
+        <button onClick={onReady} style={{
+          backgroundColor: "#a855f7", color: "white", border: "none",
+          borderRadius: "10px", padding: "0.9rem 2rem",
+          cursor: "pointer", fontWeight: "bold", fontSize: "1rem",
+        }}>
+          Let&apos;s Do This 👹
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Boss Slayer Animation ──────────────────────────────────────────────────
+
+function BossSlayerModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1100, cursor: "pointer",
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#1a0a0a",
+        border: "3px solid #ffd700",
+        borderRadius: "20px",
+        padding: "3rem",
+        textAlign: "center",
+        maxWidth: "400px",
+      }}>
+        <div style={{ fontSize: "5rem", marginBottom: "1rem" }}>🏆</div>
+        <div style={{ color: "#ffd700", fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
+          BOSS SLAYER!
+        </div>
+        <div style={{ color: "#e2e8f0", fontSize: "1rem" }}>
+          You defeated the Boss Puzzle!
+        </div>
+        <div style={{ color: "#4ade80", fontSize: "0.9rem", marginTop: "0.5rem" }}>
+          +2× XP awarded ⭐
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Nemesis Defeated Animation ─────────────────────────────────────────────
+
+function NemesisDefeatedModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.8)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1100, cursor: "pointer",
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#150a1e",
+        border: "3px solid #a855f7",
+        borderRadius: "20px",
+        padding: "3rem",
+        textAlign: "center",
+        maxWidth: "400px",
+      }}>
+        <div style={{ fontSize: "5rem", marginBottom: "1rem" }}>💀</div>
+        <div style={{ color: "#a855f7", fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
+          NEMESIS DEFEATED!
+        </div>
+        <div style={{ color: "#e2e8f0", fontSize: "1rem" }}>
+          You conquered your nemesis!
+        </div>
+        <div style={{ color: "#4ade80", fontSize: "0.9rem", marginTop: "0.5rem" }}>
+          +3× XP awarded ⭐
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Level Up Celebration ───────────────────────────────────────────────────
 
@@ -355,6 +520,17 @@ export default function Puzzle() {
   const [xpToast, setXpToast] = useState<number | null>(null);
   const [mixedRevealedPattern, setMixedRevealedPattern] = useState<string | null>(null);
 
+  // Sprint 6: Boss / Nemesis / Achievements
+  const [showBossAnnouncement, setShowBossAnnouncement] = useState(false);
+  const [showNemesisAnnouncement, setShowNemesisAnnouncement] = useState(false);
+  const [nemesisFailCount, setNemesisFailCount] = useState(0);
+  const [showBossSlayer, setShowBossSlayer] = useState(false);
+  const [showNemesisDefeated, setShowNemesisDefeated] = useState(false);
+  const [achievementQueue, setAchievementQueue] = useState<Achievement[]>([]);
+  const isBossPuzzleRef = useRef(false);
+  const isNemesisPuzzleRef = useRef(false);
+  const pendingPuzzleRef = useRef<{ pattern: string; isMixed: boolean } | null>(null);
+
   // Session puzzle count for social proof
   const sessionCountRef = useRef(0);
   const [showSocialProof, setShowSocialProof] = useState(false);
@@ -378,6 +554,13 @@ export default function Puzzle() {
       const pattern = patterns.find((p) => p.name === patternName);
       if (!pattern) return;
 
+      // Check if this should be a Boss puzzle (every 10th in session, unlocks at Level 3)
+      const session = getSessionState();
+      const xpData = getXPData();
+      const isBoss = session.puzzleCount > 0 && session.puzzleCount % 10 === 0 && xpData.level >= 3;
+      isBossPuzzleRef.current = isBoss;
+      isNemesisPuzzleRef.current = false;
+
       setLoading(true);
       setError(null);
       setCurrentPuzzle(null);
@@ -388,6 +571,16 @@ export default function Puzzle() {
         const lichessPuzzle = await fetchPuzzleByTheme(theme);
         const appPuzzle = lichessPuzzleToApp(lichessPuzzle, patternName, pattern.tier);
         setCurrentPuzzle(appPuzzle);
+
+        // Check if new puzzle is a Nemesis
+        if (isPuzzleNemesis(appPuzzle.id)) {
+          const failCount = getPuzzleFailCount(appPuzzle.id);
+          isNemesisPuzzleRef.current = true;
+          setNemesisFailCount(failCount);
+          setShowNemesisAnnouncement(true);
+        } else if (isBoss) {
+          setShowBossAnnouncement(true);
+        }
       } catch (err) {
         setError(
           `Failed to fetch puzzle: ${err instanceof Error ? err.message : "Unknown error"}. Check your network.`
@@ -432,18 +625,26 @@ export default function Puzzle() {
     await fetchNextPuzzle(patternName);
   }
 
-  function handleResult(outcome: SM2Outcome, solveTimeMs: number) {
+  async function handleResult(outcome: SM2Outcome, solveTimeMs: number) {
     const pattern = mode === "mixed"
       ? patterns.find((p) => p.name === currentPuzzle?.theme)
       : selectedPatternObj;
 
     const tier = pattern?.tier ?? currentPuzzle?.patternTier ?? 1;
     const themeName = (mode === "mixed" ? currentPuzzle?.theme : selectedPattern) ?? "UNKNOWN";
+    const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
 
     // Start free trial on first puzzle solve (if not already started)
     startTrial();
 
     if (currentPuzzle) {
+      // Track nemesis: record fail
+      if (!isSolved) {
+        recordPuzzleFail(currentPuzzle.id);
+      } else if (isNemesisPuzzleRef.current) {
+        recordPuzzleWin(currentPuzzle.id);
+      }
+
       // Record SM-2 attempt with solve time
       recordSM2Attempt({
         puzzleId: currentPuzzle.id,
@@ -462,12 +663,26 @@ export default function Puzzle() {
     }
 
     // Update streak
-    updateStreak();
+    const { streakData } = updateStreak();
+
+    // Update session state
+    const sessionState = updateSessionState(isSolved);
+    sessionCountRef.current = sessionState.puzzleCount;
+
+    // Calculate XP multiplier for boss/nemesis
+    let xpMultiplier = 1;
+    if (isBossPuzzleRef.current && isSolved) {
+      xpMultiplier = 2;
+      setShowBossSlayer(true);
+    } else if (isNemesisPuzzleRef.current && isSolved) {
+      xpMultiplier = 3;
+      setShowNemesisDefeated(true);
+    }
 
     // Calculate and award XP
-    const xpEarned = calculateXPForOutcome(tier, outcome);
+    const baseXP = calculateXPForOutcome(tier, outcome);
     const questXP = updateQuestProgress(outcome, themeName, tier);
-    const totalXPEarned = xpEarned + questXP;
+    const totalXPEarned = Math.round(baseXP * xpMultiplier) + questXP;
 
     if (totalXPEarned > 0) {
       const { leveledUp, newLevel } = addXP(totalXPEarned);
@@ -477,9 +692,46 @@ export default function Puzzle() {
       }
     }
 
-    // Session count for social proof (every 5 puzzles for free users)
-    sessionCountRef.current++;
-    if (sessionCountRef.current > 0 && sessionCountRef.current % 5 === 0) {
+    // Check achievements
+    const totalSM2 = getSM2Attempts().filter(
+      (a) => a.outcome === "solved-first-try" || a.outcome === "solved-after-retry"
+    ).length;
+    const newAchievementIds = checkAndAwardAchievements({
+      outcome,
+      solveTimeMs,
+      theme: themeName,
+      consecutiveCorrect: sessionState.consecutiveCorrect,
+      totalSolved: totalSM2,
+      streakDays: streakData.currentStreak,
+      tier,
+      puzzleId: currentPuzzle?.id ?? "",
+    });
+    if (newAchievementIds.length > 0) {
+      const allAch = getAchievements(); // already imported at top
+      const newAchObjs = newAchievementIds
+        .map((id) => allAch.find((a) => a.id === id))
+        .filter((a): a is Achievement => a !== null && a !== undefined);
+      if (newAchObjs.length > 0) {
+        setAchievementQueue((q) => [...q, ...newAchObjs]);
+      }
+    }
+    // Award nemesis_slayer if nemesis was defeated
+    if (isNemesisPuzzleRef.current && isSolved) {
+      const r = earnAchievement("nemesis_slayer");
+      if (r.earned && r.achievement) {
+        setAchievementQueue((q) => [...q, r.achievement!]);
+      }
+    }
+    // Award boss_slayer if boss was defeated
+    if (isBossPuzzleRef.current && isSolved) {
+      const r = earnAchievement("boss_slayer");
+      if (r.earned && r.achievement) {
+        setAchievementQueue((q) => [...q, r.achievement!]);
+      }
+    }
+
+    // Social proof every 5 puzzles
+    if (sessionState.puzzleCount > 0 && sessionState.puzzleCount % 5 === 0) {
       setShowSocialProof(true);
     }
   }
@@ -502,6 +754,26 @@ export default function Puzzle() {
 
   return (
     <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+      {/* Sprint 6 Modals */}
+      {showBossAnnouncement && (
+        <BossAnnouncement onReady={() => setShowBossAnnouncement(false)} />
+      )}
+      {showNemesisAnnouncement && (
+        <NemesisAnnouncement failCount={nemesisFailCount} onReady={() => setShowNemesisAnnouncement(false)} />
+      )}
+      {showBossSlayer && (
+        <BossSlayerModal onClose={() => setShowBossSlayer(false)} />
+      )}
+      {showNemesisDefeated && (
+        <NemesisDefeatedModal onClose={() => setShowNemesisDefeated(false)} />
+      )}
+      {/* Achievement Toast Queue */}
+      {achievementQueue.length > 0 && (
+        <AchievementToast
+          achievement={achievementQueue[0]}
+          onDone={() => setAchievementQueue((q) => q.slice(1))}
+        />
+      )}
       {levelUpModal !== null && (
         <LevelUpModal level={levelUpModal} onClose={() => setLevelUpModal(null)} />
       )}

@@ -5,7 +5,7 @@ export const isStripeConfigured = !!process.env.STRIPE_SECRET_KEY;
 let stripeInstance: Stripe | null = null;
 if (isStripeConfigured) {
   stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2025-03-31.basil', // Use latest stable version
+    apiVersion: '2026-03-25.dahlia', // Updated to current stable version
   });
 } else {
   console.warn('STRIPE_SECRET_KEY not set. Stripe functionality disabled.');

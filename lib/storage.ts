@@ -407,7 +407,9 @@ export function getWeakestPattern(): string | null {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sprint 4 — XP + Leveling System
+// Sprint 6 — XP + Leveling System (updated thresholds)
+// L1=0, L2=100, L3=250, L4=450, L5=600, L6=800, L7=1000, L8=1400, L9=1700,
+// L10=2000, then scale to L20=8000 (+600/level after L10)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface XPData {
@@ -415,25 +417,28 @@ export interface XPData {
   level: number;
 }
 
-export const LEVEL_THRESHOLDS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
+// Index 0 = L1 threshold, index 1 = L2 threshold, etc.
+export const LEVEL_THRESHOLDS = [0, 100, 250, 450, 600, 800, 1000, 1400, 1700, 2000];
 
+// 7 rank names cycling up through levels
 export const LEVEL_NAMES: Record<number, string> = {
   1: "Pawn",
-  2: "Knight",
-  3: "Bishop",
-  4: "Rook",
-  5: "Queen",
-  6: "King",
-  7: "Expert",
-  8: "Master",
-  9: "International Master",
-  10: "Grandmaster",
+  2: "Pawn",
+  3: "Knight",
+  4: "Knight",
+  5: "Bishop",
+  6: "Bishop",
+  7: "Rook",
+  8: "Rook",
+  9: "Queen",
+  10: "King",
 };
 
 export function getXPThresholdForLevel(level: number): number {
   if (level <= 1) return 0;
   if (level <= 10) return LEVEL_THRESHOLDS[level - 1];
-  return 3200 + (level - 10) * 800;
+  // Scale: L10=2000, L11=2600, L12=3200, ... L20=8000 → +600 per level after 10
+  return 2000 + (level - 10) * 600;
 }
 
 export function getLevelFromXP(totalXP: number): number {
@@ -451,7 +456,8 @@ export function getLevelFromXP(totalXP: number): number {
 }
 
 export function getLevelName(level: number): string {
-  if (level <= 10) return LEVEL_NAMES[level] ?? "Grandmaster";
+  if (level <= 10) return LEVEL_NAMES[level] ?? "King";
+  if (level < 15) return "Grandmaster";
   return "Grandmaster";
 }
 
@@ -891,4 +897,289 @@ export async function fetchAndSaveRatings(): Promise<void> {
   if (snapshot.chesscom || snapshot.lichess) {
     saveRatingSnapshot(snapshot);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 6 — Achievement Badges
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ACHIEVEMENTS_KEY = "ctt_achievements";
+
+export type AchievementId =
+  | "first_blood"
+  | "fork_master"
+  | "speed_demon"
+  | "on_fire"
+  | "comeback_kid"
+  | "pattern_collector"
+  | "tier_climber"
+  | "elite"
+  | "centurion"
+  | "dedicated"
+  | "committed"
+  | "nemesis_slayer"
+  | "boss_slayer";
+
+export interface Achievement {
+  id: AchievementId;
+  name: string;
+  description: string;
+  emoji: string;
+  earnedAt: string | null; // ISO timestamp or null
+}
+
+export const ACHIEVEMENT_DEFINITIONS: Achievement[] = [
+  { id: "first_blood", name: "First Blood", description: "Solve your first puzzle", emoji: "🩸", earnedAt: null },
+  { id: "fork_master", name: "Fork Master", description: "Solve 50 Fork puzzles", emoji: "⚔️", earnedAt: null },
+  { id: "speed_demon", name: "Speed Demon", description: "Solve a puzzle in under 5 seconds", emoji: "⚡", earnedAt: null },
+  { id: "on_fire", name: "On Fire", description: "Solve 10 puzzles in a row without failing", emoji: "🔥", earnedAt: null },
+  { id: "comeback_kid", name: "Comeback Kid", description: "Beat a puzzle you failed 3+ times before", emoji: "💪", earnedAt: null },
+  { id: "pattern_collector", name: "Pattern Collector", description: "Attempt all 28 tactical patterns", emoji: "📚", earnedAt: null },
+  { id: "tier_climber", name: "Tier Climber", description: "Unlock Tier 2 patterns", emoji: "🧗", earnedAt: null },
+  { id: "elite", name: "Elite", description: "Unlock Tier 3 patterns", emoji: "💎", earnedAt: null },
+  { id: "centurion", name: "Centurion", description: "Solve 100 puzzles total", emoji: "💯", earnedAt: null },
+  { id: "dedicated", name: "Dedicated", description: "Maintain a 7-day streak", emoji: "🗓️", earnedAt: null },
+  { id: "committed", name: "Committed", description: "Maintain a 30-day streak", emoji: "📅", earnedAt: null },
+  { id: "nemesis_slayer", name: "Nemesis Slayer", description: "Defeat a Nemesis puzzle", emoji: "👹", earnedAt: null },
+  { id: "boss_slayer", name: "Boss Slayer", description: "Defeat a Boss puzzle", emoji: "⚔️", earnedAt: null },
+];
+
+export function getAchievements(): Achievement[] {
+  if (typeof window === "undefined") return ACHIEVEMENT_DEFINITIONS.map((a) => ({ ...a }));
+  try {
+    const stored = JSON.parse(localStorage.getItem(ACHIEVEMENTS_KEY) || "null") as Record<string, string> | null;
+    if (!stored) return ACHIEVEMENT_DEFINITIONS.map((a) => ({ ...a }));
+    return ACHIEVEMENT_DEFINITIONS.map((def) => ({
+      ...def,
+      earnedAt: stored[def.id] ?? null,
+    }));
+  } catch {
+    return ACHIEVEMENT_DEFINITIONS.map((a) => ({ ...a }));
+  }
+}
+
+export function earnAchievement(id: AchievementId): { earned: boolean; achievement: Achievement | null } {
+  if (typeof window === "undefined") return { earned: false, achievement: null };
+  const stored: Record<string, string> = (() => {
+    try { return JSON.parse(localStorage.getItem(ACHIEVEMENTS_KEY) || "{}"); } catch { return {}; }
+  })();
+  if (stored[id]) return { earned: false, achievement: null }; // already earned
+  stored[id] = new Date().toISOString();
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(stored));
+  const def = ACHIEVEMENT_DEFINITIONS.find((a) => a.id === id);
+  return { earned: true, achievement: def ? { ...def, earnedAt: stored[id] } : null };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 6 — Session State (Boss + Nemesis + Consecutive streak)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SESSION_KEY = "ctt_session";
+
+export interface SessionState {
+  puzzleCount: number;       // puzzles attempted this session
+  consecutiveCorrect: number; // no-fail streak this session
+  startedAt: string;
+}
+
+function getDefaultSession(): SessionState {
+  return { puzzleCount: 0, consecutiveCorrect: 0, startedAt: new Date().toISOString() };
+}
+
+export function getSessionState(): SessionState {
+  if (typeof window === "undefined") return getDefaultSession();
+  try {
+    const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null") as SessionState | null;
+    if (!stored) return getDefaultSession();
+    // Reset session if older than 4 hours (new session)
+    const age = (Date.now() - new Date(stored.startedAt).getTime()) / 3600000;
+    if (age > 4) return getDefaultSession();
+    return stored;
+  } catch {
+    return getDefaultSession();
+  }
+}
+
+export function updateSessionState(correct: boolean): SessionState {
+  if (typeof window === "undefined") return getDefaultSession();
+  const state = getSessionState();
+  state.puzzleCount++;
+  if (correct) {
+    state.consecutiveCorrect++;
+  } else {
+    state.consecutiveCorrect = 0;
+  }
+  localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+  return state;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 6 — Nemesis Puzzle Tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NEMESIS_KEY = "ctt_nemesis";
+
+export interface NemesisEntry {
+  puzzleId: string;
+  failCount: number;
+  lastFailedAt: string;
+  defeated: boolean;
+}
+
+export function getNemesisEntries(): Record<string, NemesisEntry> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(NEMESIS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function recordPuzzleFail(puzzleId: string): NemesisEntry {
+  if (typeof window === "undefined") return { puzzleId, failCount: 1, lastFailedAt: new Date().toISOString(), defeated: false };
+  const entries = getNemesisEntries();
+  const existing = entries[puzzleId] ?? { puzzleId, failCount: 0, lastFailedAt: "", defeated: false };
+  const updated: NemesisEntry = {
+    ...existing,
+    failCount: existing.failCount + 1,
+    lastFailedAt: new Date().toISOString(),
+  };
+  entries[puzzleId] = updated;
+  localStorage.setItem(NEMESIS_KEY, JSON.stringify(entries));
+  return updated;
+}
+
+export function recordPuzzleWin(puzzleId: string): void {
+  if (typeof window === "undefined") return;
+  const entries = getNemesisEntries();
+  if (entries[puzzleId]) {
+    entries[puzzleId].defeated = true;
+    localStorage.setItem(NEMESIS_KEY, JSON.stringify(entries));
+  }
+}
+
+/** Get active Nemesis puzzles (failed 5+ times, not defeated). Max 3. */
+export function getActiveNemesisPuzzles(): NemesisEntry[] {
+  const entries = getNemesisEntries();
+  return Object.values(entries)
+    .filter((e) => e.failCount >= 5 && !e.defeated)
+    .sort((a, b) => b.failCount - a.failCount)
+    .slice(0, 3);
+}
+
+/** Check if a puzzle is a Nemesis */
+export function isPuzzleNemesis(puzzleId: string): boolean {
+  const entries = getNemesisEntries();
+  const e = entries[puzzleId];
+  return !!e && e.failCount >= 5 && !e.defeated;
+}
+
+/** Get fail count for a specific puzzle */
+export function getPuzzleFailCount(puzzleId: string): number {
+  const entries = getNemesisEntries();
+  return entries[puzzleId]?.failCount ?? 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 6 — Achievement check helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Check and award all applicable achievements after a puzzle attempt.
+ * Returns array of newly earned achievement IDs.
+ */
+export function checkAndAwardAchievements(params: {
+  outcome: SM2Outcome;
+  solveTimeMs: number;
+  theme?: string;
+  consecutiveCorrect: number;
+  totalSolved: number;
+  streakDays: number;
+  tier: number;
+  puzzleId: string;
+}): AchievementId[] {
+  const earned: AchievementId[] = [];
+  const { outcome, solveTimeMs, theme, consecutiveCorrect, totalSolved, streakDays, tier, puzzleId } = params;
+  const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
+
+  // First Blood: 1st solve
+  if (isSolved && totalSolved === 1) {
+    const r = earnAchievement("first_blood");
+    if (r.earned) earned.push("first_blood");
+  }
+
+  // Centurion: 100 total
+  if (isSolved && totalSolved >= 100) {
+    const r = earnAchievement("centurion");
+    if (r.earned) earned.push("centurion");
+  }
+
+  // Speed Demon: < 5s
+  if (isSolved && solveTimeMs > 0 && solveTimeMs < 5000) {
+    const r = earnAchievement("speed_demon");
+    if (r.earned) earned.push("speed_demon");
+  }
+
+  // On Fire: 10 consecutive
+  if (isSolved && consecutiveCorrect >= 10) {
+    const r = earnAchievement("on_fire");
+    if (r.earned) earned.push("on_fire");
+  }
+
+  // Fork Master: 50 fork puzzles
+  if (isSolved && theme?.toUpperCase() === "FORK") {
+    const sm2 = getSM2Attempts();
+    const forkSolves = sm2.filter(
+      (a) => a.theme?.toUpperCase() === "FORK" && (a.outcome === "solved-first-try" || a.outcome === "solved-after-retry")
+    ).length;
+    if (forkSolves >= 50) {
+      const r = earnAchievement("fork_master");
+      if (r.earned) earned.push("fork_master");
+    }
+  }
+
+  // Pattern Collector: all 28 attempted
+  if (isSolved) {
+    const sm2 = getSM2Attempts();
+    const themes = new Set(sm2.map((a) => a.theme?.toUpperCase()).filter(Boolean));
+    if (themes.size >= 28) {
+      const r = earnAchievement("pattern_collector");
+      if (r.earned) earned.push("pattern_collector");
+    }
+  }
+
+  // Comeback Kid: beat puzzle failed 3+ times before
+  if (isSolved) {
+    const failCount = getPuzzleFailCount(puzzleId);
+    if (failCount >= 3) {
+      const r = earnAchievement("comeback_kid");
+      if (r.earned) earned.push("comeback_kid");
+    }
+  }
+
+  // Dedicated: 7-day streak
+  if (streakDays >= 7) {
+    const r = earnAchievement("dedicated");
+    if (r.earned) earned.push("dedicated");
+  }
+
+  // Committed: 30-day streak
+  if (streakDays >= 30) {
+    const r = earnAchievement("committed");
+    if (r.earned) earned.push("committed");
+  }
+
+  // Tier Climber: solved Tier 2
+  if (isSolved && tier >= 2) {
+    const r = earnAchievement("tier_climber");
+    if (r.earned) earned.push("tier_climber");
+  }
+
+  // Elite: solved Tier 3
+  if (isSolved && tier >= 3) {
+    const r = earnAchievement("elite");
+    if (r.earned) earned.push("elite");
+  }
+
+  return earned;
 }
