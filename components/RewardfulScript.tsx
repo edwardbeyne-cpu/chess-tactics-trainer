@@ -1,40 +1,18 @@
-'use client';
-
-import { useEffect } from 'react';
-
-declare global {
-  interface Window {
-    rewardful?: {
-      init: (options: { key: string }) => void;
-    };
-  }
-}
+import Script from 'next/script';
 
 export default function RewardfulScript() {
-  useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_REWARDFUL_API_KEY;
-    if (!apiKey) {
-      console.warn('Rewardful API key not set');
-      return;
-    }
+  const apiKey = process.env.NEXT_PUBLIC_REWARDFUL_API_KEY || '976154';
 
-    // Check if script already loaded
-    if (window.rewardful) {
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://r.wdfl.co/rw.js';
-    script.async = true;
-    script.onload = () => {
-      window.rewardful?.init({ key: apiKey });
-    };
-    document.head.appendChild(script);
-
-    return () => {
-      // Cleanup if needed
-    };
-  }, []);
-
-  return null;
+  return (
+    <>
+      <Script
+        src="https://r.wdfl.co/rw.js"
+        data-rewardful={apiKey}
+        strategy="beforeInteractive"
+      />
+      <Script id="rewardful-queue" strategy="beforeInteractive">{`
+        (function(w,r){w._rwq=w[r]=w[r]||[];function(){(w[r].q=w[r].q||[]).push(arguments)}})(window,'rewardful');
+      `}</Script>
+    </>
+  );
 }

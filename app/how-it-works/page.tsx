@@ -13,7 +13,7 @@ const steps = [
     title: "Connect",
     headline: "Import your games, find your weaknesses",
     desc: "Link your Chess.com account and we analyze your last 100+ games. We identify the tactical patterns you missed — forks you didn't see, pins you walked into, back rank mates you overlooked.",
-    note: "Chess.com import coming in next sprint — train manually now.",
+    note: "Chess.com import available on the Improver plan — start training manually now.",
   },
   {
     number: "02",

@@ -10,6 +10,8 @@ import {
   getUserSettings,
   saveUserSettings,
   fetchAndSavePlatformRatings,
+  getDailyTargetSettings,
+  saveDailyTargetSettings,
 } from "@/lib/storage";
 import BoardThemeSettings from "./BoardThemeSettings";
 import DataExport from "./DataExport";
@@ -414,6 +416,28 @@ export default function Settings() {
   const [lastFilename, setLastFilename] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sprint 10: Daily goal
+  const [dailyGoal, setDailyGoalState] = useState<number>(() => {
+    if (typeof window === "undefined") return 10;
+    return getDailyTargetSettings().dailyGoal;
+  });
+  const [customGoal, setCustomGoal] = useState<string>("");
+  const [goalSaved, setGoalSaved] = useState(false);
+
+  function handleGoalSelect(goal: number) {
+    setDailyGoalState(goal);
+    setCustomGoal("");
+    saveDailyTargetSettings({ dailyGoal: goal });
+    setGoalSaved(true);
+    setTimeout(() => setGoalSaved(false), 1500);
+  }
+
+  function handleCustomGoal() {
+    const val = parseInt(customGoal, 10);
+    if (isNaN(val) || val < 1 || val > 200) return;
+    handleGoalSelect(val);
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -464,6 +488,71 @@ export default function Settings() {
       <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>
         Settings
       </h1>
+
+      {/* Sprint 10: Daily Puzzle Goal */}
+      <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1.2rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
+          🎯 Daily Puzzle Goal
+        </h2>
+        <p style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
+          Set how many puzzles you want to solve each day. Your streak counts days where you hit this goal.
+        </p>
+        <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          {[10, 20, 30].map((g) => (
+            <button
+              key={g}
+              onClick={() => handleGoalSelect(g)}
+              style={{
+                backgroundColor: dailyGoal === g ? "#2e75b6" : "#162030",
+                color: dailyGoal === g ? "white" : "#94a3b8",
+                border: `1px solid ${dailyGoal === g ? "#2e75b6" : "#2e3a5c"}`,
+                borderRadius: "8px",
+                padding: "0.6rem 1.25rem",
+                cursor: "pointer",
+                fontWeight: dailyGoal === g ? "bold" : "normal",
+                fontSize: "0.9rem",
+              }}
+            >
+              {g} puzzles
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={customGoal}
+            onChange={(e) => setCustomGoal(e.target.value)}
+            placeholder="Custom (1-200)"
+            style={{
+              backgroundColor: "#162030",
+              border: "1px solid #2e3a5c",
+              borderRadius: "6px",
+              padding: "0.5rem 0.75rem",
+              color: "#e2e8f0",
+              fontSize: "0.9rem",
+              width: "140px",
+            }}
+          />
+          <button
+            onClick={handleCustomGoal}
+            disabled={!customGoal}
+            style={{
+              backgroundColor: customGoal ? "#2e75b6" : "#162030",
+              color: customGoal ? "white" : "#475569",
+              border: "none", borderRadius: "6px",
+              padding: "0.5rem 1rem", cursor: customGoal ? "pointer" : "not-allowed", fontSize: "0.85rem",
+            }}
+          >
+            Set Custom
+          </button>
+          {goalSaved && <span style={{ color: "#4ade80", fontSize: "0.85rem" }}>✓ Saved!</span>}
+        </div>
+        <div style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.6rem" }}>
+          Current goal: <strong style={{ color: "#e2e8f0" }}>{dailyGoal} puzzles/day</strong>
+        </div>
+      </div>
 
       {/* Sprint 9: Board & Piece Themes */}
       <BoardThemeSettings />

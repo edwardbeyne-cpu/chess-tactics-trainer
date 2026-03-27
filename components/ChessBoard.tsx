@@ -6,6 +6,8 @@ import type { Api } from "chessground/api";
 import type { Config } from "chessground/config";
 import type { Key, Color } from "chessground/types";
 import { Chess } from "chess.js";
+import "chessground/assets/chessground.base.css";
+import "chessground/assets/chessground.brown.css";
 
 interface ChessBoardProps {
   fen: string;
@@ -18,7 +20,7 @@ interface ChessBoardProps {
 }
 
 function getMovable(fen: string, draggable: boolean) {
-  if (!draggable) return { color: undefined as Color | undefined, dests: new Map() };
+  if (!draggable) return { color: undefined as Color | undefined, dests: new Map(), turnColor: "white" as Color };
   
   const chess = new Chess(fen);
   const dests = new Map<Key, Key[]>();
@@ -31,7 +33,7 @@ function getMovable(fen: string, draggable: boolean) {
   }
 
   const turn = chess.turn() === "w" ? "white" : "black";
-  return { color: turn as Color, dests };
+  return { color: turn as Color, dests, turnColor: turn as Color };
 }
 
 // ── Annotation helpers ─────────────────────────────────────────────────────
@@ -83,6 +85,8 @@ export default function ChessBoard({
   const highlights = useRef<SquareHighlight[]>([]);
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
+  const fenRef = useRef(fen);
+  fenRef.current = fen;
 
   // Convert file/rank to square key from mouse position
   const getSquareFromEvent = useCallback((e: MouseEvent): Key | null => {
@@ -131,6 +135,7 @@ export default function ChessBoard({
     const config: Config = {
       fen,
       orientation,
+      turnColor: movable.turnColor,
       movable: {
         free: false,
         color: movable.color,
@@ -143,7 +148,17 @@ export default function ChessBoard({
                 // Clear annotations on any move played
                 clearAnnotations();
               } else if (cgRef.current) {
-                cgRef.current.set({ fen });
+                // Reset board to current position, preserving movable state
+                const currentMovable = getMovable(fenRef.current, true);
+                cgRef.current.set({
+                  fen: fenRef.current,
+                  turnColor: currentMovable.turnColor,
+                  movable: {
+                    free: false,
+                    color: currentMovable.color,
+                    dests: currentMovable.dests,
+                  },
+                });
               }
             }
           },
@@ -240,12 +255,14 @@ export default function ChessBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update board when fen/draggable changes
+  // Update board when fen/draggable/orientation changes
   useEffect(() => {
     if (!cgRef.current) return;
     const movable = getMovable(fen, draggable);
     cgRef.current.set({
       fen,
+      orientation,
+      turnColor: movable.turnColor,
       movable: {
         free: false,
         color: movable.color,
@@ -253,7 +270,7 @@ export default function ChessBoard({
       },
       lastMove: lastMove as [Key, Key] | undefined,
     });
-  }, [fen, draggable, lastMove]);
+  }, [fen, draggable, lastMove, orientation]);
 
   return (
     <div

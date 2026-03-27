@@ -1,5 +1,4 @@
-// TODO: Integrate Auth0 in Sprint 3
-// This is a placeholder login page
+// Login page
 
 import Link from "next/link";
 
@@ -61,30 +60,6 @@ export default function LoginPage() {
           Sign in to access your training dashboard
         </p>
 
-        {/* TODO: Replace with Auth0 Universal Login in Sprint 3 */}
-        <button
-          disabled
-          style={{
-            width: "100%",
-            backgroundColor: "#162030",
-            border: "1px solid #2e3a5c",
-            borderRadius: "10px",
-            padding: "0.85rem",
-            color: "#94a3b8",
-            fontSize: "0.95rem",
-            cursor: "not-allowed",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.75rem",
-            marginBottom: "1rem",
-          }}
-        >
-          <span style={{ fontSize: "1.1rem" }}>G</span>
-          Sign in with Google
-          <span style={{ fontSize: "0.7rem", color: "#475569", marginLeft: "auto" }}>Coming Sprint 3</span>
-        </button>
-
         <div
           style={{
             backgroundColor: "#0d2218",
@@ -96,7 +71,7 @@ export default function LoginPage() {
             marginBottom: "1.5rem",
           }}
         >
-          Auth0 integration coming in Sprint 3. For now, training data is saved locally in your browser.
+          Training data is saved locally in your browser. No account required to get started.
         </div>
 
         <Link

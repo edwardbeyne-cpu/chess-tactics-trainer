@@ -35,11 +35,11 @@ const faqs = [
   },
   {
     q: "Do I need a Chess.com account?",
-    a: "No. You can train with the full puzzle library without connecting Chess.com. The Chess.com integration (Sprint 3) just lets us personalize your queue based on your actual blunders.",
+    a: "No. You can train with the full puzzle library without connecting Chess.com. The Chess.com integration just lets us personalize your queue based on your actual blunders.",
   },
   {
     q: "When is the Chess.com import available?",
-    a: "Chess.com game import and full personalization is coming in the next sprint. Sign up free now to get early access.",
+    a: "Chess.com game import and full personalization is available on the Improver plan. Sign up free now to get early access.",
   },
 ];
 
@@ -208,8 +208,8 @@ export default function HomePage() {
           />
           <PricingCard
             tier="pro"
-            price="$7.99"
-            priceAnnual="$59"
+            price="$9.99"
+            priceAnnual="$99"
             features={[
               "Unlimited puzzles",
               "All 28 patterns across 3 tiers",

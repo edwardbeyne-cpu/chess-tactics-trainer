@@ -100,19 +100,19 @@ piece.fading {
   pointer-events: none;
 }
 
-/* Unicode chess pieces as background images */
-piece.white.king    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♔</text></svg>"); }
-piece.white.queen   { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♕</text></svg>"); }
-piece.white.rook    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♖</text></svg>"); }
-piece.white.bishop  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♗</text></svg>"); }
-piece.white.knight  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♘</text></svg>"); }
-piece.white.pawn    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♙</text></svg>"); }
-piece.black.king    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♚</text></svg>"); }
-piece.black.queen   { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♛</text></svg>"); }
-piece.black.rook    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♜</text></svg>"); }
-piece.black.bishop  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♝</text></svg>"); }
-piece.black.knight  { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♞</text></svg>"); }
-piece.black.pawn    { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'><text y='40' font-size='40'>♟</text></svg>"); }
+/* cburnett piece set (Lichess) */
+piece.white.king    { background-image: url("/pieces/cburnett/wK.svg"); }
+piece.white.queen   { background-image: url("/pieces/cburnett/wQ.svg"); }
+piece.white.rook    { background-image: url("/pieces/cburnett/wR.svg"); }
+piece.white.bishop  { background-image: url("/pieces/cburnett/wB.svg"); }
+piece.white.knight  { background-image: url("/pieces/cburnett/wN.svg"); }
+piece.white.pawn    { background-image: url("/pieces/cburnett/wP.svg"); }
+piece.black.king    { background-image: url("/pieces/cburnett/bK.svg"); }
+piece.black.queen   { background-image: url("/pieces/cburnett/bQ.svg"); }
+piece.black.rook    { background-image: url("/pieces/cburnett/bR.svg"); }
+piece.black.bishop  { background-image: url("/pieces/cburnett/bB.svg"); }
+piece.black.knight  { background-image: url("/pieces/cburnett/bN.svg"); }
+piece.black.pawn    { background-image: url("/pieces/cburnett/bP.svg"); }
 
 /* ── Sprint 6 Animations ──────────────────────────────────────────────────── */
 

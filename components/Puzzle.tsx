@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Chess } from "chess.js";
 import patterns from "@/data/patterns";
 import {
@@ -26,6 +26,7 @@ import {
   checkAndAwardAchievements,
   updateTacticsRating,
   getTacticsRatingData,
+  refreshHabitEntry,
   type Achievement,
 } from "@/lib/storage";
 
@@ -34,14 +35,14 @@ function getTacticsRatingDataForAgg(): number {
   if (typeof window === "undefined") return 800;
   return getTacticsRatingData().tacticsRating;
 }
-import type { SM2Outcome } from "@/lib/storage";
+import type { SM2Outcome, SM2Attempt } from "@/lib/storage";
 import AchievementToast from "./AchievementToast";
 import SocialProofBanner from "./SocialProofBanner";
 import { fetchPuzzleByTheme, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
 import { startTrial, hasActiveSubscription } from "@/lib/trial";
 import { isSocialProofSuppressed } from "@/lib/socialProof";
 import { recordAggregateAttempt, updateWeeklyRatingGain } from "@/lib/aggregate";
-import { getSubscriptionTier } from "@/lib/percentile";
+import { getSubscriptionTier as getPercentileTier } from "@/lib/percentile";
 import ChessBoard from "./ChessBoard";
 
 // ── Mode: lichess (live), classic (static), or mixed ──────────────────────
@@ -268,6 +269,28 @@ function XPToast({ xp, onDone }: { xp: number; onDone: () => void }) {
   );
 }
 
+// ── Responsive board width hook ────────────────────────────────────────────
+
+function useResponsiveBoardWidth(): number {
+  const getWidth = () => {
+    if (typeof window === "undefined") return 480;
+    const vw = window.innerWidth;
+    if (vw < 640) return Math.min(vw - 32, 380);
+    if (vw <= 1024) return Math.min(480, Math.floor(vw * 0.9));
+    return 480;
+  };
+
+  const [boardWidth, setBoardWidth] = useState<number>(getWidth);
+
+  useEffect(() => {
+    const handleResize = () => setBoardWidth(getWidth());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return boardWidth;
+}
+
 // ── Lichess Puzzle Board ───────────────────────────────────────────────────
 
 function LichessPuzzleBoard({
@@ -276,14 +299,17 @@ function LichessPuzzleBoard({
   onNext,
   isMixedMode,
   revealedPattern,
+  boardWidth,
 }: {
   puzzle: AppPuzzle;
   onResult: (outcome: SM2Outcome, solveTimeMs: number) => void;
   onNext: () => void;
   isMixedMode?: boolean;
   revealedPattern?: string | null;
+  boardWidth: number;
 }) {
   const [fen, setFen] = useState(puzzle.fen);
+  const [orientation] = useState<'white' | 'black'>(puzzle.fen.includes(' b ') ? 'black' : 'white');
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "waiting" | "solved" | "failed">("solve");
   const [message, setMessage] = useState(puzzle.description);
@@ -316,7 +342,7 @@ function LichessPuzzleBoard({
         if (t <= 1) {
           setTimerActive(false);
           setStatus("failed");
-          setMessage("Time&apos;s up! Moving to next puzzle.");
+          setMessage("Time's up! Moving to next puzzle...");
           if (!resultCalledRef.current) {
             resultCalledRef.current = true;
             onResult("failed", 0);
@@ -329,6 +355,17 @@ function LichessPuzzleBoard({
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerActive]);
+
+  // Auto-advance after 2 seconds when timer runs out
+  useEffect(() => {
+    if (status === "failed" && timeLeft === 0) {
+      const autoAdvance = setTimeout(() => {
+        onNext();
+      }, 2000);
+      return () => clearTimeout(autoAdvance);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, timeLeft]);
 
   function handleMove(sourceSquare: string, targetSquare: string): boolean {
     if (status !== "solve") return false;
@@ -385,10 +422,21 @@ function LichessPuzzleBoard({
 
     setTimeout(() => {
       const afterOp = new Chess(newFen);
-      afterOp.move({ from: opFrom, to: opTo, promotion: opMove.slice(4) || "q" });
-      setFen(afterOp.fen());
+      const opPromotion = opMove.length === 5 ? opMove[4] : undefined;
+      try {
+        afterOp.move({ from: opFrom, to: opTo, ...(opPromotion ? { promotion: opPromotion } : {}) });
+      } catch {
+        // Opponent move failed — advance index past it and unblock player
+        setMoveIndex(nextIndex + 1);
+        setStatus("solve");
+        setMessage("Good move! Keep going...");
+        return;
+      }
+      const afterOpFen = afterOp.fen();
+      setFen(afterOpFen);
       setLastMove([opFrom, opTo]);
-      setMoveIndex(nextIndex + 1);
+      const afterOpIndex = nextIndex + 1;
+      setMoveIndex(afterOpIndex);
       setStatus("solve");
       setMessage("Good move! Keep going...");
     }, 600);
@@ -416,8 +464,15 @@ function LichessPuzzleBoard({
   const messageColor =
     status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#e2e8f0";
 
+  const isMobile = boardWidth < 480;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2rem", alignItems: "start" }}>
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: isMobile ? "1fr" : "auto 1fr",
+      gap: isMobile ? "1rem" : "2rem",
+      alignItems: "start",
+    }}>
       <div>
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.5rem", marginBottom: "1rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
@@ -443,11 +498,13 @@ function LichessPuzzleBoard({
           <div style={{ color: messageColor, fontSize: "1rem" }}>{message}</div>
         </div>
         <ChessBoard
+          key={puzzle.id}
           fen={fen}
+          orientation={orientation}
           onMove={handleMove}
           lastMove={lastMove}
           draggable={status === "solve"}
-          boardWidth={480}
+          boardWidth={boardWidth}
         />
       </div>
 
@@ -520,11 +577,171 @@ function LichessPuzzleBoard({
   );
 }
 
+// ── Lichess Pattern Mode (with tier lockout) ──────────────────────────────
+
+function LichessPatternMode({
+  selectedPattern,
+  currentPuzzle,
+  loading,
+  error,
+  mixedRevealedPattern,
+  onPatternSelect,
+  onResult,
+  onNext,
+  onRetry,
+  boardWidth,
+}: {
+  selectedPattern: string;
+  currentPuzzle: AppPuzzle | null;
+  loading: boolean;
+  error: string | null;
+  mixedRevealedPattern: string | null;
+  onPatternSelect: (name: string) => void;
+  onResult: (outcome: SM2Outcome, solveTimeMs: number) => void;
+  onNext: () => void;
+  onRetry: () => void;
+  boardWidth: number;
+}) {
+  // Calculate tier lockout from SM2 attempts
+  const { tier2Locked, tier3Locked, tier1Progress, tier2Progress } = useMemo(() => {
+    const sm2 = getSM2Attempts();
+    const byTheme = new Map<string, SM2Attempt[]>();
+    for (const a of sm2) {
+      if (!a.theme) continue;
+      const key = a.theme.toUpperCase();
+      if (!byTheme.has(key)) byTheme.set(key, []);
+      byTheme.get(key)!.push(a);
+    }
+
+    function getSolveRate(patternName: string): number {
+      const arr = byTheme.get(patternName.toUpperCase()) ?? [];
+      if (arr.length === 0) return 0;
+      const solved = arr.filter((a) => a.outcome === "solved-first-try").length;
+      return solved / arr.length;
+    }
+
+    const tier1Patterns = patterns.filter((p) => p.tier === 1);
+    const tier2Patterns = patterns.filter((p) => p.tier === 2);
+    const t1At70 = tier1Patterns.filter((p) => getSolveRate(p.name) >= 0.7).length;
+    const t2At70 = tier2Patterns.filter((p) => getSolveRate(p.name) >= 0.7).length;
+
+    return {
+      tier2Locked: t1At70 < tier1Patterns.length,
+      tier3Locked: t2At70 < tier2Patterns.length,
+      tier1Progress: { at70: t1At70, total: tier1Patterns.length },
+      tier2Progress: { at70: t2At70, total: tier2Patterns.length },
+    };
+  }, []);
+
+  function isPatternLocked(tier: number): boolean {
+    if (tier === 2) return tier2Locked;
+    if (tier === 3) return tier3Locked;
+    return false;
+  }
+
+  const isMobileLayout = boardWidth < 480;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: isMobileLayout ? "1fr" : "220px 1fr", gap: "1.5rem" }}>
+      {/* Pattern selector */}
+      <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem", overflowY: "auto", maxHeight: isMobileLayout ? "200px" : "700px" }}>
+        <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          Select Pattern
+        </div>
+        {/* Tier 1 progress hint */}
+        {tier2Locked && (
+          <div style={{ backgroundColor: "#1a1508", border: "1px solid #4a3a0a", borderRadius: "6px", padding: "0.5rem 0.6rem", marginBottom: "0.6rem", fontSize: "0.68rem", color: "#f59e0b" }}>
+            Tier 1: {tier1Progress.at70}/{tier1Progress.total} at 70%+ to unlock Tier 2
+            <div style={{ backgroundColor: "#0d1200", borderRadius: "3px", height: "4px", overflow: "hidden", marginTop: "0.3rem" }}>
+              <div style={{ width: `${(tier1Progress.at70 / tier1Progress.total) * 100}%`, height: "100%", backgroundColor: "#f59e0b", borderRadius: "3px" }} />
+            </div>
+          </div>
+        )}
+        {!tier2Locked && tier3Locked && (
+          <div style={{ backgroundColor: "#150e1f", border: "1px solid #3a1f5a", borderRadius: "6px", padding: "0.5rem 0.6rem", marginBottom: "0.6rem", fontSize: "0.68rem", color: "#a855f7" }}>
+            Tier 2: {tier2Progress.at70}/{tier2Progress.total} at 70%+ to unlock Tier 3
+            <div style={{ backgroundColor: "#0d0817", borderRadius: "3px", height: "4px", overflow: "hidden", marginTop: "0.3rem" }}>
+              <div style={{ width: `${(tier2Progress.at70 / tier2Progress.total) * 100}%`, height: "100%", backgroundColor: "#a855f7", borderRadius: "3px" }} />
+            </div>
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+          {patterns.map((p) => {
+            const locked = isPatternLocked(p.tier);
+            return (
+              <button
+                key={p.name}
+                onClick={() => !locked && onPatternSelect(p.name)}
+                title={locked ? `Complete Tier ${p.tier - 1} to unlock` : undefined}
+                style={{
+                  backgroundColor: selectedPattern === p.name ? "#2e75b6" : locked ? "#0f1219" : "#162030",
+                  color: locked ? "#475569" : "white",
+                  border: "none", borderRadius: "6px",
+                  padding: "0.5rem 0.75rem", cursor: locked ? "not-allowed" : "pointer",
+                  textAlign: "left", fontSize: "0.82rem",
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  opacity: locked ? 0.6 : 1,
+                }}
+              >
+                <span>{locked ? "🔒" : p.icon}</span>
+                <span>{p.name}</span>
+                <span style={{ marginLeft: "auto", color: "#475569", fontSize: "0.7rem" }}>T{p.tier}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Puzzle area */}
+      <div>
+        {!selectedPattern && (
+          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>♟</div>
+            <div style={{ color: "#94a3b8", fontSize: "1.1rem" }}>
+              Select a tactical pattern on the left to fetch a live puzzle from Lichess
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
+            <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⟳</div>
+            <div style={{ color: "#94a3b8" }}>Fetching puzzle from Lichess...</div>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #ef4444", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
+            <div style={{ color: "#ef4444", marginBottom: "1rem" }}>{error}</div>
+            <button
+              onClick={onRetry}
+              style={{ backgroundColor: "#2e75b6", color: "white", border: "none", borderRadius: "8px", padding: "0.6rem 1.25rem", cursor: "pointer" }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {currentPuzzle && !loading && (
+          <LichessPuzzleBoard
+            key={currentPuzzle.id}
+            puzzle={currentPuzzle}
+            onResult={onResult}
+            onNext={onNext}
+            boardWidth={boardWidth}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Puzzle Component ──────────────────────────────────────────────────
 
 export default function Puzzle() {
+  const boardWidth = useResponsiveBoardWidth();
   const [mode, setMode] = useState<PuzzleMode>("lichess");
   const [selectedPattern, setSelectedPattern] = useState<string>("");
+  const puzzleSubscriptionTier = typeof window !== "undefined" ? getPercentileTier() : "free";
   const [currentPuzzle, setCurrentPuzzle] = useState<AppPuzzle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -681,6 +898,9 @@ export default function Puzzle() {
     // Update streak
     const { streakData } = updateStreak();
 
+    // Sprint 10: Update daily habit entry
+    refreshHabitEntry();
+
     // Update session state
     const sessionState = updateSessionState(isSolved);
     sessionCountRef.current = sessionState.puzzleCount;
@@ -758,7 +978,7 @@ export default function Puzzle() {
     }
 
     // Sprint 8: Record aggregate contribution (opt-in)
-    const subTier = getSubscriptionTier();
+    const subTier = getPercentileTier();
     const sessionStateForAgg = getSessionState();
     recordAggregateAttempt({
       patternName: themeName,
@@ -873,23 +1093,35 @@ export default function Puzzle() {
       )}
 
       {/* Mode toggle */}
-      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", alignItems: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "8px", overflow: "hidden" }}>
-          {(["lichess", "mixed", "classic"] as PuzzleMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => { setMode(m); setSelectedPattern(""); setCurrentPuzzle(null); setError(null); }}
-              style={{
-                backgroundColor: mode === m ? "#2e75b6" : "transparent",
-                color: mode === m ? "white" : "#64748b",
-                border: "none", padding: "0.5rem 1.25rem",
-                cursor: "pointer", fontWeight: mode === m ? "bold" : "normal",
-                fontSize: "0.9rem",
-              }}
-            >
-              {m === "lichess" ? "🌐 Pattern Mode" : m === "mixed" ? "🎲 Mixed Mode" : "📚 Classic"}
-            </button>
-          ))}
+          {(["lichess", "mixed", "classic"] as PuzzleMode[]).map((m) => {
+            const isMixedLocked = m === "mixed" && puzzleSubscriptionTier === "free";
+            return (
+              <button
+                key={m}
+                onClick={() => {
+                  if (isMixedLocked) {
+                    window.location.href = "/pricing";
+                    return;
+                  }
+                  setMode(m); setSelectedPattern(""); setCurrentPuzzle(null); setError(null);
+                }}
+                title={isMixedLocked ? "Mixed Mode requires Improver or Serious plan" : undefined}
+                style={{
+                  backgroundColor: mode === m ? "#2e75b6" : "transparent",
+                  color: isMixedLocked ? "#475569" : mode === m ? "white" : "#64748b",
+                  border: "none", padding: "0.5rem 1.25rem",
+                  cursor: isMixedLocked ? "not-allowed" : "pointer",
+                  fontWeight: mode === m ? "bold" : "normal",
+                  fontSize: "0.9rem",
+                  position: "relative",
+                }}
+              >
+                {m === "lichess" ? "🌐 Pattern Mode" : m === "mixed" ? (isMixedLocked ? "🔒 Mixed Mode" : "🎲 Mixed Mode") : "📚 Classic"}
+              </button>
+            );
+          })}
         </div>
         <span style={{ color: "#64748b", fontSize: "0.8rem" }}>
           {mode === "mixed"
@@ -898,6 +1130,11 @@ export default function Puzzle() {
             ? "Select a pattern to fetch live puzzles"
             : "Classic static puzzles"}
         </span>
+        {puzzleSubscriptionTier === "free" && (
+          <span style={{ color: "#f59e0b", fontSize: "0.75rem", backgroundColor: "#1a1508", border: "1px solid #4a3a0a", borderRadius: "6px", padding: "0.3rem 0.6rem" }}>
+            🔒 Mixed Mode — <a href="/pricing" style={{ color: "#f59e0b", textDecoration: "underline" }}>Upgrade to Improver</a>
+          </span>
+        )}
       </div>
 
       {/* Mixed Mode */}
@@ -937,6 +1174,7 @@ export default function Puzzle() {
               onNext={handleNext}
               isMixedMode={true}
               revealedPattern={mixedRevealedPattern}
+              boardWidth={boardWidth}
             />
           )}
         </div>
@@ -944,74 +1182,18 @@ export default function Puzzle() {
 
       {/* Lichess / Pattern Mode */}
       {mode === "lichess" && (
-        <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "1.5rem" }}>
-          {/* Pattern selector */}
-          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem", overflowY: "auto", maxHeight: "700px" }}>
-            <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-              Select Pattern
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-              {patterns.map((p) => (
-                <button
-                  key={p.name}
-                  onClick={() => handlePatternSelect(p.name)}
-                  style={{
-                    backgroundColor: selectedPattern === p.name ? "#2e75b6" : "#162030",
-                    color: "white",
-                    border: "none", borderRadius: "6px",
-                    padding: "0.5rem 0.75rem", cursor: "pointer",
-                    textAlign: "left", fontSize: "0.82rem",
-                    display: "flex", alignItems: "center", gap: "0.5rem",
-                  }}
-                >
-                  <span>{p.icon}</span>
-                  <span>{p.name}</span>
-                  <span style={{ marginLeft: "auto", color: "#475569", fontSize: "0.7rem" }}>T{p.tier}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Puzzle area */}
-          <div>
-            {!selectedPattern && (
-              <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
-                <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>♟</div>
-                <div style={{ color: "#94a3b8", fontSize: "1.1rem" }}>
-                  Select a tactical pattern on the left to fetch a live puzzle from Lichess
-                </div>
-              </div>
-            )}
-
-            {loading && (
-              <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⟳</div>
-                <div style={{ color: "#94a3b8" }}>Fetching puzzle from Lichess...</div>
-              </div>
-            )}
-
-            {error && (
-              <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #ef4444", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
-                <div style={{ color: "#ef4444", marginBottom: "1rem" }}>{error}</div>
-                <button
-                  onClick={() => selectedPattern && fetchNextPuzzle(selectedPattern)}
-                  style={{ backgroundColor: "#2e75b6", color: "white", border: "none", borderRadius: "8px", padding: "0.6rem 1.25rem", cursor: "pointer" }}
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {currentPuzzle && !loading && (
-              <LichessPuzzleBoard
-                key={currentPuzzle.id}
-                puzzle={currentPuzzle}
-                onResult={handleResult}
-                onNext={handleNext}
-              />
-            )}
-          </div>
-        </div>
+        <LichessPatternMode
+          selectedPattern={selectedPattern}
+          currentPuzzle={currentPuzzle}
+          loading={loading}
+          error={error}
+          mixedRevealedPattern={mixedRevealedPattern}
+          onPatternSelect={handlePatternSelect}
+          onResult={handleResult}
+          onNext={handleNext}
+          onRetry={() => selectedPattern && fetchNextPuzzle(selectedPattern)}
+          boardWidth={boardWidth}
+        />
       )}
 
       {/* Classic Mode */}
@@ -1025,6 +1207,7 @@ export default function Puzzle() {
 import puzzles from "@/data/puzzles";
 
 function ClassicPuzzleMode() {
+  const boardWidth = useResponsiveBoardWidth();
   const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [fen, setFen] = useState(puzzles[0].fen);
   const [moveIndex, setMoveIndex] = useState(0);
@@ -1144,8 +1327,9 @@ function ClassicPuzzleMode() {
   const messageColor =
     status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#e2e8f0";
 
+  const isMobile = boardWidth < 480;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2rem", alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "auto 1fr", gap: isMobile ? "1rem" : "2rem", alignItems: "start" }}>
       <div>
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.5rem", marginBottom: "1rem" }}>
           <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
@@ -1153,7 +1337,7 @@ function ClassicPuzzleMode() {
           </div>
           <div style={{ color: messageColor, fontSize: "1rem" }}>{message}</div>
         </div>
-        <ChessBoard fen={fen} onMove={handleMove} lastMove={lastMove} draggable={status === "solve"} boardWidth={480} />
+        <ChessBoard key={puzzles[puzzleIndex]?.id} fen={fen} orientation={puzzles[puzzleIndex]?.fen?.includes(' b ') ? 'black' : 'white'} onMove={handleMove} lastMove={lastMove} draggable={status === "solve"} boardWidth={boardWidth} />
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>

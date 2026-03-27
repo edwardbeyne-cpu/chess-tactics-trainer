@@ -17,6 +17,10 @@ const BOARD_THEME_KEY = "ctt_board_theme";
 const PIECE_STYLE_KEY = "ctt_piece_style";
 const PGN_IMPORT_USAGE_KEY = "ctt_pgn_import_usage";
 
+// Sprint 10 keys
+const DAILY_TARGET_KEY = "ctt_daily_target";
+const DAILY_HABIT_KEY = "ctt_daily_habit";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy SRS interval ladder (Sprint 2 system — kept for backward compat)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -294,6 +298,79 @@ export interface PatternStat {
   lastPracticed: string | null;
   dueCount: number;
   avgSolveTimeMs: number | null; // Sprint 4
+  personalBestMs: number | null; // Sprint 10: fastest first-try solve
+  recentSolveTimes: number[];    // Sprint 10: last 20 first-try solve times (ms)
+  fluencyScore: number | null;   // Sprint 10: 0-100 composite score
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 10 — Fluency Score Calculation
+// Composite 0-100: accuracy 50% + speed 30% + consistency 20%
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fluency labels:
+ *   0-39   → Novice
+ *   40-69  → Developing
+ *   70-89  → Proficient
+ *   90-100 → Fluent
+ */
+export function getFluencyLabel(score: number): string {
+  if (score >= 90) return "Fluent";
+  if (score >= 70) return "Proficient";
+  if (score >= 40) return "Developing";
+  return "Novice";
+}
+
+export function getFluencyColor(score: number): string {
+  if (score >= 90) return "#4ade80";
+  if (score >= 70) return "#22c55e";
+  if (score >= 40) return "#f59e0b";
+  return "#ef4444";
+}
+
+/**
+ * Calculate fluency score from available stats.
+ * @param solveRate - 0-1, proportion solved first try
+ * @param avgSolveTimeMs - average ms on first-try solves
+ * @param recentTimes - recent first-try solve times (ms) for consistency
+ */
+export function calculateFluencyScore(
+  solveRate: number,
+  avgSolveTimeMs: number | null,
+  recentTimes: number[]
+): number {
+  // Accuracy component (0-50 pts): linear 0%→0, 100%→50
+  const accuracyComponent = solveRate * 50;
+
+  // Speed component (0-30 pts):
+  // Target: <= 5s = 30pts, <= 10s = 24pts, <= 20s = 15pts, <= 30s = 8pts, > 30s = 0pts
+  let speedComponent = 0;
+  if (avgSolveTimeMs !== null) {
+    const avgSec = avgSolveTimeMs / 1000;
+    if (avgSec <= 5) speedComponent = 30;
+    else if (avgSec <= 10) speedComponent = 24;
+    else if (avgSec <= 20) speedComponent = 15;
+    else if (avgSec <= 30) speedComponent = 8;
+    else speedComponent = Math.max(0, 8 - (avgSec - 30) * 0.2);
+  }
+
+  // Consistency component (0-20 pts):
+  // Measured by coefficient of variation (lower = more consistent)
+  let consistencyComponent = 0;
+  if (recentTimes.length >= 3) {
+    const mean = recentTimes.reduce((s, t) => s + t, 0) / recentTimes.length;
+    const variance = recentTimes.reduce((s, t) => s + Math.pow(t - mean, 2), 0) / recentTimes.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = mean > 0 ? stdDev / mean : 1; // coefficient of variation
+    // cv <= 0.2 = very consistent (20pts), cv >= 1.0 = very inconsistent (0pts)
+    consistencyComponent = Math.max(0, Math.min(20, 20 * (1 - cv)));
+  } else if (recentTimes.length > 0) {
+    // Not enough data — give partial consistency based on solve time alone
+    consistencyComponent = 5;
+  }
+
+  return Math.round(Math.min(100, accuracyComponent + speedComponent + consistencyComponent));
 }
 
 export function getAllPatternStats(): PatternStat[] {
@@ -340,6 +417,23 @@ export function getAllPatternStats(): PatternStat[] {
       ? withTime.reduce((sum, a) => sum + (a.solve_time_ms ?? 0), 0) / withTime.length
       : null;
 
+    // Sprint 10: personal best and last 20 solve times
+    const allFirstTryTimes = withTime
+      .map((a) => a.solve_time_ms!)
+      .filter((t) => t > 0);
+    const personalBestMs = allFirstTryTimes.length > 0
+      ? Math.min(...allFirstTryTimes)
+      : null;
+    // Last 20 in chronological order
+    const sortedByTime = withTime.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const recentSolveTimes = sortedByTime.slice(-20).map((a) => a.solve_time_ms!);
+
+    // Sprint 10: fluency score (0-100)
+    // accuracy 50% + speed 30% + consistency 20%
+    const fluencyScore = totalAttempts >= 3
+      ? calculateFluencyScore(solveRate, avgSolveTimeMs, recentSolveTimes)
+      : null;
+
     result.push({
       theme,
       totalAttempts,
@@ -348,6 +442,9 @@ export function getAllPatternStats(): PatternStat[] {
       lastPracticed,
       dueCount,
       avgSolveTimeMs,
+      personalBestMs,
+      recentSolveTimes,
+      fluencyScore,
     });
   }
 
@@ -1775,4 +1872,141 @@ export function downloadFile(filename: string, content: string, mimeType: string
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 10 — Daily Puzzle Target / Habit Tracker
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DailyTargetSettings {
+  dailyGoal: number; // 10, 20, 30, or custom
+}
+
+function defaultDailyTargetSettings(): DailyTargetSettings {
+  return { dailyGoal: 10 };
+}
+
+export function getDailyTargetSettings(): DailyTargetSettings {
+  if (typeof window === "undefined") return defaultDailyTargetSettings();
+  try {
+    const stored = JSON.parse(localStorage.getItem(DAILY_TARGET_KEY) || "null") as DailyTargetSettings | null;
+    return stored ?? defaultDailyTargetSettings();
+  } catch {
+    return defaultDailyTargetSettings();
+  }
+}
+
+export function saveDailyTargetSettings(settings: DailyTargetSettings): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DAILY_TARGET_KEY, JSON.stringify(settings));
+}
+
+/**
+ * Daily habit entry: one per calendar day.
+ * goalMet = puzzlesSolved >= dailyGoal on that date
+ */
+export interface DailyHabitEntry {
+  date: string;          // YYYY-MM-DD
+  puzzlesSolved: number;
+  goalSet: number;       // the goal that was in effect on that day
+  goalMet: boolean;
+}
+
+export interface HabitData {
+  entries: DailyHabitEntry[];
+}
+
+export function getHabitData(): HabitData {
+  if (typeof window === "undefined") return { entries: [] };
+  try {
+    const stored = JSON.parse(localStorage.getItem(DAILY_HABIT_KEY) || "null") as HabitData | null;
+    return stored ?? { entries: [] };
+  } catch {
+    return { entries: [] };
+  }
+}
+
+function saveHabitData(data: HabitData): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(DAILY_HABIT_KEY, JSON.stringify(data));
+}
+
+/**
+ * Count how many puzzles the user solved today (SM2 attempts with "solved" outcome).
+ */
+export function getTodaySolvedCount(): number {
+  const today = getTodayKey();
+  return getSM2Attempts().filter((a) =>
+    a.timestamp.slice(0, 10) === today &&
+    (a.outcome === "solved-first-try" || a.outcome === "solved-after-retry")
+  ).length;
+}
+
+/**
+ * Refresh today's habit entry based on current attempt data.
+ * Should be called after each puzzle attempt.
+ */
+export function refreshHabitEntry(): DailyHabitEntry {
+  const today = getTodayKey();
+  const settings = getDailyTargetSettings();
+  const solvedToday = getTodaySolvedCount();
+  const goalMet = solvedToday >= settings.dailyGoal;
+
+  const data = getHabitData();
+  const idx = data.entries.findIndex((e) => e.date === today);
+  const entry: DailyHabitEntry = {
+    date: today,
+    puzzlesSolved: solvedToday,
+    goalSet: settings.dailyGoal,
+    goalMet,
+  };
+  if (idx >= 0) {
+    data.entries[idx] = entry;
+  } else {
+    data.entries.push(entry);
+  }
+  // Keep last 90 days
+  data.entries = data.entries.slice(-90);
+  saveHabitData(data);
+  return entry;
+}
+
+/**
+ * Get the last 7 days of habit data (including today), padded with empty entries.
+ */
+export function getWeeklyHabitChart(): DailyHabitEntry[] {
+  const data = getHabitData();
+  const result: DailyHabitEntry[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateKey = d.toISOString().slice(0, 10);
+    const existing = data.entries.find((e) => e.date === dateKey);
+    result.push(existing ?? { date: dateKey, puzzlesSolved: 0, goalSet: 10, goalMet: false });
+  }
+  return result;
+}
+
+/**
+ * Compute the "goal streak" — consecutive days where daily goal was met (ending today or yesterday).
+ */
+export function getGoalStreak(): number {
+  const data = getHabitData();
+  const entriesMap = new Map(data.entries.map((e) => [e.date, e]));
+  let streak = 0;
+  const today = new Date();
+  // Start from today
+  const d = new Date(today);
+  while (true) {
+    const key = d.toISOString().slice(0, 10);
+    const entry = entriesMap.get(key);
+    if (entry?.goalMet) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else {
+      break;
+    }
+    if (streak > 365) break;
+  }
+  return streak;
 }

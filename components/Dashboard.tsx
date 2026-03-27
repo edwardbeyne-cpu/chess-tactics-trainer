@@ -22,9 +22,14 @@ import {
   getTacticsRatingData,
   fetchAndSavePlatformRatings,
   shouldFetchPlatformRatings,
+  getDailyTargetSettings,
+  getTodaySolvedCount,
+  getWeeklyHabitChart,
+  getGoalStreak,
   type DailyQuests,
   type Quest,
   type RatingSnapshot,
+  type DailyHabitEntry,
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
 import { getSubscriptionTier } from "@/lib/storage";
@@ -452,6 +457,145 @@ function RatingTrackingPanel() {
   );
 }
 
+// ── Sprint 10: Daily Goal Progress Card ───────────────────────────────────
+
+function DailyGoalCard() {
+  const [solvedToday, setSolvedToday] = useState(0);
+  const [goalSettings, setGoalSettings] = useState(() => ({ dailyGoal: 10 }));
+  const [habitData, setHabitData] = useState<DailyHabitEntry[]>([]);
+  const [goalStreak, setGoalStreak] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const settings = getDailyTargetSettings();
+    const today = getTodaySolvedCount();
+    const weekly = getWeeklyHabitChart();
+    const gs = getGoalStreak();
+    setGoalSettings(settings);
+    setSolvedToday(today);
+    setHabitData(weekly);
+    setGoalStreak(gs);
+  }, []);
+
+  const { dailyGoal } = goalSettings;
+  const pct = Math.min(100, Math.round((solvedToday / dailyGoal) * 100));
+  const goalMet = solvedToday >= dailyGoal;
+  const remaining = Math.max(0, dailyGoal - solvedToday);
+
+  const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  function getDayLabel(dateStr: string): string {
+    const d = new Date(dateStr + "T00:00:00");
+    const idx = d.getDay(); // 0=Sun
+    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][idx];
+  }
+
+  return (
+    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", margin: 0 }}>
+          🎯 Daily Goal
+        </h2>
+        <a href="/app/settings" style={{ color: "#64748b", fontSize: "0.75rem", textDecoration: "none" }}>
+          Change goal ↗
+        </a>
+      </div>
+
+      {/* Progress */}
+      <div style={{ marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
+          <span style={{ color: goalMet ? "#4ade80" : "#e2e8f0", fontWeight: "bold", fontSize: "1.1rem" }}>
+            {solvedToday}/{dailyGoal} puzzles today
+            {goalMet && " 🎉"}
+          </span>
+          <span style={{ color: "#64748b", fontSize: "0.8rem" }}>{pct}%</span>
+        </div>
+        <div style={{ backgroundColor: "#0d1621", borderRadius: "6px", height: "10px", overflow: "hidden" }}>
+          <div style={{
+            width: `${pct}%`,
+            height: "100%",
+            backgroundColor: goalMet ? "#4ade80" : "#2e75b6",
+            borderRadius: "6px",
+            transition: "width 0.4s ease",
+          }} />
+        </div>
+        <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
+          {goalMet
+            ? "Goal reached! 🎉 Keep going for bonus practice."
+            : `${remaining} more to hit your daily goal`}
+        </div>
+      </div>
+
+      {/* Goal streak */}
+      {goalStreak > 0 && (
+        <div style={{ color: "#f59e0b", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
+          🔥 Goal streak: {goalStreak} day{goalStreak !== 1 ? "s" : ""} in a row
+        </div>
+      )}
+
+      {/* Weekly habit chart */}
+      {habitData.length > 0 && (
+        <div>
+          <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            This Week
+          </div>
+          <div style={{ display: "flex", gap: "0.3rem", alignItems: "flex-end" }}>
+            {habitData.map((entry) => {
+              const barPct = entry.goalSet > 0 ? Math.min(100, (entry.puzzlesSolved / entry.goalSet) * 100) : 0;
+              const isToday = entry.date === new Date().toISOString().slice(0, 10);
+              return (
+                <div key={entry.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" }}>
+                  <div style={{
+                    width: "100%",
+                    height: "40px",
+                    backgroundColor: "#0d1621",
+                    borderRadius: "4px",
+                    overflow: "hidden",
+                    position: "relative",
+                    border: isToday ? "1px solid #2e75b6" : "1px solid transparent",
+                  }}
+                    title={`${entry.date}: ${entry.puzzlesSolved}/${entry.goalSet} puzzles`}
+                  >
+                    <div style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: `${barPct}%`,
+                      backgroundColor: entry.goalMet ? "#4ade80" : entry.puzzlesSolved > 0 ? "#2e75b6" : "#162030",
+                      transition: "height 0.3s ease",
+                    }} />
+                    {entry.goalMet && (
+                      <div style={{ position: "absolute", top: "2px", left: 0, right: 0, textAlign: "center", fontSize: "0.6rem" }}>✓</div>
+                    )}
+                  </div>
+                  <div style={{ color: isToday ? "#4ade80" : "#475569", fontSize: "0.62rem" }}>
+                    {getDayLabel(entry.date)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.4rem", fontSize: "0.68rem" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+              <span style={{ width: "8px", height: "8px", backgroundColor: "#4ade80", borderRadius: "2px", display: "inline-block" }} />
+              <span style={{ color: "#64748b" }}>Goal met</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+              <span style={{ width: "8px", height: "8px", backgroundColor: "#2e75b6", borderRadius: "2px", display: "inline-block" }} />
+              <span style={{ color: "#64748b" }}>Partial</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
+              <span style={{ width: "8px", height: "8px", backgroundColor: "#162030", borderRadius: "2px", display: "inline-block" }} />
+              <span style={{ color: "#64748b" }}>Missed</span>
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -570,6 +714,11 @@ export default function Dashboard() {
         <StreakCard streak={streak} freezes={streakData.freezesAvailable} />
         {/* Daily Quests */}
         <DailyQuestsPanel />
+      </div>
+
+      {/* Sprint 10: Daily Goal Progress */}
+      <div style={{ marginBottom: "1rem" }}>
+        <DailyGoalCard />
       </div>
 
       {/* Rating History Chart — Sprint 7 */}

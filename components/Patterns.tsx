@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import patterns, { type Pattern } from "@/data/patterns";
 import puzzles from "@/data/puzzles";
-import { getAttempts, getAllPatternStats, type PatternStat } from "@/lib/storage";
+import { getAttempts, getAllPatternStats, getFluencyLabel, getFluencyColor, type PatternStat } from "@/lib/storage";
 import { calculatePatternRank, getNextRankProgress, RANK_DEFINITIONS } from "@/lib/srs";
 import {
   calcPercentile,
@@ -70,6 +70,32 @@ function getLegacyPatternStats(pattern: Pattern): LegacyPatternStats {
   return { total, solved, attemptCount };
 }
 
+// ── Sparkline ────────────────────────────────────────────────────────────
+
+function Sparkline({ times, width = 80, height = 24 }: { times: number[]; width?: number; height?: number }) {
+  if (times.length < 2) return null;
+  const max = Math.max(...times);
+  const min = Math.min(...times);
+  const range = max - min || 1;
+  const points = times.map((t, i) => {
+    const x = (i / (times.length - 1)) * width;
+    const y = height - ((t - min) / range) * height;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg width={width} height={height} style={{ overflow: "visible" }}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke="#4ade80"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 // ── Rank Badge ────────────────────────────────────────────────────────────
 
 function RankBadge({ rank, size = "small" }: { rank: string; size?: "small" | "large" }) {
@@ -118,6 +144,9 @@ function PatternCard({
   const dueCount = hasSM2 ? sm2Stat.dueCount : 0;
   const lastPracticed = hasSM2 ? sm2Stat.lastPracticed : null;
   const avgSolveTimeMs = hasSM2 ? sm2Stat.avgSolveTimeMs : null;
+  const personalBestMs = hasSM2 ? sm2Stat.personalBestMs : null;
+  const recentSolveTimes = hasSM2 ? sm2Stat.recentSolveTimes : [];
+  const fluencyScore = hasSM2 ? sm2Stat.fluencyScore : null;
   const rateColor = solveRateColor(solveRate);
   const rateLabel = solveRateLabel(solveRate);
   const legacyMastered = legacyStats.total > 0 && legacyStats.solved === legacyStats.total;
@@ -218,6 +247,21 @@ function PatternCard({
                   fontWeight: "bold",
                 }}>
                   {topPercentLabel(percentile)}
+                </span>
+              )}
+              {/* Sprint 10: Fluency score badge */}
+              {fluencyScore !== null && (
+                <span style={{
+                  backgroundColor: `${getFluencyColor(fluencyScore)}18`,
+                  color: getFluencyColor(fluencyScore),
+                  border: `1px solid ${getFluencyColor(fluencyScore)}50`,
+                  borderRadius: "4px",
+                  padding: "0.1rem 0.4rem",
+                  fontSize: "0.65rem",
+                  fontWeight: "bold",
+                }}
+                >
+                  {getFluencyLabel(fluencyScore)} {fluencyScore}
                 </span>
               )}
               {/* Free user teaser on unlocked patterns */}
@@ -362,6 +406,12 @@ function PatternCard({
               <div style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold" }}>{formatTime(avgSolveTimeMs)}</div>
             </div>
             <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.2rem" }}>PERSONAL BEST</div>
+              <div style={{ color: personalBestMs ? "#4ade80" : "#e2e8f0", fontSize: "1rem", fontWeight: "bold" }}>
+                {formatTime(personalBestMs)} {personalBestMs ? "⚡" : ""}
+              </div>
+            </div>
+            <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
               <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.2rem" }}>DUE FOR REVIEW</div>
               <div style={{ color: dueCount > 0 ? "#f59e0b" : "#4ade80", fontSize: "1rem", fontWeight: "bold" }}>
                 {dueCount > 0 ? `${dueCount} puzzle${dueCount !== 1 ? "s" : ""}` : "None"}
@@ -375,7 +425,39 @@ function PatternCard({
               <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.2rem" }}>LAST PRACTICED</div>
               <div style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: "bold" }}>{formatDate(lastPracticed)}</div>
             </div>
+            {/* Sprint 10: Fluency Score detail */}
+            {fluencyScore !== null && (
+              <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
+                <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.2rem" }}>FLUENCY SCORE</div>
+                <div style={{ color: getFluencyColor(fluencyScore), fontSize: "1rem", fontWeight: "bold" }}>
+                  {fluencyScore}/100 — {getFluencyLabel(fluencyScore)}
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Sprint 10: Sparkline of last 20 solve times */}
+          {recentSolveTimes.length >= 2 && (
+            <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.7rem 0.75rem", marginTop: "0.5rem" }}>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.5rem" }}>
+                LAST {recentSolveTimes.length} SOLVE TIMES (first-try)
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                <Sparkline times={recentSolveTimes} width={120} height={28} />
+                <div style={{ color: "#64748b", fontSize: "0.7rem" }}>
+                  {recentSolveTimes.length >= 2 && (() => {
+                    const firstHalf = recentSolveTimes.slice(0, Math.floor(recentSolveTimes.length / 2));
+                    const secondHalf = recentSolveTimes.slice(Math.floor(recentSolveTimes.length / 2));
+                    const avgFirst = firstHalf.reduce((s, t) => s + t, 0) / firstHalf.length;
+                    const avgSecond = secondHalf.reduce((s, t) => s + t, 0) / secondHalf.length;
+                    const trend = avgSecond < avgFirst ? "↓ Getting faster" : avgSecond > avgFirst ? "↑ Slowing down" : "→ Consistent";
+                    const trendColor = avgSecond < avgFirst ? "#4ade80" : avgSecond > avgFirst ? "#f59e0b" : "#94a3b8";
+                    return <span style={{ color: trendColor }}>{trend}</span>;
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
