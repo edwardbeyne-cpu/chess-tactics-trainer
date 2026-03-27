@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { Chess } from "chess.js";
 import patterns from "@/data/patterns";
+import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
 import {
   recordAttempt,
   scheduleFailed,
@@ -27,6 +29,11 @@ import {
   updateTacticsRating,
   getTacticsRatingData,
   refreshHabitEntry,
+  updatePuzzleProgress,
+  updatePatternRating,
+  getNextPuzzleForPattern,
+  getLastActivePattern,
+  setLastActivePattern,
   type Achievement,
 } from "@/lib/storage";
 
@@ -300,6 +307,8 @@ function LichessPuzzleBoard({
   isMixedMode,
   revealedPattern,
   boardWidth,
+  puzzleIndex,
+  totalPuzzles,
 }: {
   puzzle: AppPuzzle;
   onResult: (outcome: SM2Outcome, solveTimeMs: number) => void;
@@ -307,6 +316,8 @@ function LichessPuzzleBoard({
   isMixedMode?: boolean;
   revealedPattern?: string | null;
   boardWidth: number;
+  puzzleIndex?: number;
+  totalPuzzles?: number;
 }) {
   const [fen, setFen] = useState(puzzle.fen);
   const [orientation] = useState<'white' | 'black'>(puzzle.fen.includes(' b ') ? 'black' : 'white');
@@ -481,19 +492,18 @@ function LichessPuzzleBoard({
                 status === "solved" || status === "failed"
                   ? `🎲 Mixed Mode — ${revealedPattern ?? puzzle.theme}`
                   : "🎲 Mixed Mode — identify the pattern!"
-              ) : puzzle.title}
+              ) : (
+                <>
+                  {puzzle.theme}
+                  {puzzleIndex !== undefined && totalPuzzles !== undefined && (
+                    <span style={{ color: "#64748b", fontWeight: "normal", marginLeft: "0.5rem" }}>
+                      Puzzle {puzzleIndex} of {totalPuzzles}
+                    </span>
+                  )}
+                </>
+              )}
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-              <span style={{ color: "#64748b", fontSize: "0.75rem" }}>⭐ {puzzle.rating}</span>
-              <a
-                href={puzzle.gameUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: "#2e75b6", fontSize: "0.75rem", textDecoration: "none" }}
-              >
-                View on Lichess ↗
-              </a>
-            </div>
+            <span style={{ color: "#64748b", fontSize: "0.75rem" }}>⭐ {puzzle.rating}</span>
           </div>
           <div style={{ color: messageColor, fontSize: "1rem" }}>{message}</div>
         </div>
@@ -590,6 +600,7 @@ function LichessPatternMode({
   onNext,
   onRetry,
   boardWidth,
+  currentPuzzleIndex,
 }: {
   selectedPattern: string;
   currentPuzzle: AppPuzzle | null;
@@ -601,6 +612,7 @@ function LichessPatternMode({
   onNext: () => void;
   onRetry: () => void;
   boardWidth: number;
+  currentPuzzleIndex?: number;
 }) {
   // Calculate tier lockout from SM2 attempts
   const { tier2Locked, tier3Locked, tier1Progress, tier2Progress } = useMemo(() => {
@@ -667,13 +679,27 @@ function LichessPatternMode({
         <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
           {patterns.map((p) => {
             const locked = isPatternLocked(p.tier);
+            // Get theme key for this pattern
+            const themeKeyForPattern = Object.entries({
+              "Fork": "fork", "Pin": "pin", "Skewer": "skewer",
+              "Discovered Attack": "discoveredAttack", "Back Rank Mate": "backRankMate",
+              "Smothered Mate": "smotheredMate", "Double Check": "doubleCheck",
+              "Overloading": "overloading", "Deflection": "deflection",
+              "Interference": "interference", "Zugzwang": "zugzwang",
+              "Attraction": "attraction", "Clearance": "clearance",
+              "Trapped Piece": "trappedPiece", "Discovered Check": "discoveredCheck",
+              "Kingside Attack": "kingsideAttack", "Queenside Attack": "queensideAttack",
+            }).find(([k]) => k === p.name)?.[1] ?? p.name.toLowerCase();
+            const isSelected = selectedPattern === themeKeyForPattern;
+            const patternPuzzleCount = (cachedPuzzlesByTheme[themeKeyForPattern]?.length) ?? 0;
+
             return (
               <button
                 key={p.name}
-                onClick={() => !locked && onPatternSelect(p.name)}
-                title={locked ? `Complete Tier ${p.tier - 1} to unlock` : undefined}
+                onClick={() => !locked && onPatternSelect(themeKeyForPattern)}
+                title={locked ? `Complete Tier ${p.tier - 1} to unlock` : `${patternPuzzleCount} puzzles`}
                 style={{
-                  backgroundColor: selectedPattern === p.name ? "#2e75b6" : locked ? "#0f1219" : "#162030",
+                  backgroundColor: isSelected ? "#2e75b6" : locked ? "#0f1219" : "#162030",
                   color: locked ? "#475569" : "white",
                   border: "none", borderRadius: "6px",
                   padding: "0.5rem 0.75rem", cursor: locked ? "not-allowed" : "pointer",
@@ -683,8 +709,12 @@ function LichessPatternMode({
                 }}
               >
                 <span>{locked ? "🔒" : p.icon}</span>
-                <span>{p.name}</span>
-                <span style={{ marginLeft: "auto", color: "#475569", fontSize: "0.7rem" }}>T{p.tier}</span>
+                <span style={{ flex: 1 }}>{p.name}</span>
+                {!locked && (
+                  <span style={{ color: isSelected ? "rgba(255,255,255,0.7)" : "#475569", fontSize: "0.65rem" }}>
+                    {patternPuzzleCount}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -693,19 +723,10 @@ function LichessPatternMode({
 
       {/* Puzzle area */}
       <div>
-        {!selectedPattern && (
-          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>♟</div>
-            <div style={{ color: "#94a3b8", fontSize: "1.1rem" }}>
-              Select a tactical pattern on the left to fetch a live puzzle from Lichess
-            </div>
-          </div>
-        )}
-
         {loading && (
           <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
             <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⟳</div>
-            <div style={{ color: "#94a3b8" }}>Fetching puzzle from Lichess...</div>
+            <div style={{ color: "#94a3b8" }}>Loading puzzle...</div>
           </div>
         )}
 
@@ -728,6 +749,8 @@ function LichessPatternMode({
             onResult={onResult}
             onNext={onNext}
             boardWidth={boardWidth}
+            puzzleIndex={currentPuzzleIndex}
+            totalPuzzles={selectedPattern ? (PATTERN_PUZZLE_COUNTS[selectedPattern] ?? cachedPuzzlesByTheme[selectedPattern]?.length ?? undefined) : undefined}
           />
         )}
       </div>
@@ -737,10 +760,63 @@ function LichessPatternMode({
 
 // ── Main Puzzle Component ──────────────────────────────────────────────────
 
+// ── Curriculum puzzle FEN resolver ────────────────────────────────────────
+
+/**
+ * Apply the opponent's first move (from the Lichess DB) to get the actual
+ * puzzle start position and remaining solution moves.
+ */
+function applyFirstMoveCurriculum(fen: string, moves: string[]): { fen: string; solution: string[] } {
+  if (!moves || moves.length < 2) return { fen, solution: moves };
+  try {
+    const chess = new Chess(fen);
+    const opponentMove = moves[0];
+    const from = opponentMove.slice(0, 2);
+    const to = opponentMove.slice(2, 4);
+    const promotion = opponentMove.length === 5 ? opponentMove[4] : undefined;
+    chess.move({ from, to, ...(promotion ? { promotion } : {}) });
+    return { fen: chess.fen(), solution: moves.slice(1) };
+  } catch {
+    return { fen, solution: moves };
+  }
+}
+
+// ── Theme key → pattern name mapping ─────────────────────────────────────
+
+const THEME_KEY_TO_PATTERN_NAME: Record<string, string> = {
+  fork: "Fork",
+  pin: "Pin",
+  skewer: "Skewer",
+  discoveredAttack: "Discovered Attack",
+  backRankMate: "Back Rank Mate",
+  smotheredMate: "Smothered Mate",
+  doubleCheck: "Double Check",
+  overloading: "Overloading",
+  deflection: "Deflection",
+  interference: "Interference",
+  zugzwang: "Zugzwang",
+  attraction: "Attraction",
+  clearance: "Clearance",
+  trappedPiece: "Trapped Piece",
+  discoveredCheck: "Discovered Check",
+  kingsideAttack: "Kingside Attack",
+  queensideAttack: "Queenside Attack",
+};
+
+const PATTERN_NAME_TO_THEME_KEY: Record<string, string> = Object.fromEntries(
+  Object.entries(THEME_KEY_TO_PATTERN_NAME).map(([k, v]) => [v, k])
+);
+
 export default function Puzzle() {
   const boardWidth = useResponsiveBoardWidth();
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<PuzzleMode>("lichess");
+
+  // selectedPattern is now the THEME KEY (e.g. "fork"), not pattern name
   const [selectedPattern, setSelectedPattern] = useState<string>("");
+  // Current puzzle index within the pattern (1-based)
+  const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState<number>(1);
+
   const puzzleSubscriptionTier = typeof window !== "undefined" ? getPercentileTier() : "free";
   const [currentPuzzle, setCurrentPuzzle] = useState<AppPuzzle | null>(null);
   const [loading, setLoading] = useState(false);
@@ -768,26 +844,57 @@ export default function Puzzle() {
   // Sprint 7: Tactics rating milestone toast
   const [ratingMilestoneToast, setRatingMilestoneToast] = useState<{ rating: number } | null>(null);
 
-  const selectedPatternObj = patterns.find((p) => p.name === selectedPattern);
+  // selectedPattern is theme key ("fork"), find the pattern obj by it
+  const selectedPatternObj = patterns.find((p) => {
+    const key = PATTERN_NAME_TO_THEME_KEY[p.name];
+    return key === selectedPattern;
+  });
 
-  // Get patterns eligible for Mixed Mode (10+ attempts)
+  // Get patterns eligible for Mixed Mode — Sprint 11: 20+ attempts in the curated DB
   const eligibleMixedPatterns = useCallback(() => {
-    const sm2 = getSM2Attempts();
+    const progressMap = typeof window !== "undefined"
+      ? (() => { try { return JSON.parse(localStorage.getItem("ctt_puzzle_progress") || "{}"); } catch { return {}; } })()
+      : {};
+    // Count attempts per theme from progress map
     const byTheme = new Map<string, number>();
+    for (const entry of Object.values(progressMap) as Array<{ patternTheme: string }>) {
+      if (!entry.patternTheme) continue;
+      byTheme.set(entry.patternTheme, (byTheme.get(entry.patternTheme) ?? 0) + 1);
+    }
+    // Fall back to SM2 attempts for legacy data
+    const sm2 = getSM2Attempts();
     for (const a of sm2) {
       if (!a.theme) continue;
-      const key = a.theme.toUpperCase();
+      const key = a.theme.toLowerCase();
       byTheme.set(key, (byTheme.get(key) ?? 0) + 1);
     }
-    return patterns.filter((p) => (byTheme.get(p.name.toUpperCase()) ?? 0) >= 10);
+    return patterns.filter((p) => {
+      const themeKey = PATTERN_NAME_TO_THEME_KEY[p.name] ?? p.name.toLowerCase();
+      return (byTheme.get(themeKey) ?? 0) >= 20;
+    });
   }, []);
 
-  const fetchNextPuzzle = useCallback(
-    async (patternName: string) => {
-      const pattern = patterns.find((p) => p.name === patternName);
-      if (!pattern) return;
+  /**
+   * Load a specific puzzle from the curated database by theme key and index (1-based).
+   * Sprint 11: all puzzle loading goes through this — no more random Lichess API calls.
+   */
+  const loadCurriculumPuzzle = useCallback(
+    (themeKey: string, puzzleIndex: number) => {
+      const puzzles = cachedPuzzlesByTheme[themeKey];
+      if (!puzzles || puzzles.length === 0) {
+        setError(`No puzzles found for pattern "${themeKey}". Database may not include this pattern.`);
+        return;
+      }
 
-      // Check if this should be a Boss puzzle (every 10th in session, unlocks at Level 3)
+      const idx = Math.max(0, Math.min(puzzleIndex - 1, puzzles.length - 1));
+      const raw = puzzles[idx];
+
+      // Find pattern obj
+      const patternName = THEME_KEY_TO_PATTERN_NAME[themeKey] ?? themeKey;
+      const pattern = patterns.find((p) => p.name === patternName);
+      const tier = pattern?.tier ?? 1;
+
+      // Boss puzzle check
       const session = getSessionState();
       const xpData = getXPData();
       const isBoss = session.puzzleCount > 0 && session.puzzleCount % 10 === 0 && xpData.level >= 3;
@@ -800,14 +907,30 @@ export default function Puzzle() {
       setMixedRevealedPattern(null);
 
       try {
-        const theme = pattern.themes[0];
-        const lichessPuzzle = await fetchPuzzleByTheme(theme);
-        const appPuzzle = lichessPuzzleToApp(lichessPuzzle, patternName, pattern.tier);
+        // Apply first move (opponent's move) to get actual puzzle position
+        const { fen, solution } = applyFirstMoveCurriculum(raw.fen, raw.moves);
+        const difficulty = raw.rating < 1200 ? "easy" : raw.rating < 1800 ? "medium" : "hard";
+        const appPuzzle: AppPuzzle = {
+          id: raw.id,
+          title: `${patternName} — #${puzzleIndex}`,
+          theme: patternName.toUpperCase(),
+          patternTier: tier,
+          difficulty,
+          description: `Find the best move! Rating: ${raw.rating}`,
+          fen,
+          solution,
+          hint: `Theme: ${raw.themes.slice(0, 2).join(", ")}`,
+          source: "lichess",
+          rating: raw.rating,
+          gameUrl: `https://lichess.org/training/${raw.id}`,
+        };
         setCurrentPuzzle(appPuzzle);
+        setCurrentPuzzleIndex(puzzleIndex);
+        setLastActivePattern(themeKey);
 
-        // Check if new puzzle is a Nemesis
-        if (isPuzzleNemesis(appPuzzle.id)) {
-          const failCount = getPuzzleFailCount(appPuzzle.id);
+        // Check Nemesis
+        if (isPuzzleNemesis(raw.id)) {
+          const failCount = getPuzzleFailCount(raw.id);
           isNemesisPuzzleRef.current = true;
           setNemesisFailCount(failCount);
           setShowNemesisAnnouncement(true);
@@ -815,9 +938,7 @@ export default function Puzzle() {
           setShowBossAnnouncement(true);
         }
       } catch (err) {
-        setError(
-          `Failed to fetch puzzle: ${err instanceof Error ? err.message : "Unknown error"}. Check your network.`
-        );
+        setError(`Failed to load puzzle: ${err instanceof Error ? err.message : "Unknown error"}`);
       } finally {
         setLoading(false);
       }
@@ -825,37 +946,111 @@ export default function Puzzle() {
     []
   );
 
-  const fetchMixedPuzzle = useCallback(async () => {
+  // Advance to next puzzle in sequence (or next due-for-review)
+  const loadNextCurriculumPuzzle = useCallback(
+    (themeKey: string, afterIndex: number) => {
+      const totalPuzzles = PATTERN_PUZZLE_COUNTS[themeKey] ?? (cachedPuzzlesByTheme[themeKey]?.length ?? 0);
+      // Get next: check for due-for-review first, otherwise advance sequentially
+      const nextDue = getNextPuzzleForPattern(themeKey, totalPuzzles);
+      // If nextDue is a review puzzle (already played) and it's different from where we are, show it
+      const progressMap = typeof window !== "undefined"
+        ? (() => { try { return JSON.parse(localStorage.getItem("ctt_puzzle_progress") || "{}"); } catch { return {}; } })()
+        : {};
+      const now = new Date(); now.setHours(0, 0, 0, 0);
+      const hasDue = Object.values(progressMap as Record<string, { patternTheme: string; nextReviewDate: string | null; orderIndex: number }>)
+        .some(p => p.patternTheme === themeKey && p.nextReviewDate && new Date(p.nextReviewDate) <= now);
+
+      if (hasDue && nextDue !== afterIndex) {
+        loadCurriculumPuzzle(themeKey, nextDue);
+      } else {
+        // Sequential: go to next unplayed
+        const nextIndex = afterIndex < totalPuzzles ? afterIndex + 1 : 1;
+        loadCurriculumPuzzle(themeKey, nextIndex);
+      }
+    },
+    [loadCurriculumPuzzle]
+  );
+
+  const fetchMixedPuzzle = useCallback(() => {
     const eligible = eligibleMixedPatterns();
 
     if (eligible.length === 0) {
-      setError("Mixed Mode requires 10+ attempts in at least one pattern. Practice Pattern Mode first!");
+      setError("Mixed Mode requires 20+ attempts in at least one pattern. Practice Pattern Mode first!");
       return;
     }
 
+    // Pick a random eligible pattern and a random puzzle from its curated set
     const randomPattern = eligible[Math.floor(Math.random() * eligible.length)];
+    const themeKey = PATTERN_NAME_TO_THEME_KEY[randomPattern.name] ?? randomPattern.name.toLowerCase();
+    const puzzles = cachedPuzzlesByTheme[themeKey];
+    if (!puzzles || puzzles.length === 0) {
+      setError("No puzzles available for this pattern.");
+      return;
+    }
+
+    const randomIdx = Math.floor(Math.random() * puzzles.length);
+    const raw = puzzles[randomIdx];
+
     setLoading(true);
     setError(null);
     setCurrentPuzzle(null);
     setMixedRevealedPattern(null);
 
     try {
-      const theme = randomPattern.themes[0];
-      const lichessPuzzle = await fetchPuzzleByTheme(theme);
-      const appPuzzle = lichessPuzzleToApp(lichessPuzzle, randomPattern.name, randomPattern.tier);
+      const { fen, solution } = applyFirstMoveCurriculum(raw.fen, raw.moves);
+      const difficulty = raw.rating < 1200 ? "easy" : raw.rating < 1800 ? "medium" : "hard";
+      const appPuzzle: AppPuzzle = {
+        id: raw.id,
+        title: `${randomPattern.name} — Mixed`,
+        theme: randomPattern.name.toUpperCase(),
+        patternTier: randomPattern.tier,
+        difficulty,
+        description: `Find the best move! Rating: ${raw.rating}`,
+        fen,
+        solution,
+        hint: `Theme: ${raw.themes.slice(0, 2).join(", ")}`,
+        source: "lichess",
+        rating: raw.rating,
+        gameUrl: `https://lichess.org/training/${raw.id}`,
+      };
       setCurrentPuzzle(appPuzzle);
+      setLoading(false);
     } catch (err) {
-      setError(
-        `Failed to fetch puzzle: ${err instanceof Error ? err.message : "Unknown error"}. Check your network.`
-      );
-    } finally {
+      setError(`Failed to load puzzle: ${err instanceof Error ? err.message : "Unknown error"}`);
       setLoading(false);
     }
   }, [eligibleMixedPatterns]);
 
-  async function handlePatternSelect(patternName: string) {
-    setSelectedPattern(patternName);
-    await fetchNextPuzzle(patternName);
+  // Sprint 11: URL param handling — ?pattern=fork&index=47
+  useEffect(() => {
+    const patternParam = searchParams?.get("pattern");
+    const indexParam = searchParams?.get("index");
+    if (patternParam && cachedPuzzlesByTheme[patternParam]) {
+      const idx = indexParam ? parseInt(indexParam, 10) : 1;
+      setSelectedPattern(patternParam);
+      loadCurriculumPuzzle(patternParam, isNaN(idx) ? 1 : idx);
+    } else if (!patternParam) {
+      // Auto-load on page open (Step 6)
+      const lastPattern = getLastActivePattern();
+      if (lastPattern && cachedPuzzlesByTheme[lastPattern]) {
+        const totalPuzzles = PATTERN_PUZZLE_COUNTS[lastPattern] ?? (cachedPuzzlesByTheme[lastPattern]?.length ?? 0);
+        const nextIdx = getNextPuzzleForPattern(lastPattern, totalPuzzles);
+        setSelectedPattern(lastPattern);
+        loadCurriculumPuzzle(lastPattern, nextIdx);
+      } else {
+        // First time: auto-load Fork puzzle #1 (easiest pattern)
+        setSelectedPattern("fork");
+        loadCurriculumPuzzle("fork", 1);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handlePatternSelect(themeKey: string) {
+    setSelectedPattern(themeKey);
+    const totalPuzzles = PATTERN_PUZZLE_COUNTS[themeKey] ?? (cachedPuzzlesByTheme[themeKey]?.length ?? 0);
+    const nextIdx = getNextPuzzleForPattern(themeKey, totalPuzzles);
+    loadCurriculumPuzzle(themeKey, nextIdx);
   }
 
   async function handleResult(outcome: SM2Outcome, solveTimeMs: number) {
@@ -864,7 +1059,12 @@ export default function Puzzle() {
       : selectedPatternObj;
 
     const tier = pattern?.tier ?? currentPuzzle?.patternTier ?? 1;
-    const themeName = (mode === "mixed" ? currentPuzzle?.theme : selectedPattern) ?? "UNKNOWN";
+    // In curriculum/pattern mode, selectedPattern is the theme key (e.g. "fork")
+    // In mixed mode, use the puzzle's theme name
+    const themeKey = mode === "mixed"
+      ? (PATTERN_NAME_TO_THEME_KEY[currentPuzzle?.theme ?? ""] ?? (currentPuzzle?.theme?.toLowerCase() ?? ""))
+      : selectedPattern;
+    const themeName = (mode === "mixed" ? currentPuzzle?.theme : (THEME_KEY_TO_PATTERN_NAME[selectedPattern] ?? selectedPattern)) ?? "UNKNOWN";
     const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
 
     // Start free trial on first puzzle solve (if not already started)
@@ -888,6 +1088,12 @@ export default function Puzzle() {
         solve_time_ms: solveTimeMs > 0 ? solveTimeMs : undefined,
         tier,
       });
+
+      // Sprint 11: Update curriculum puzzle progress
+      if (mode === "lichess" && themeKey) {
+        updatePuzzleProgress(currentPuzzle.id, themeKey, currentPuzzleIndex, outcome, solveTimeMs > 0 ? solveTimeMs : null);
+        updatePatternRating(themeKey, currentPuzzle.rating, isSolved, currentPuzzle.id);
+      }
 
       // Reveal pattern in mixed mode after solving
       if (mode === "mixed") {
@@ -1008,7 +1214,7 @@ export default function Puzzle() {
     if (mode === "mixed") {
       fetchMixedPuzzle();
     } else if (selectedPattern) {
-      fetchNextPuzzle(selectedPattern);
+      loadNextCurriculumPuzzle(selectedPattern, currentPuzzleIndex);
     }
   }
 
@@ -1143,9 +1349,9 @@ export default function Puzzle() {
           {eligibleMixedPatterns().length === 0 && !loading && !currentPuzzle && (
             <div style={{ backgroundColor: "#1a1508", border: "1px solid #4a3a0a", borderRadius: "12px", padding: "2rem", textAlign: "center", marginBottom: "1rem" }}>
               <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>🎲</div>
-              <div style={{ color: "#f59e0b", fontWeight: "bold", marginBottom: "0.5rem" }}>Mixed Mode requires 10+ attempts per pattern</div>
+              <div style={{ color: "#f59e0b", fontWeight: "bold", marginBottom: "0.5rem" }}>Mixed Mode requires 20+ attempts per pattern</div>
               <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
-                Practice Pattern Mode first to unlock Mixed Mode. It trains your ability to recognize patterns when you don&apos;t know what&apos;s coming.
+                Practice Pattern Mode first to unlock Mixed Mode. Complete 20+ puzzles in any pattern to enable it.
               </div>
             </div>
           )}
@@ -1191,8 +1397,9 @@ export default function Puzzle() {
           onPatternSelect={handlePatternSelect}
           onResult={handleResult}
           onNext={handleNext}
-          onRetry={() => selectedPattern && fetchNextPuzzle(selectedPattern)}
+          onRetry={() => selectedPattern && loadCurriculumPuzzle(selectedPattern, currentPuzzleIndex)}
           boardWidth={boardWidth}
+          currentPuzzleIndex={currentPuzzleIndex}
         />
       )}
 

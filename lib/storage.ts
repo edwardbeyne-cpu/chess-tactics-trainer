@@ -13,6 +13,11 @@ const PLATFORM_RATINGS_KEY = "ctt_platform_ratings";
 
 // Sprint 9 keys
 const PERSONAL_PUZZLES_KEY = "ctt_personal_puzzles";
+
+// Sprint 11 — Curriculum keys
+const PUZZLE_PROGRESS_KEY = "ctt_puzzle_progress";
+const PATTERN_RATINGS_KEY = "ctt_pattern_ratings";
+const LAST_ACTIVE_PATTERN_KEY = "ctt_last_active_pattern";
 const BOARD_THEME_KEY = "ctt_board_theme";
 const PIECE_STYLE_KEY = "ctt_piece_style";
 const PGN_IMPORT_USAGE_KEY = "ctt_pgn_import_usage";
@@ -2009,4 +2014,280 @@ export function getGoalStreak(): number {
     if (streak > 365) break;
   }
   return streak;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 11 — Curriculum: Puzzle Progress Tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PuzzleStatus = 'not_attempted' | 'solved_first_try' | 'solved_retry' | 'missed';
+
+export interface PuzzleProgress {
+  puzzleId: string;
+  patternTheme: string;      // e.g. "fork", "pin"
+  orderIndex: number;        // 1-based position in the pattern (1-200)
+  status: PuzzleStatus;
+  attempts: number;
+  lastAttempted: string | null;
+  nextReviewDate: string | null; // SM-2 spaced repetition
+  solveTimeMs: number | null;
+}
+
+// Per-pattern ELO rating
+export interface PatternRating {
+  theme: string;
+  rating: number;            // starts at 800
+  gamesPlayed: number;
+  history: { date: string; rating: number; puzzleId: string }[];
+}
+
+export function getPuzzleProgressMap(): Record<string, PuzzleProgress> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(PUZZLE_PROGRESS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePuzzleProgressMap(map: Record<string, PuzzleProgress>): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PUZZLE_PROGRESS_KEY, JSON.stringify(map));
+}
+
+export function getPuzzleProgress(puzzleId: string): PuzzleProgress | null {
+  const map = getPuzzleProgressMap();
+  return map[puzzleId] ?? null;
+}
+
+/**
+ * Update progress after a puzzle attempt in pattern mode.
+ * Also applies SM-2 scheduling for review.
+ */
+export function updatePuzzleProgress(
+  puzzleId: string,
+  patternTheme: string,
+  orderIndex: number,
+  outcome: SM2Outcome,
+  solveTimeMs: number | null
+): PuzzleProgress {
+  const map = getPuzzleProgressMap();
+  const existing = map[puzzleId];
+  const now = new Date().toISOString();
+
+  const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
+  let status: PuzzleStatus;
+  if (outcome === "solved-first-try") status = "solved_first_try";
+  else if (outcome === "solved-after-retry") status = "solved_retry";
+  else status = "missed";
+
+  // Compute next review date using SM-2 logic
+  const sm2Attempts = getSM2Attempts().filter(a => a.puzzleId === puzzleId);
+  const sm2StateMap = getSM2StateMap();
+  const sm2State = sm2StateMap[puzzleId];
+  const nextReviewDate = sm2State?.nextReviewDate ?? null;
+
+  const attempts = (existing?.attempts ?? 0) + 1;
+
+  const progress: PuzzleProgress = {
+    puzzleId,
+    patternTheme,
+    orderIndex,
+    status,
+    attempts,
+    lastAttempted: now,
+    nextReviewDate,
+    solveTimeMs: isSolved && solveTimeMs && solveTimeMs > 0 ? solveTimeMs : (existing?.solveTimeMs ?? null),
+  };
+
+  map[puzzleId] = progress;
+  savePuzzleProgressMap(map);
+  return progress;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 11 — Pattern ELO Ratings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getPatternRatings(): Record<string, PatternRating> {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(PATTERN_RATINGS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePatternRatings(ratings: Record<string, PatternRating>): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PATTERN_RATINGS_KEY, JSON.stringify(ratings));
+}
+
+export function getPatternRating(theme: string): PatternRating {
+  const ratings = getPatternRatings();
+  return ratings[theme] ?? { theme, rating: 800, gamesPlayed: 0, history: [] };
+}
+
+/**
+ * Update pattern ELO after a puzzle attempt.
+ * K=32 for first 30 games, K=16 after.
+ */
+export function updatePatternRating(
+  theme: string,
+  puzzleRating: number,
+  won: boolean,
+  puzzleId: string
+): { newRating: number; delta: number } {
+  const ratings = getPatternRatings();
+  const current = ratings[theme] ?? { theme, rating: 800, gamesPlayed: 0, history: [] };
+
+  const K = current.gamesPlayed < 30 ? 32 : 16;
+  const expected = 1 / (1 + Math.pow(10, (puzzleRating - current.rating) / 400));
+  const score = won ? 1 : 0;
+  const delta = Math.round(K * (score - expected));
+  const newRating = Math.max(100, current.rating + delta);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const newHistory = [
+    ...current.history.slice(-99), // keep last 100 entries
+    { date: today, rating: newRating, puzzleId },
+  ];
+
+  const updated: PatternRating = {
+    theme,
+    rating: newRating,
+    gamesPlayed: current.gamesPlayed + 1,
+    history: newHistory,
+  };
+
+  ratings[theme] = updated;
+  savePatternRatings(ratings);
+
+  return { newRating, delta };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 11 — Last Active Pattern
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getLastActivePattern(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(LAST_ACTIVE_PATTERN_KEY);
+}
+
+export function setLastActivePattern(theme: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LAST_ACTIVE_PATTERN_KEY, theme);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 11 — Pattern Progress Summary
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PatternCurriculumSummary {
+  theme: string;
+  completed: number;         // puzzles with status !== 'not_attempted'
+  totalPuzzles: number;      // 200 (or however many in db)
+  solvedFirstTry: number;
+  solvedRetry: number;
+  missed: number;
+  dueForReview: number;
+  patternRating: number;
+  solveRate: number;         // solved (first+retry) / total attempted
+  status: 'unstarted' | 'in_progress' | 'mastered'; // mastered = 80%+ solve rate, all 200 done
+  nextPuzzleIndex: number;   // 1-based index of next puzzle to play
+}
+
+export function getPatternCurriculumSummary(
+  theme: string,
+  totalPuzzles: number
+): PatternCurriculumSummary {
+  const progressMap = getPuzzleProgressMap();
+  const patternEntries = Object.values(progressMap).filter(p => p.patternTheme === theme);
+  const rating = getPatternRating(theme);
+
+  const completed = patternEntries.length;
+  const solvedFirstTry = patternEntries.filter(p => p.status === 'solved_first_try').length;
+  const solvedRetry = patternEntries.filter(p => p.status === 'solved_retry').length;
+  const missed = patternEntries.filter(p => p.status === 'missed').length;
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const dueForReview = patternEntries.filter(p =>
+    p.nextReviewDate !== null && new Date(p.nextReviewDate) <= now
+  ).length;
+
+  const totalAttempted = solvedFirstTry + solvedRetry + missed;
+  const solveRate = totalAttempted > 0 ? (solvedFirstTry + solvedRetry) / totalAttempted : 0;
+
+  let patternStatus: 'unstarted' | 'in_progress' | 'mastered' = 'unstarted';
+  if (completed > 0) {
+    if (completed >= totalPuzzles && solveRate >= 0.8) {
+      patternStatus = 'mastered';
+    } else {
+      patternStatus = 'in_progress';
+    }
+  }
+
+  // Next puzzle is the first not-yet-attempted one
+  const attemptedIndices = new Set(patternEntries.map(p => p.orderIndex));
+  let nextPuzzleIndex = 1;
+  for (let i = 1; i <= totalPuzzles; i++) {
+    if (!attemptedIndices.has(i)) {
+      nextPuzzleIndex = i;
+      break;
+    }
+  }
+  // If all attempted, pick the first due for review or just index 1
+  if (nextPuzzleIndex === 1 && completed >= totalPuzzles) {
+    const dueEntry = patternEntries
+      .filter(p => p.nextReviewDate !== null && new Date(p.nextReviewDate) <= now)
+      .sort((a, b) => a.orderIndex - b.orderIndex)[0];
+    nextPuzzleIndex = dueEntry?.orderIndex ?? 1;
+  }
+
+  return {
+    theme,
+    completed,
+    totalPuzzles,
+    solvedFirstTry,
+    solvedRetry,
+    missed,
+    dueForReview,
+    patternRating: rating.rating,
+    solveRate,
+    status: patternStatus,
+    nextPuzzleIndex,
+  };
+}
+
+/**
+ * Get the next puzzle to play for a given pattern theme.
+ * Priority: due for review first, then next unplayed.
+ * Returns orderIndex (1-based).
+ */
+export function getNextPuzzleForPattern(
+  theme: string,
+  totalPuzzles: number
+): number {
+  const progressMap = getPuzzleProgressMap();
+  const patternEntries = Object.values(progressMap).filter(p => p.patternTheme === theme);
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  // Due for review — return lowest order index that's due
+  const dueEntry = patternEntries
+    .filter(p => p.nextReviewDate !== null && new Date(p.nextReviewDate) <= now)
+    .sort((a, b) => a.orderIndex - b.orderIndex)[0];
+  if (dueEntry) return dueEntry.orderIndex;
+
+  // Next unplayed
+  const attemptedIndices = new Set(patternEntries.map(p => p.orderIndex));
+  for (let i = 1; i <= totalPuzzles; i++) {
+    if (!attemptedIndices.has(i)) return i;
+  }
+
+  // All played — return first puzzle
+  return 1;
 }
