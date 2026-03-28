@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect } from "react";
-import type { Achievement } from "@/lib/storage";
+import type { Achievement, NewAchievement } from "@/lib/storage";
+
+type AnyAchievement = Achievement | NewAchievement;
 
 interface AchievementToastProps {
-  achievement: Achievement;
+  achievement: AnyAchievement;
   onDone: () => void;
+}
+
+function getIcon(ach: AnyAchievement): string {
+  // NewAchievement has `icon`, old Achievement has `emoji`
+  if ("icon" in ach) return ach.icon;
+  if ("emoji" in ach) return ach.emoji;
+  return "🏆";
 }
 
 export default function AchievementToast({ achievement, onDone }: AchievementToastProps) {
@@ -35,7 +44,7 @@ export default function AchievementToast({ achievement, onDone }: AchievementToa
         animation: "slideUpIn 0.4s ease",
       }}
     >
-      <span style={{ fontSize: "2.5rem", flexShrink: 0 }}>{achievement.emoji}</span>
+      <span style={{ fontSize: "2.5rem", flexShrink: 0 }}>{getIcon(achievement)}</span>
       <div>
         <div style={{ color: "#ffd700", fontWeight: "bold", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.1rem" }}>
           Achievement Unlocked!

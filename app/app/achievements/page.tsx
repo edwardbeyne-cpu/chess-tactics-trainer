@@ -1,7 +1,6 @@
-import Achievements from "@/components/Achievements";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Achievements — Chess Tactics Trainer" };
-
+// Achievements have moved to the Dashboard
 export default function AchievementsPage() {
-  return <Achievements />;
+  redirect("/app/dashboard");
 }

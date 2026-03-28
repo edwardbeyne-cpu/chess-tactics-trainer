@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import patterns, { type Pattern } from "@/data/patterns";
+import { HelpModal, HelpBulletList } from "./HelpModal";
 import {
   getPatternCurriculumSummary,
   type PatternCurriculumSummary,
@@ -60,14 +61,10 @@ function statusLabel(status: PatternCurriculumSummary["status"]): string {
 function CurriculumPatternCard({
   pattern,
   summary,
-  locked,
-  lockMessage,
   onClick,
 }: {
   pattern: Pattern;
   summary: PatternCurriculumSummary;
-  locked: boolean;
-  lockMessage?: string;
   onClick: () => void;
 }) {
   const colors = TIER_COLORS[pattern.tier];
@@ -76,31 +73,6 @@ function CurriculumPatternCard({
     : 0;
 
   const isMastered = summary.status === "mastered";
-
-  if (locked) {
-    return (
-      <div style={{
-        backgroundColor: "#0f1219",
-        border: "1px solid #1e2a3a",
-        borderRadius: "12px",
-        padding: "1.25rem",
-        opacity: 0.6,
-        cursor: "not-allowed",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <span style={{ fontSize: "1.5rem", filter: "grayscale(100%)" }}>{pattern.icon}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: "#64748b", fontWeight: "bold", fontSize: "0.95rem" }}>
-              🔒 {pattern.name}
-            </div>
-            <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-              {lockMessage ?? "Complete previous tier to unlock"}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -120,13 +92,8 @@ function CurriculumPatternCard({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1 }}>
           <span style={{ fontSize: "1.5rem" }}>{pattern.icon}</span>
-          <div>
-            <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
-              {pattern.name}
-            </div>
-            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.15rem" }}>
-              {pattern.tierLabel}
-            </div>
+          <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
+            {pattern.name}
           </div>
         </div>
         {/* Status indicator */}
@@ -144,16 +111,23 @@ function CurriculumPatternCard({
         </span>
       </div>
 
-      {/* Progress: X / 200 completed */}
+      {/* ELO rating */}
+      <div style={{ marginBottom: "0.5rem" }}>
+        <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
+          ELO: <strong style={{ color: "#e2e8f0" }}>{summary.patternRating.toLocaleString()}</strong>
+        </span>
+      </div>
+
+      {/* Progress: X / totalPuzzles */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.35rem" }}>
         <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-          Progress: <strong style={{ color: "#e2e8f0" }}>{summary.completed} / {summary.totalPuzzles}</strong> completed
+          Progress: <strong style={{ color: "#e2e8f0" }}>{summary.completed} / {summary.totalPuzzles}</strong>
         </span>
         <span style={{ color: "#64748b", fontSize: "0.72rem" }}>{progressPct}%</span>
       </div>
 
       {/* Progress bar */}
-      <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "6px", overflow: "hidden", marginBottom: "0.6rem" }}>
+      <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "6px", overflow: "hidden", marginBottom: "0.5rem" }}>
         <div style={{
           width: `${progressPct}%`,
           height: "100%",
@@ -163,12 +137,9 @@ function CurriculumPatternCard({
         }} />
       </div>
 
-      {/* Pattern ELO + due count */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-          Rating: <strong style={{ color: "#e2e8f0" }}>{summary.patternRating.toLocaleString()}</strong>
-        </span>
-        {summary.dueForReview > 0 && (
+      {/* Due for review badge */}
+      {summary.dueForReview > 0 && (
+        <div>
           <span style={{
             color: "#f59e0b",
             fontSize: "0.7rem",
@@ -179,8 +150,8 @@ function CurriculumPatternCard({
           }}>
             📅 {summary.dueForReview} due for review
           </span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -201,42 +172,7 @@ export default function Patterns() {
     return result;
   }, []);
 
-  // Compute tier unlock state
-  const { tier2Locked, tier3Locked, tier1Progress, tier2Progress } = useMemo(() => {
-    const tier1Patterns = patterns.filter((p) => p.tier === 1);
-    const tier2Patterns = patterns.filter((p) => p.tier === 2);
 
-    const t1Mastered = tier1Patterns.filter((p) => summaries[p.name]?.status === "mastered").length;
-    const t2Mastered = tier2Patterns.filter((p) => summaries[p.name]?.status === "mastered").length;
-
-    // Unlock condition: all tier patterns at 70%+ solve rate (or just started for demo)
-    // For Sprint 11 we use mastered count: all tier 1 must be in_progress or mastered to unlock tier 2
-    const t1InProgress = tier1Patterns.filter((p) => summaries[p.name]?.status !== "unstarted").length;
-    const t2InProgress = tier2Patterns.filter((p) => summaries[p.name]?.status !== "unstarted").length;
-
-    // Tier 2 unlocks when 4+ Tier 1 patterns in progress (or any mastered)
-    const tier2Locked = t1InProgress < 4 && t1Mastered === 0;
-    const tier3Locked = t2InProgress < 4 && t2Mastered === 0;
-
-    return {
-      tier2Locked,
-      tier3Locked,
-      tier1Progress: { inProgress: t1InProgress, mastered: t1Mastered, total: tier1Patterns.length },
-      tier2Progress: { inProgress: t2InProgress, mastered: t2Mastered, total: tier2Patterns.length },
-    };
-  }, [summaries]);
-
-  function isPatternLocked(tier: number): boolean {
-    if (tier === 2) return tier2Locked;
-    if (tier === 3) return tier3Locked;
-    return false;
-  }
-
-  function getLockMessage(tier: number): string {
-    if (tier === 2) return `Start ${4 - tier1Progress.inProgress} more Tier 1 patterns to unlock Tier 2`;
-    if (tier === 3) return `Start ${4 - tier2Progress.inProgress} more Tier 2 patterns to unlock Tier 3`;
-    return "Complete previous tier to unlock";
-  }
 
   // Overall stats
   const totalCompleted = Object.values(summaries).reduce((s, x) => s + x.completed, 0);
@@ -253,9 +189,21 @@ export default function Patterns() {
     <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", marginBottom: "0.4rem" }}>
-          ♟ Tactics Curriculum
-        </h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
+          <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", margin: 0 }}>
+            ♟ Tactics Curriculum
+          </h1>
+          <HelpModal title="How Drill Tactics Works">
+            <HelpBulletList items={[
+              "Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)",
+              "You'll work through up to 200 puzzles for that pattern, starting easy and getting progressively harder",
+              "Your rating for that specific pattern updates as you solve puzzles",
+              "Solve puzzles correctly to move up — miss them and they go into your Review queue",
+              "The goal is to internalize each pattern until it becomes instinct",
+              "Work one pattern at a time until you feel strong, then move to the next",
+            ]} />
+          </HelpModal>
+        </div>
         <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
           Master tactical patterns one by one — 200 puzzles per pattern, sorted from easiest to hardest.
         </p>
@@ -281,11 +229,10 @@ export default function Patterns() {
         </div>
       </div>
 
-      {/* Tier sections */}
+      {/* Pattern sections by tier — clean list, no lockout gates */}
       {[1, 2, 3].map((tier) => {
         const tierColors = TIER_COLORS[tier];
         const tierPatterns = byTier[tier];
-        const locked = isPatternLocked(tier);
 
         return (
           <div key={tier} style={{ marginBottom: "2rem" }}>
@@ -301,29 +248,19 @@ export default function Patterns() {
               }}>
                 {tier === 1 ? "Tier 1 — Basic Tactics" : tier === 2 ? "Tier 2 — Intermediate" : "Tier 3 — Advanced"}
               </span>
-              {locked && (
-                <span style={{ color: "#64748b", fontSize: "0.78rem" }}>
-                  {getLockMessage(tier)}
-                </span>
-              )}
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
               {tierPatterns.map((p) => {
                 const summary = summaries[p.name];
-                const isLocked = locked || isPatternLocked(p.tier);
                 return (
                   <CurriculumPatternCard
                     key={p.name}
                     pattern={p}
                     summary={summary}
-                    locked={isLocked}
-                    lockMessage={isLocked ? getLockMessage(p.tier) : undefined}
                     onClick={() => {
-                      if (!isLocked) {
-                        const themeKey = getThemeKey(p.name);
-                        router.push(`/app/patterns/${themeKey}`);
-                      }
+                      const themeKey = getThemeKey(p.name);
+                      router.push(`/app/patterns/${themeKey}`);
                     }}
                   />
                 );
@@ -332,6 +269,7 @@ export default function Patterns() {
           </div>
         );
       })}
+
     </div>
   );
 }

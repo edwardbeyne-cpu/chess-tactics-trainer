@@ -1,6 +1,7 @@
-// Login page
+// Login page — Sprint 5: Google OAuth + Beta Access
 
 import Link from "next/link";
+import GoogleSignInSection from "@/components/GoogleSignInSection";
 
 export const metadata = {
   title: "Sign In — ChessTrainer",
@@ -59,6 +60,23 @@ export default function LoginPage() {
         <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "2rem" }}>
           Sign in to access your training dashboard
         </p>
+
+        {/* Google sign-in (client component) */}
+        <GoogleSignInSection />
+
+        {/* Divider */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            margin: "1.5rem 0",
+          }}
+        >
+          <div style={{ flex: 1, height: "1px", backgroundColor: "#2e3a5c" }} />
+          <span style={{ color: "#475569", fontSize: "0.75rem" }}>or</span>
+          <div style={{ flex: 1, height: "1px", backgroundColor: "#2e3a5c" }} />
+        </div>
 
         <div
           style={{

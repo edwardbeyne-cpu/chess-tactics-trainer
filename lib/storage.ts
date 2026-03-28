@@ -14,6 +14,10 @@ const PLATFORM_RATINGS_KEY = "ctt_platform_ratings";
 // Sprint 9 keys
 const PERSONAL_PUZZLES_KEY = "ctt_personal_puzzles";
 
+// Sprint 7 (redesign) keys
+const ACTIVITY_LOG_KEY = "ctt_activity_log";
+const NEW_ACHIEVEMENTS_KEY = "ctt_achievements_v2";
+
 // Sprint 11 — Curriculum keys
 const PUZZLE_PROGRESS_KEY = "ctt_puzzle_progress";
 const PATTERN_RATINGS_KEY = "ctt_pattern_ratings";
@@ -2290,4 +2294,463 @@ export function getNextPuzzleForPattern(
 
   // All played — return first puzzle
   return 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Activity Log (ctt_activity_log)
+// Stores array of date strings "YYYY-MM-DD" for 30-day habit tracker
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getActivityLog(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Record today in the activity log (called on every puzzle completion).
+ */
+export function recordActivityToday(): void {
+  if (typeof window === "undefined") return;
+  const today = getTodayKey();
+  const log = getActivityLog();
+  if (!log.includes(today)) {
+    log.push(today);
+    // Keep last 90 days
+    const trimmed = log.slice(-90);
+    localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — New Achievement System (ctt_achievements_v2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type NewAchievementId =
+  // Rating Milestones
+  | "first_steps"
+  | "improving"
+  | "solid"
+  | "strong"
+  | "expert"
+  | "master"
+  | "century_climb"
+  // Pattern Mastery
+  | "pattern_beginner"
+  | "pattern_student"
+  | "pattern_master"
+  | "sharp_eye"
+  // Consistency
+  | "three_in_a_row"
+  | "week_warrior"
+  | "habit_formed"
+  // Review
+  | "clean_slate"
+  | "second_chance"
+  // Improvement
+  | "weekly_climber"
+  | "personal_best";
+
+export interface NewAchievement {
+  id: NewAchievementId;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  earnedDate: string | null; // ISO date string
+}
+
+export const NEW_ACHIEVEMENT_DEFINITIONS: Omit<NewAchievement, "earned" | "earnedDate">[] = [
+  // Rating Milestones
+  { id: "first_steps",     name: "First Steps",     icon: "👶", description: "Reach a tactics rating of 800." },
+  { id: "improving",       name: "Improving",        icon: "📈", description: "Reach a tactics rating of 1000." },
+  { id: "solid",           name: "Solid",            icon: "🧱", description: "Reach a tactics rating of 1200." },
+  { id: "strong",          name: "Strong",           icon: "💪", description: "Reach a tactics rating of 1500." },
+  { id: "expert",          name: "Expert",           icon: "🎓", description: "Reach a tactics rating of 1800." },
+  { id: "master",          name: "Master",           icon: "🏆", description: "Reach a tactics rating of 2000." },
+  { id: "century_climb",   name: "Century Climb",    icon: "🚀", description: "Gain 100 rating points in a single session." },
+  // Pattern Mastery
+  { id: "pattern_beginner", name: "Pattern Beginner", icon: "🔰", description: "Complete all 200 puzzles in your first pattern." },
+  { id: "pattern_student",  name: "Pattern Student",  icon: "📚", description: "Complete 5 patterns (all 200 puzzles each)." },
+  { id: "pattern_master",   name: "Pattern Master",   icon: "🧠", description: "Complete all 17 patterns." },
+  { id: "sharp_eye",        name: "Sharp Eye",        icon: "👁️", description: "Score 90%+ accuracy on any pattern." },
+  // Consistency
+  { id: "three_in_a_row",  name: "Three in a Row",   icon: "🔥", description: "Maintain a 3-day practice streak." },
+  { id: "week_warrior",    name: "Week Warrior",     icon: "⚔️", description: "Maintain a 7-day practice streak." },
+  { id: "habit_formed",    name: "Habit Formed",     icon: "🔗", description: "Maintain a 30-day practice streak." },
+  // Review
+  { id: "clean_slate",     name: "Clean Slate",      icon: "✨", description: "Clear your entire review queue down to zero." },
+  { id: "second_chance",   name: "Second Chance",    icon: "♻️", description: "Solve a previously missed puzzle correctly." },
+  // Improvement
+  { id: "weekly_climber",  name: "Weekly Climber",   icon: "🧗", description: "Improve your rating 200+ points in 7 days." },
+  { id: "personal_best",   name: "Personal Best",    icon: "🥇", description: "Hit a new all-time rating high." },
+];
+
+export interface StoredNewAchievement {
+  id: NewAchievementId;
+  earnedDate: string; // ISO timestamp
+}
+
+export function getNewAchievements(): NewAchievement[] {
+  if (typeof window === "undefined") {
+    return NEW_ACHIEVEMENT_DEFINITIONS.map((d) => ({ ...d, earned: false, earnedDate: null }));
+  }
+  try {
+    const stored: StoredNewAchievement[] = JSON.parse(
+      localStorage.getItem(NEW_ACHIEVEMENTS_KEY) || "[]"
+    );
+    const earnedMap = new Map(stored.map((s) => [s.id, s.earnedDate]));
+    return NEW_ACHIEVEMENT_DEFINITIONS.map((d) => ({
+      ...d,
+      earned: earnedMap.has(d.id),
+      earnedDate: earnedMap.get(d.id) ?? null,
+    }));
+  } catch {
+    return NEW_ACHIEVEMENT_DEFINITIONS.map((d) => ({ ...d, earned: false, earnedDate: null }));
+  }
+}
+
+export function earnNewAchievement(id: NewAchievementId): { earned: boolean; achievement: NewAchievement | null } {
+  if (typeof window === "undefined") return { earned: false, achievement: null };
+  try {
+    const stored: StoredNewAchievement[] = JSON.parse(
+      localStorage.getItem(NEW_ACHIEVEMENTS_KEY) || "[]"
+    );
+    if (stored.some((s) => s.id === id)) return { earned: false, achievement: null };
+    const now = new Date().toISOString();
+    stored.push({ id, earnedDate: now });
+    localStorage.setItem(NEW_ACHIEVEMENTS_KEY, JSON.stringify(stored));
+    const def = NEW_ACHIEVEMENT_DEFINITIONS.find((d) => d.id === id);
+    if (!def) return { earned: false, achievement: null };
+    return { earned: true, achievement: { ...def, earned: true, earnedDate: now } };
+  } catch {
+    return { earned: false, achievement: null };
+  }
+}
+
+/**
+ * Check and award new achievements after a puzzle completion.
+ * Returns array of newly earned achievement objects.
+ */
+export function checkAndAwardNewAchievements(params: {
+  outcome: SM2Outcome;
+  streakDays: number;
+  tacticsRating: number;
+  sessionRatingGain: number;
+  weeklyRatingGain: number;
+  allTimeHighRating: number;
+  previousAllTimeHigh: number;
+  reviewQueueCount: number;
+  wasPreviouslyMissed: boolean;
+  patternCompletedCount: number; // # patterns with all 200 puzzles done
+  patternsWithHighAccuracy: string[]; // themes with 90%+ accuracy (min 20 attempts)
+}): NewAchievement[] {
+  const earned: NewAchievement[] = [];
+  const {
+    outcome, streakDays, tacticsRating, sessionRatingGain, weeklyRatingGain,
+    allTimeHighRating, previousAllTimeHigh, reviewQueueCount, wasPreviouslyMissed,
+    patternCompletedCount, patternsWithHighAccuracy,
+  } = params;
+
+  const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
+
+  // Rating milestones
+  const ratingMilestones: Array<[number, NewAchievementId]> = [
+    [800, "first_steps"], [1000, "improving"], [1200, "solid"],
+    [1500, "strong"], [1800, "expert"], [2000, "master"],
+  ];
+  for (const [threshold, id] of ratingMilestones) {
+    if (tacticsRating >= threshold) {
+      const r = earnNewAchievement(id);
+      if (r.earned && r.achievement) earned.push(r.achievement);
+    }
+  }
+
+  // Century Climb: 100+ points in a single session
+  if (sessionRatingGain >= 100) {
+    const r = earnNewAchievement("century_climb");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Personal Best: new all-time high
+  if (isSolved && tacticsRating > previousAllTimeHigh) {
+    const r = earnNewAchievement("personal_best");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Weekly Climber: 200+ points in 7 days
+  if (weeklyRatingGain >= 200) {
+    const r = earnNewAchievement("weekly_climber");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Streak milestones
+  if (streakDays >= 3) {
+    const r = earnNewAchievement("three_in_a_row");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+  if (streakDays >= 7) {
+    const r = earnNewAchievement("week_warrior");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+  if (streakDays >= 30) {
+    const r = earnNewAchievement("habit_formed");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Pattern Mastery
+  if (patternCompletedCount >= 1) {
+    const r = earnNewAchievement("pattern_beginner");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+  if (patternCompletedCount >= 5) {
+    const r = earnNewAchievement("pattern_student");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+  if (patternCompletedCount >= 17) {
+    const r = earnNewAchievement("pattern_master");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+  if (patternsWithHighAccuracy.length > 0) {
+    const r = earnNewAchievement("sharp_eye");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Clean Slate: review queue = 0
+  if (reviewQueueCount === 0) {
+    const r = earnNewAchievement("clean_slate");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  // Second Chance: solved a previously missed puzzle
+  if (isSolved && wasPreviouslyMissed) {
+    const r = earnNewAchievement("second_chance");
+    if (r.earned && r.achievement) earned.push(r.achievement);
+  }
+
+  return earned;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Weekly rating gain tracking for Weekly Climber achievement
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WEEKLY_RATING_GAIN_KEY = "ctt_weekly_rating_gain_v2";
+
+interface WeeklyRatingGainData {
+  weekStart: string; // YYYY-MM-DD (Monday)
+  ratingAtWeekStart: number;
+}
+
+export function getWeeklyRatingGainData(): WeeklyRatingGainData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return JSON.parse(localStorage.getItem(WEEKLY_RATING_GAIN_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+export function ensureWeeklyRatingBaseline(currentRating: number): void {
+  if (typeof window === "undefined") return;
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+  const weekStart = monday.toISOString().slice(0, 10);
+
+  const existing = getWeeklyRatingGainData();
+  if (!existing || existing.weekStart !== weekStart) {
+    localStorage.setItem(WEEKLY_RATING_GAIN_KEY, JSON.stringify({ weekStart, ratingAtWeekStart: currentRating }));
+  }
+}
+
+export function getWeeklyRatingGainAmount(currentRating: number): number {
+  const data = getWeeklyRatingGainData();
+  if (!data) return 0;
+  return Math.max(0, currentRating - data.ratingAtWeekStart);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Session rating gain tracking for Century Climb achievement
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SESSION_RATING_KEY = "ctt_session_rating_start";
+
+export function getSessionRatingStart(): number {
+  if (typeof window === "undefined") return 800;
+  try {
+    const stored = localStorage.getItem(SESSION_RATING_KEY);
+    return stored ? parseInt(stored, 10) : 800;
+  } catch {
+    return 800;
+  }
+}
+
+export function setSessionRatingStart(rating: number): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(SESSION_RATING_KEY, String(rating));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — All-time high rating tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ALL_TIME_HIGH_KEY = "ctt_all_time_high_rating";
+
+export function getAllTimeHighRating(): number {
+  if (typeof window === "undefined") return 800;
+  try {
+    const stored = localStorage.getItem(ALL_TIME_HIGH_KEY);
+    return stored ? parseInt(stored, 10) : 800;
+  } catch {
+    return 800;
+  }
+}
+
+export function updateAllTimeHighRating(currentRating: number): { isNewHigh: boolean; previousHigh: number } {
+  const previous = getAllTimeHighRating();
+  if (currentRating > previous) {
+    localStorage.setItem(ALL_TIME_HIGH_KEY, String(currentRating));
+    return { isNewHigh: true, previousHigh: previous };
+  }
+  return { isNewHigh: false, previousHigh: previous };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Puzzles solved today / this week / all time helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getPuzzlesSolvedThisWeek(): number {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+  const weekStart = monday.toISOString().slice(0, 10);
+
+  return getSM2Attempts().filter((a) => {
+    const date = a.timestamp.slice(0, 10);
+    return date >= weekStart && (a.outcome === "solved-first-try" || a.outcome === "solved-after-retry");
+  }).length;
+}
+
+export function getPuzzlesSolvedAllTime(): number {
+  return getSM2Attempts().filter(
+    (a) => a.outcome === "solved-first-try" || a.outcome === "solved-after-retry"
+  ).length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Pattern completion count (# with all 200 done)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getCompletedPatternCount(): number {
+  const progressMap = getPuzzleProgressMap();
+  const byTheme: Record<string, number> = {};
+  for (const p of Object.values(progressMap)) {
+    if (!byTheme[p.patternTheme]) byTheme[p.patternTheme] = 0;
+    if (p.status !== "missed") byTheme[p.patternTheme]++;
+  }
+  // Count themes where attempted >= 200
+  return Object.values(byTheme).filter((count) => count >= 200).length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Patterns with 90%+ accuracy (min 20 attempts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getPatternsWithHighAccuracy(): string[] {
+  const stats = getAllPatternStats();
+  return stats
+    .filter((s) => s.totalAttempts >= 20 && s.solveRate >= 0.9)
+    .map((s) => s.theme);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Review queue helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REVIEW_QUEUE_STORAGE_KEY = "ctt_review_queue";
+
+export function getReviewQueueCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const queue: string[] = JSON.parse(localStorage.getItem(REVIEW_QUEUE_STORAGE_KEY) || "[]");
+    return queue.length;
+  } catch {
+    return 0;
+  }
+}
+
+export function getReviewQueueThemes(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const queue: string[] = JSON.parse(localStorage.getItem(REVIEW_QUEUE_STORAGE_KEY) || "[]");
+    // Try to find themes from SM2 attempts
+    const sm2 = getSM2Attempts();
+    const themes = new Set<string>();
+    for (const id of queue) {
+      const attempt = sm2.filter((a) => a.puzzleId === id && a.theme).slice(-1)[0];
+      if (attempt?.theme) themes.add(attempt.theme);
+    }
+    return Array.from(themes);
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Rating trend (points gained/lost this week)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getRatingTrendThisWeek(): number {
+  const data = getTacticsRatingData();
+  if (!data.tacticsRatingHistory || data.tacticsRatingHistory.length === 0) return 0;
+
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday);
+  monday.setHours(0, 0, 0, 0);
+  const weekStart = monday.toISOString().slice(0, 10);
+
+  // Find rating at start of week
+  const beforeWeek = data.tacticsRatingHistory.filter((h) => h.date < weekStart);
+  const ratingAtWeekStart = beforeWeek.length > 0
+    ? beforeWeek[beforeWeek.length - 1].rating
+    : data.tacticsRatingStart;
+
+  return data.tacticsRating - ratingAtWeekStart;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 7 Redesign — Rating sparkline data (last 30 days)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SparklinePoint {
+  date: string;
+  rating: number;
+}
+
+export function getRatingSparkline(): SparklinePoint[] {
+  const data = getTacticsRatingData();
+  if (!data.tacticsRatingHistory || data.tacticsRatingHistory.length === 0) return [];
+
+  // Last 30 days
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(today.getDate() - 30);
+  const cutoff = thirtyDaysAgo.toISOString().slice(0, 10);
+
+  return data.tacticsRatingHistory
+    .filter((h) => h.date >= cutoff)
+    .map((h) => ({ date: h.date, rating: h.rating }));
 }

@@ -2,19 +2,15 @@
 
 import { useMemo, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { HelpModal, HelpBulletList } from "./HelpModal";
 import {
   getAttempts,
   getDuePuzzleIds,
   getSM2DuePuzzleIds,
   getTotalAttempts,
-  getWeakestPattern,
   getAllPatternStats,
-  getXPData,
-  getLevelFromXP,
-  getLevelName,
-  getXPThresholdForLevel,
   getStreakData,
-  getDailyQuests,
   getUserSettings,
   getRatingData,
   fetchAndSaveRatings,
@@ -24,259 +20,374 @@ import {
   shouldFetchPlatformRatings,
   getDailyTargetSettings,
   getTodaySolvedCount,
-  getWeeklyHabitChart,
-  getGoalStreak,
-  type DailyQuests,
-  type Quest,
+  getSubscriptionTier,
+  getNewAchievements,
+  getActivityLog,
+  getRatingSparkline,
+  getRatingTrendThisWeek,
+  getPuzzlesSolvedThisWeek,
+  getPuzzlesSolvedAllTime,
+  getReviewQueueCount,
+  getReviewQueueThemes,
+  getAllTimeHighRating,
+  getPatternRatings,
   type RatingSnapshot,
-  type DailyHabitEntry,
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
-import { getSubscriptionTier } from "@/lib/storage";
-import DashboardSocialProof from "./DashboardSocialProof";
-import Link from "next/link";
+import patterns from "@/data/patterns";
 
 // Dynamically import recharts-based chart (avoids SSR issues)
 const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
 
-function getActivityColor(count: number): string {
-  if (count === 0) return "#0d1621";
-  if (count < 4) return "#1e4a8a";
-  if (count < 8) return "#2e75b6";
-  if (count < 13) return "#3d9fd4";
-  return "#4ade80";
+// ── Color helpers ──────────────────────────────────────────────────────────
+
+function getAccuracyColor(rate: number): string {
+  if (rate >= 0.75) return "#4ade80"; // green — strong
+  if (rate >= 0.5) return "#f59e0b";  // yellow — average
+  return "#ef4444";                    // red — weak
 }
 
-function ActivityCalendar() {
-  const days = useMemo(() => {
-    const attempts = getAttempts();
-    const countByDate: Record<string, number> = {};
-    attempts.forEach((a) => {
-      const key = a.timestamp.slice(0, 10);
-      countByDate[key] = (countByDate[key] || 0) + 1;
-    });
-
-    const sm2Attempts = typeof window !== "undefined"
-      ? (() => {
-          try {
-            return JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as { timestamp: string }[];
-          } catch { return []; }
-        })()
-      : [];
-
-    sm2Attempts.forEach((a) => {
-      const key = a.timestamp.slice(0, 10);
-      countByDate[key] = (countByDate[key] || 0) + 1;
-    });
-
-    const today = new Date();
-    return Array.from({ length: 30 }, (_, i) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() - (29 - i));
-      const key = date.toISOString().slice(0, 10);
-      return {
-        date,
-        count: countByDate[key] || 0,
-        label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      };
-    });
-  }, []);
-
-  const totalPuzzles = days.reduce((sum, d) => sum + d.count, 0);
-  const activeDays = days.filter((d) => d.count > 0).length;
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-        {days.map((day, i) => (
-          <div
-            key={i}
-            title={`${day.label}: ${day.count} puzzle${day.count !== 1 ? "s" : ""}`}
-            style={{
-              width: "30px", height: "30px", borderRadius: "5px",
-              backgroundColor: getActivityColor(day.count),
-              border: "1px solid rgba(255,255,255,0.04)",
-              cursor: "default", flexShrink: 0,
-            }}
-          />
-        ))}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "0.75rem", fontSize: "0.72rem", color: "#64748b" }}>
-        <span>Less</span>
-        {[0, 3, 7, 12, 15].map((n, i) => (
-          <div key={i} style={{ width: "14px", height: "14px", borderRadius: "3px", backgroundColor: getActivityColor(n), border: "1px solid rgba(255,255,255,0.06)" }} />
-        ))}
-        <span>More</span>
-        <span style={{ marginLeft: "auto", color: "#94a3b8" }}>
-          {totalPuzzles} puzzles across {activeDays} active days
-        </span>
-      </div>
-    </div>
-  );
+function getAccuracyLabel(rate: number): string {
+  if (rate >= 0.75) return "Strong";
+  if (rate >= 0.5) return "Average";
+  return "Weak";
 }
 
-// ── XP Progress Bar ────────────────────────────────────────────────────────
-
-function XPBar() {
-  const xpData = useMemo(() => getXPData(), []);
-  const level = xpData.level;
-  const totalXP = xpData.totalXP;
-  const levelName = getLevelName(level);
-  const currentThreshold = getXPThresholdForLevel(level);
-  const nextThreshold = getXPThresholdForLevel(level + 1);
-  const xpInLevel = totalXP - currentThreshold;
-  const xpNeeded = nextThreshold - currentThreshold;
-  const progressPct = Math.min(100, Math.floor((xpInLevel / xpNeeded) * 100));
-
-  return (
-    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-        <div>
-          <span style={{ color: "#ffd700", fontWeight: "bold", fontSize: "1rem" }}>
-            ⭐ Level {level} — {levelName}
-          </span>
-        </div>
-        <span style={{ color: "#64748b", fontSize: "0.8rem" }}>{totalXP} XP total</span>
-      </div>
-      <div style={{ backgroundColor: "#0d1621", borderRadius: "6px", height: "10px", overflow: "hidden", marginBottom: "0.4rem" }}>
-        <div style={{
-          width: `${progressPct}%`, height: "100%",
-          background: "linear-gradient(90deg, #4ade80, #22d3ee)",
-          borderRadius: "6px", transition: "width 0.5s ease",
-        }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#475569" }}>
-        <span>{xpInLevel} / {xpNeeded} XP</span>
-        <span>{xpNeeded - xpInLevel} XP to Level {level + 1} ({getLevelName(level + 1)})</span>
-      </div>
-    </div>
-  );
+function getAccuracyBg(rate: number): string {
+  if (rate >= 0.75) return "#0a1f12";
+  if (rate >= 0.5) return "#1a1200";
+  return "#1f0a0a";
 }
 
-// ── Daily Quests Panel ─────────────────────────────────────────────────────
+function getAccuracyBorder(rate: number): string {
+  if (rate >= 0.75) return "#1a4a2a";
+  if (rate >= 0.5) return "#4a3000";
+  return "#4a1a1a";
+}
 
-function DailyQuestsPanel() {
-  const [quests, setQuests] = useState<DailyQuests | null>(null);
+// ── Section 1: Hero — Overall Tactics Rating ──────────────────────────────
+
+function RatingHero() {
+  const [data, setData] = useState(() => getTacticsRatingData());
+  const [weekTrend, setWeekTrend] = useState(0);
+  const sparkline = useMemo(() => getRatingSparkline(), []);
 
   useEffect(() => {
-    setQuests(getDailyQuests());
-    // Refresh quests when window gets focus (in case puzzles were solved)
-    const handler = () => setQuests(getDailyQuests());
-    window.addEventListener("focus", handler);
-    const interval = setInterval(() => setQuests(getDailyQuests()), 10000);
-    return () => { window.removeEventListener("focus", handler); clearInterval(interval); };
+    const refresh = () => {
+      setData(getTacticsRatingData());
+      setWeekTrend(getRatingTrendThisWeek());
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    const iv = setInterval(refresh, 15000);
+    return () => { window.removeEventListener("focus", refresh); clearInterval(iv); };
   }, []);
 
-  if (!quests) return null;
+  const trendColor = weekTrend >= 0 ? "#4ade80" : "#ef4444";
+  const trendArrow = weekTrend >= 0 ? "↑" : "↓";
+  const trendLabel = weekTrend >= 0 ? `+${weekTrend}` : String(weekTrend);
 
-  const allDone = quests.quests.every((q) => q.completed);
+  // Build sparkline SVG
+  const sparkW = 280;
+  const sparkH = 60;
+  let sparkPath = "";
+  if (sparkline.length >= 2) {
+    const ratings = sparkline.map((p) => p.rating);
+    const minR = Math.min(...ratings) - 20;
+    const maxR = Math.max(...ratings) + 20;
+    const range = maxR - minR || 1;
+    const pts = sparkline.map((p, i) => {
+      const x = (i / (sparkline.length - 1)) * sparkW;
+      const y = sparkH - ((p.rating - minR) / range) * sparkH;
+      return `${x},${y}`;
+    });
+    sparkPath = pts.join(" ");
+  }
 
   return (
-    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", margin: 0 }}>⚔️ Daily Quests</h2>
-        {allDone && (
-          <span style={{ backgroundColor: "#0a1f12", color: "#4ade80", border: "1px solid #1a4a2a", borderRadius: "6px", padding: "0.2rem 0.6rem", fontSize: "0.7rem", fontWeight: "bold" }}>
-            ALL COMPLETE +200 XP 🎉
-          </span>
-        )}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {quests.quests.map((quest: Quest) => (
-          <QuestRow key={quest.id} quest={quest} />
-        ))}
-      </div>
-      <div style={{ marginTop: "0.75rem", color: "#475569", fontSize: "0.72rem" }}>
-        Resets at midnight · 50 XP per quest · 200 XP bonus for all 3
-      </div>
-    </div>
-  );
-}
-
-function QuestRow({ quest }: { quest: Quest }) {
-  const pct = Math.min(100, Math.floor((quest.progress / quest.target) * 100));
-  return (
-    <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          {quest.completed ? (
-            <span style={{ color: "#4ade80" }}>✅</span>
-          ) : (
-            <span style={{ color: "#64748b" }}>○</span>
+    <div style={{
+      background: "linear-gradient(135deg, #0f1a2e 0%, #1a2a4e 100%)",
+      border: "1px solid #2e3a5c",
+      borderRadius: "16px",
+      padding: "2rem 2.5rem",
+      marginBottom: "1.5rem",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: "2rem",
+    }}>
+      <div>
+        <div style={{ color: "#64748b", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "0.5rem" }}>
+          ♟ Overall Tactics Rating
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "1rem" }}>
+          <div style={{ color: "#4ade80", fontSize: "4rem", fontWeight: "bold", lineHeight: 1 }}>
+            {data.tacticsRating}
+          </div>
+          {weekTrend !== 0 && (
+            <div style={{ color: trendColor, fontSize: "1.4rem", fontWeight: "bold" }}>
+              {trendArrow} {trendLabel} this week
+            </div>
           )}
-          <span style={{ color: quest.completed ? "#4ade80" : "#e2e8f0", fontSize: "0.82rem" }}>
-            {quest.description}
-          </span>
+          {weekTrend === 0 && data.totalPuzzlesRated > 0 && (
+            <div style={{ color: "#475569", fontSize: "1rem" }}>
+              No change this week
+            </div>
+          )}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>
-            {quest.progress}/{quest.target}
-          </span>
-          <span style={{ color: "#ffd700", fontSize: "0.72rem" }}>+{quest.xpReward} XP</span>
-        </div>
-      </div>
-      <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "4px", overflow: "hidden" }}>
-        <div style={{
-          width: `${pct}%`, height: "100%",
-          backgroundColor: quest.completed ? "#4ade80" : "#2e75b6",
-          borderRadius: "4px", transition: "width 0.3s",
-        }} />
-      </div>
-    </div>
-  );
-}
-
-// ── Streak Card ────────────────────────────────────────────────────────────
-
-function StreakCard({ streak, freezes }: { streak: number; freezes: number }) {
-  const streakData = useMemo(() => getStreakData(), []);
-
-  const milestoneEmojis: Record<number, string> = {
-    7: "🔥",
-    30: "⚡",
-    100: "💫",
-    365: "👑",
-  };
-
-  return (
-    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
-        <div>
-          <div style={{ color: "#f59e0b", fontSize: "1.75rem", fontWeight: "bold", lineHeight: 1 }}>
-            🔥 {streak}
+        {data.totalPuzzlesRated === 0 && (
+          <div style={{ color: "#475569", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+            Solve puzzles to start earning your rating!
           </div>
-          <div style={{ color: "#94a3b8", fontSize: "0.8rem", marginTop: "0.25rem" }}>Day Streak</div>
-        </div>
-        {freezes > 0 && (
-          <div style={{ backgroundColor: "#0a1525", border: "1px solid #1e3a5c", borderRadius: "8px", padding: "0.5rem 0.75rem", textAlign: "center" }}>
-            <div style={{ fontSize: "1.1rem" }}>🧊</div>
-            <div style={{ color: "#60a5fa", fontSize: "0.7rem", fontWeight: "bold" }}>{freezes} freeze{freezes !== 1 ? "s" : ""}</div>
+        )}
+        {data.totalPuzzlesRated > 0 && (
+          <div style={{ color: "#475569", fontSize: "0.8rem", marginTop: "0.4rem" }}>
+            Based on {data.totalPuzzlesRated} rated puzzle{data.totalPuzzlesRated !== 1 ? "s" : ""}
           </div>
         )}
       </div>
-      {freezes === 0 && (
-        <div style={{ color: "#475569", fontSize: "0.72rem", marginBottom: "0.5rem" }}>
-          Complete a 7-day streak to earn a freeze
+
+      {sparkline.length >= 2 && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.4rem" }}>
+          <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Last 30 days
+          </div>
+          <svg width={sparkW} height={sparkH}>
+            <polyline
+              points={sparkPath}
+              fill="none"
+              stroke="#4ade80"
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
       )}
-      {/* Milestone badges */}
-      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
-        {[7, 30, 100, 365].map((m) => {
-          const earned = streakData.milestonesEarned.includes(m);
+    </div>
+  );
+}
+
+// ── Section 2: Weakness Breakdown ─────────────────────────────────────────
+
+function WeaknessBreakdown() {
+  const [reviewCount, setReviewCount] = useState(0);
+  const [reviewThemes, setReviewThemes] = useState<string[]>([]);
+
+  useEffect(() => {
+    const refresh = () => {
+      setReviewCount(getReviewQueueCount());
+      setReviewThemes(getReviewQueueThemes());
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    const iv = setInterval(refresh, 15000);
+    return () => { window.removeEventListener("focus", refresh); clearInterval(iv); };
+  }, []);
+
+  const worstPatterns = useMemo(() => {
+    const stats = getAllPatternStats().filter((s) => s.totalAttempts >= 5);
+    return [...stats].sort((a, b) => a.solveRate - b.solveRate).slice(0, 3);
+  }, []);
+
+  return (
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1.25rem", margin: "0 0 1.25rem" }}>
+        ⚠️ Weakness Breakdown
+      </h2>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+        {/* Worst patterns */}
+        <div>
+          <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+            Worst 3 Patterns (by accuracy)
+          </div>
+          {worstPatterns.length === 0 ? (
+            <div style={{ color: "#475569", fontSize: "0.85rem" }}>Solve at least 5 puzzles per pattern to see rankings.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {worstPatterns.map((p, i) => {
+                const pct = Math.round(p.solveRate * 100);
+                const patternName = patterns.find((pat) => pat.themes.some((t) => t === p.theme))?.name ?? p.theme;
+                return (
+                  <div key={p.theme} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    backgroundColor: getAccuracyBg(p.solveRate),
+                    border: `1px solid ${getAccuracyBorder(p.solveRate)}`,
+                    borderRadius: "8px",
+                    padding: "0.6rem 0.75rem",
+                  }}>
+                    <span style={{ color: "#ef4444", fontWeight: "bold", fontSize: "1rem", width: "20px" }}>#{i + 1}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: "bold" }}>{patternName}</div>
+                      <div style={{ color: "#64748b", fontSize: "0.72rem" }}>{p.totalAttempts} attempts</div>
+                    </div>
+                    <span style={{ color: getAccuracyColor(p.solveRate), fontWeight: "bold", fontSize: "0.9rem" }}>
+                      {pct}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Review queue */}
+        <div>
+          <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+            Review Queue
+          </div>
+          <div style={{
+            backgroundColor: reviewCount > 0 ? "#1a1200" : "#0a1f12",
+            border: `1px solid ${reviewCount > 0 ? "#4a3000" : "#1a4a2a"}`,
+            borderRadius: "10px",
+            padding: "1rem",
+            marginBottom: "0.75rem",
+          }}>
+            <div style={{ color: reviewCount > 0 ? "#f59e0b" : "#4ade80", fontSize: "2.5rem", fontWeight: "bold", lineHeight: 1 }}>
+              {reviewCount}
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginTop: "0.25rem" }}>
+              {reviewCount === 0 ? "All caught up! 🎉" : `puzzle${reviewCount !== 1 ? "s" : ""} to review`}
+            </div>
+          </div>
+          {reviewThemes.length > 0 && (
+            <div>
+              <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.4rem" }}>From patterns:</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                {reviewThemes.slice(0, 6).map((t) => (
+                  <span key={t} style={{
+                    backgroundColor: "#1f0a0a",
+                    border: "1px solid #4a1a1a",
+                    borderRadius: "5px",
+                    padding: "0.15rem 0.5rem",
+                    fontSize: "0.68rem",
+                    color: "#ef4444",
+                  }}>
+                    {t.charAt(0) + t.slice(1).toLowerCase()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {reviewCount > 0 && (
+            <Link href="/app/review" style={{
+              display: "block",
+              marginTop: "0.75rem",
+              backgroundColor: "#2e75b6",
+              color: "white",
+              textDecoration: "none",
+              padding: "0.5rem 1rem",
+              borderRadius: "7px",
+              fontSize: "0.82rem",
+              fontWeight: "bold",
+              textAlign: "center",
+            }}>
+              Clear review queue →
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Section 3: Pattern Ratings Grid ───────────────────────────────────────
+
+function PatternRatingsGrid() {
+  const patternStats = useMemo(() => getAllPatternStats(), []);
+  const patternRatings = useMemo(() => getPatternRatings(), []);
+
+  // Map theme → stat
+  const statsByTheme = useMemo(() => {
+    const m: Record<string, typeof patternStats[0]> = {};
+    for (const s of patternStats) m[s.theme] = s;
+    return m;
+  }, [patternStats]);
+
+  // 17 core patterns (Tier 1 + Tier 2, first theme of each)
+  const corePatterns = patterns.slice(0, 17);
+
+  return (
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: 0 }}>
+          🎯 Pattern Ratings
+        </h2>
+        <span style={{ color: "#475569", fontSize: "0.75rem" }}>17 patterns</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.75rem" }}>
+        {corePatterns.map((p) => {
+          const themeKey = p.themes[0];
+          const stat = statsByTheme[themeKey];
+          const pr = patternRatings[themeKey];
+          const rating = pr?.rating ?? 800;
+          const accuracy = stat ? Math.round(stat.solveRate * 100) : null;
+          const progress = stat?.totalAttempts ?? 0;
+          const color = stat ? getAccuracyColor(stat.solveRate) : "#475569";
+          const bg = stat ? getAccuracyBg(stat.solveRate) : "#0d1621";
+          const border = stat ? getAccuracyBorder(stat.solveRate) : "#1e2a3a";
+
           return (
-            <div
-              key={m}
-              style={{
-                backgroundColor: earned ? "#0a1f12" : "#0d1621",
-                border: `1px solid ${earned ? "#1a4a2a" : "#2e3a5c"}`,
-                borderRadius: "6px",
-                padding: "0.2rem 0.5rem",
-                fontSize: "0.65rem",
-                color: earned ? "#4ade80" : "#475569",
-                fontWeight: earned ? "bold" : "normal",
-              }}
-            >
-              {milestoneEmojis[m]} {m}d
+            <div key={themeKey} style={{
+              backgroundColor: bg,
+              border: `1px solid ${border}`,
+              borderRadius: "10px",
+              padding: "0.85rem 1rem",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  <span style={{ fontSize: "1.2rem" }}>{p.icon}</span>
+                  <span style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "bold" }}>{p.name}</span>
+                </div>
+                {accuracy !== null && (
+                  <span style={{
+                    backgroundColor: bg,
+                    color: color,
+                    border: `1px solid ${border}`,
+                    borderRadius: "5px",
+                    padding: "0.1rem 0.4rem",
+                    fontSize: "0.68rem",
+                    fontWeight: "bold",
+                  }}>
+                    {getAccuracyLabel(stat!.solveRate)}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "0.4rem" }}>
+                <span style={{ color: "#94a3b8" }}>Rating: <strong style={{ color }}>{rating}</strong></span>
+                {accuracy !== null && (
+                  <span style={{ color: color }}>{accuracy}% accuracy</span>
+                )}
+              </div>
+              {/* Progress bar */}
+              <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "5px", overflow: "hidden" }}>
+                <div style={{
+                  width: `${Math.min(100, (progress / 200) * 100)}%`,
+                  height: "100%",
+                  backgroundColor: color,
+                  borderRadius: "4px",
+                }} />
+              </div>
+              <div style={{ color: "#475569", fontSize: "0.65rem", marginTop: "0.25rem" }}>
+                {progress}/200 attempted
+              </div>
             </div>
           );
         })}
@@ -285,22 +396,91 @@ function StreakCard({ streak, freezes }: { streak: number; freezes: number }) {
   );
 }
 
-// ── Tactics Rating Card (Sprint 7) ────────────────────────────────────────
+// ── Section 4: Activity Stats ──────────────────────────────────────────────
 
-function TacticsRatingCard() {
-  const [data, setData] = useState(() => getTacticsRatingData());
+function ActivityCalendar30() {
+  const days = useMemo(() => {
+    const activityLog = getActivityLog();
+    const logSet = new Set(activityLog);
 
-  useEffect(() => {
-    // Refresh when window gains focus (puzzles may have been solved)
-    const handler = () => setData(getTacticsRatingData());
-    window.addEventListener("focus", handler);
-    const interval = setInterval(() => setData(getTacticsRatingData()), 10000);
-    return () => { window.removeEventListener("focus", handler); clearInterval(interval); };
+    // Also backfill from existing attempts for users who don't have the log yet
+    const attempts = getAttempts();
+    attempts.forEach((a) => logSet.add(a.timestamp.slice(0, 10)));
+    try {
+      const sm2 = JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as { timestamp: string }[];
+      sm2.forEach((a) => logSet.add(a.timestamp.slice(0, 10)));
+    } catch { /* ignore */ }
+
+    const today = new Date();
+    return Array.from({ length: 30 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() - (29 - i));
+      const key = date.toISOString().slice(0, 10);
+      const isToday = key === today.toISOString().slice(0, 10);
+      return {
+        date,
+        active: logSet.has(key),
+        label: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        isToday,
+      };
+    });
   }, []);
 
-  const delta = data.tacticsRating - data.tacticsRatingStart;
-  const deltaColor = delta >= 0 ? "#4ade80" : "#ef4444";
-  const deltaStr = delta >= 0 ? `+${delta}` : String(delta);
+  const activeDays = days.filter((d) => d.active).length;
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+        {days.map((day, i) => (
+          <div
+            key={i}
+            title={`${day.label}: ${day.active ? "Practiced ✓" : "No activity"}`}
+            style={{
+              width: "28px", height: "28px", borderRadius: "5px",
+              backgroundColor: day.active ? "#4ade80" : "#0d1621",
+              border: day.isToday ? "2px solid #4ade80" : "1px solid rgba(255,255,255,0.04)",
+              flexShrink: 0,
+              cursor: "default",
+              opacity: day.active ? 1 : 0.5,
+            }}
+          />
+        ))}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.75rem", fontSize: "0.72rem", color: "#64748b" }}>
+        <span>{activeDays}/30 days active</span>
+        <span>
+          <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#4ade80", borderRadius: "2px", marginRight: "4px" }} />
+          Practiced
+          <span style={{ display: "inline-block", width: "10px", height: "10px", backgroundColor: "#0d1621", borderRadius: "2px", marginRight: "4px", marginLeft: "8px", border: "1px solid #2e3a5c" }} />
+          Missed
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ActivityStats() {
+  const [solvedToday, setSolvedToday] = useState(0);
+  const [solvedWeek, setSolvedWeek] = useState(0);
+  const [solvedAllTime, setSolvedAllTime] = useState(0);
+  const [allTimeHigh, setAllTimeHigh] = useState(800);
+  const streakData = useMemo(() => getStreakData(), []);
+
+  useEffect(() => {
+    const refresh = () => {
+      setSolvedToday(getTodaySolvedCount());
+      setSolvedWeek(getPuzzlesSolvedThisWeek());
+      setSolvedAllTime(getPuzzlesSolvedAllTime());
+      setAllTimeHigh(getAllTimeHighRating());
+    };
+    refresh();
+  }, []);
+
+  const stats = [
+    { label: "Today", value: solvedToday, icon: "📅" },
+    { label: "This week", value: solvedWeek, icon: "📊" },
+    { label: "All time", value: solvedAllTime, icon: "♟" },
+  ];
 
   return (
     <div style={{
@@ -308,288 +488,244 @@ function TacticsRatingCard() {
       border: "1px solid #2e3a5c",
       borderRadius: "12px",
       padding: "1.5rem",
+      marginBottom: "1.5rem",
     }}>
-      <div style={{ color: "#94a3b8", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.5rem" }}>
-        ♟ Your Tactics Rating
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "0.6rem" }}>
-        <div style={{ color: "#4ade80", fontSize: "2.5rem", fontWeight: "bold", lineHeight: 1 }}>
-          {data.tacticsRating}
-        </div>
-        {delta !== 0 && (
-          <div style={{ color: deltaColor, fontSize: "1rem", fontWeight: "bold" }}>
-            ({deltaStr} since you started)
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1.25rem", margin: "0 0 1.25rem" }}>
+        📈 Activity Stats
+      </h2>
+
+      {/* Puzzles solved */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        {stats.map((s) => (
+          <div key={s.label} style={{
+            backgroundColor: "#162030",
+            borderRadius: "8px",
+            padding: "0.85rem",
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>{s.icon}</div>
+            <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{s.value}</div>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>{s.label}</div>
           </div>
-        )}
+        ))}
       </div>
-      {data.totalPuzzlesRated === 0 && (
-        <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
-          Solve your first puzzle to start your rating!
+
+      {/* Streak + personal best */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        <div style={{
+          backgroundColor: "#162030",
+          borderRadius: "8px",
+          padding: "0.85rem",
+        }}>
+          <div style={{ color: "#f59e0b", fontSize: "1.5rem", fontWeight: "bold" }}>
+            🔥 {streakData.currentStreak}
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>Day streak</div>
+          <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.1rem" }}>
+            Best: {streakData.longestStreak}d
+          </div>
         </div>
-      )}
-      {data.totalPuzzlesRated > 0 && (
-        <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
-          Based on {data.totalPuzzlesRated} rated puzzle{data.totalPuzzlesRated !== 1 ? "s" : ""} · Started at {data.tacticsRatingStart}
+        <div style={{
+          backgroundColor: "#162030",
+          borderRadius: "8px",
+          padding: "0.85rem",
+        }}>
+          <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>
+            🥇 {allTimeHigh}
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>Personal best</div>
+          <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.1rem" }}>All-time high rating</div>
         </div>
-      )}
+      </div>
+
+      {/* 30-day habit tracker */}
+      <div>
+        <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+          30-Day Practice Habit
+        </div>
+        <ActivityCalendar30 />
+      </div>
     </div>
   );
 }
 
-// ── Rating History Chart ───────────────────────────────────────────────────
+// ── Section 5: Achievements ────────────────────────────────────────────────
 
-function RatingMiniChart({
-  snapshots,
-  platform,
-  ratingKey,
-  label,
-  color,
-}: {
-  snapshots: RatingSnapshot[];
-  platform: "chesscom" | "lichess";
-  ratingKey: string;
-  label: string;
-  color: string;
-}) {
-  const values = snapshots
-    .map((s) => {
-      const p = s[platform] as Record<string, number | undefined> | undefined;
-      return p?.[ratingKey] ?? null;
-    })
-    .filter((v): v is number => v !== null);
+function AchievementsSection() {
+  const achievements = useMemo(() => getNewAchievements(), []);
+  const earned = useMemo(() => achievements.filter((a) => a.earned).sort((a, b) => {
+    // Most recently earned first
+    if (!a.earnedDate) return 1;
+    if (!b.earnedDate) return -1;
+    return b.earnedDate.localeCompare(a.earnedDate);
+  }), [achievements]);
+  const [expanded, setExpanded] = useState(false);
 
-  if (values.length === 0) return null;
-
-  const min = Math.min(...values) - 20;
-  const max = Math.max(...values) + 20;
-  const range = max - min || 1;
-  const width = 180;
-  const height = 50;
-  const points = values
-    .map((v, i) => {
-      const x = (i / Math.max(values.length - 1, 1)) * width;
-      const y = height - ((v - min) / range) * height;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  const latestRating = values[values.length - 1];
-  const firstRating = values[0];
-  const change = latestRating - firstRating;
-  const changeColor = change >= 0 ? "#4ade80" : "#ef4444";
+  const displayed = expanded ? earned : earned.slice(0, 6);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "1rem", backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem", marginBottom: "0.5rem" }}>
-      <div style={{ minWidth: "90px" }}>
-        <div style={{ color: "#64748b", fontSize: "0.7rem" }}>{label}</div>
-        <div style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold" }}>{latestRating}</div>
-        {values.length > 1 && (
-          <div style={{ color: changeColor, fontSize: "0.7rem" }}>
-            {change >= 0 ? "+" : ""}{change} all-time
-          </div>
-        )}
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: 0 }}>
+          🏆 Achievements
+        </h2>
+        <span style={{ color: "#ffd700", fontSize: "0.85rem" }}>
+          {earned.length} / {achievements.length} earned
+        </span>
       </div>
-      <svg width={width} height={height} style={{ flex: 1 }}>
-        <polyline
-          points={points}
-          fill="none"
-          stroke={color}
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </svg>
+
+      {earned.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "1.5rem 0", color: "#475569" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🎯</div>
+          <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>No achievements yet</div>
+          <div style={{ color: "#475569", fontSize: "0.78rem", marginTop: "0.35rem" }}>
+            Solve puzzles to start earning badges
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "0.75rem" }}>
+            {displayed.map((ach) => (
+              <div key={ach.id} style={{
+                backgroundColor: "#0a1f12",
+                border: "1px solid #ffd70040",
+                borderRadius: "8px",
+                padding: "0.85rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.65rem",
+              }}>
+                <span style={{ fontSize: "1.8rem" }}>{ach.icon}</span>
+                <div>
+                  <div style={{ color: "#ffd700", fontWeight: "bold", fontSize: "0.85rem" }}>{ach.name}</div>
+                  <div style={{ color: "#64748b", fontSize: "0.7rem", lineHeight: 1.4 }}>{ach.description}</div>
+                  {ach.earnedDate && (
+                    <div style={{ color: "#475569", fontSize: "0.65rem", marginTop: "0.2rem" }}>
+                      {new Date(ach.earnedDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {earned.length > 6 && (
+            <div style={{ textAlign: "center", marginTop: "0.75rem" }}>
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                style={{
+                  background: "none",
+                  border: "1px solid #2e3a5c",
+                  borderRadius: "6px",
+                  color: "#64748b",
+                  padding: "0.4rem 1rem",
+                  cursor: "pointer",
+                  fontSize: "0.8rem",
+                }}
+              >
+                {expanded ? "Show less ▲" : `See all ${earned.length} achievements ▼`}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Locked previews (subtle) */}
+      {achievements.length - earned.length > 0 && (
+        <div style={{ marginTop: "1rem", paddingTop: "1rem", borderTop: "1px solid #1e2a3a" }}>
+          <div style={{ color: "#475569", fontSize: "0.72rem", marginBottom: "0.5rem" }}>
+            🔒 {achievements.length - earned.length} achievements locked
+          </div>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+            {achievements.filter((a) => !a.earned).slice(0, 8).map((a) => (
+              <div key={a.id} style={{
+                backgroundColor: "#0d1621",
+                border: "1px solid #1e2a3a",
+                borderRadius: "6px",
+                padding: "0.3rem 0.5rem",
+                fontSize: "0.68rem",
+                color: "#475569",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.3rem",
+                opacity: 0.6,
+              }}>
+                <span style={{ filter: "grayscale(100%)" }}>{a.icon}</span>
+                <span>{a.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Platform Ratings Panel (carry-over from old dashboard) ─────────────────
 
 function RatingTrackingPanel() {
   const [ratingData, setRatingData] = useState(() => getRatingData());
   const settings = useMemo(() => getUserSettings(), []);
 
   useEffect(() => {
-    // Legacy rating sync (backwards compat)
     if ((settings.chesscomUsername || settings.lichessUsername) && shouldFetchRatings()) {
       fetchAndSaveRatings().then(() => setRatingData(getRatingData()));
     }
-    // Sprint 7: platform ratings sync
     if ((settings.trackChesscom || settings.trackLichess) && shouldFetchPlatformRatings()) {
       fetchAndSavePlatformRatings();
     }
   }, [settings]);
 
-  const hasChesscom = settings.trackChesscom && !!settings.chesscomUsername;
-  const hasLichess = settings.trackLichess && !!settings.lichessUsername;
-  // Legacy: also show if username is set without toggle (backwards compat)
-  const legacyChesscom = !settings.trackChesscom && !!settings.chesscomUsername;
-  const legacyLichess = !settings.trackLichess && !!settings.lichessUsername;
-  if (!hasChesscom && !hasLichess && !legacyChesscom && !legacyLichess) return null;
+  const hasChesscom = (settings.trackChesscom && !!settings.chesscomUsername) || (!settings.trackChesscom && !!settings.chesscomUsername);
+  const hasLichess = (settings.trackLichess && !!settings.lichessUsername) || (!settings.trackLichess && !!settings.lichessUsername);
+  if (!hasChesscom && !hasLichess) return null;
 
   const snapshots = ratingData.snapshots;
+  if (snapshots.length === 0) return null;
 
   return (
-    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem", marginTop: "1rem" }}>
-      <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", marginBottom: "1rem" }}>🏆 Platform Ratings</h2>
-      {snapshots.length === 0 ? (
-        <div style={{ color: "#64748b", fontSize: "0.85rem" }}>Fetching ratings...</div>
-      ) : (
-        <div>
-          {(hasChesscom || legacyChesscom) && (
-            <div>
-              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.25rem", textTransform: "uppercase" }}>Chess.com</div>
-              <RatingMiniChart snapshots={snapshots} platform="chesscom" ratingKey="blitz" label="Blitz" color="#f59e0b" />
-              <RatingMiniChart snapshots={snapshots} platform="chesscom" ratingKey="rapid" label="Rapid" color="#4ade80" />
-            </div>
-          )}
-          {(hasLichess || legacyLichess) && (
-            <div>
-              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.25rem", textTransform: "uppercase", marginTop: (hasChesscom || legacyChesscom) ? "0.5rem" : 0 }}>Lichess</div>
-              <RatingMiniChart snapshots={snapshots} platform="lichess" ratingKey="blitz" label="Blitz" color="#60a5fa" />
-              <RatingMiniChart snapshots={snapshots} platform="lichess" ratingKey="rapid" label="Rapid" color="#a855f7" />
-            </div>
-          )}
-          <div style={{ color: "#475569", fontSize: "0.7rem", marginTop: "0.5rem" }}>
-            Updated {snapshots.length > 0 ? new Date(snapshots[snapshots.length - 1].date).toLocaleDateString() : "never"}
-          </div>
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem", margin: "0 0 1rem" }}>
+        🌐 Platform Ratings
+      </h2>
+      {hasChesscom && (
+        <div style={{ marginBottom: "0.5rem" }}>
+          <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>Chess.com</div>
+          {["blitz", "rapid"].map((k) => {
+            const latest = snapshots.slice(-1)[0]?.chesscom?.[k as "blitz" | "rapid"];
+            return latest ? (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", backgroundColor: "#162030", borderRadius: "6px", padding: "0.4rem 0.75rem", marginBottom: "0.25rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.8rem", textTransform: "capitalize" }}>{k}</span>
+                <span style={{ color: "#f59e0b", fontWeight: "bold" }}>{latest}</span>
+              </div>
+            ) : null;
+          })}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Sprint 10: Daily Goal Progress Card ───────────────────────────────────
-
-function DailyGoalCard() {
-  const [solvedToday, setSolvedToday] = useState(0);
-  const [goalSettings, setGoalSettings] = useState(() => ({ dailyGoal: 10 }));
-  const [habitData, setHabitData] = useState<DailyHabitEntry[]>([]);
-  const [goalStreak, setGoalStreak] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const settings = getDailyTargetSettings();
-    const today = getTodaySolvedCount();
-    const weekly = getWeeklyHabitChart();
-    const gs = getGoalStreak();
-    setGoalSettings(settings);
-    setSolvedToday(today);
-    setHabitData(weekly);
-    setGoalStreak(gs);
-  }, []);
-
-  const { dailyGoal } = goalSettings;
-  const pct = Math.min(100, Math.round((solvedToday / dailyGoal) * 100));
-  const goalMet = solvedToday >= dailyGoal;
-  const remaining = Math.max(0, dailyGoal - solvedToday);
-
-  const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-  function getDayLabel(dateStr: string): string {
-    const d = new Date(dateStr + "T00:00:00");
-    const idx = d.getDay(); // 0=Sun
-    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][idx];
-  }
-
-  return (
-    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-        <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", margin: 0 }}>
-          🎯 Daily Goal
-        </h2>
-        <a href="/app/settings" style={{ color: "#64748b", fontSize: "0.75rem", textDecoration: "none" }}>
-          Change goal ↗
-        </a>
-      </div>
-
-      {/* Progress */}
-      <div style={{ marginBottom: "0.75rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-          <span style={{ color: goalMet ? "#4ade80" : "#e2e8f0", fontWeight: "bold", fontSize: "1.1rem" }}>
-            {solvedToday}/{dailyGoal} puzzles today
-            {goalMet && " 🎉"}
-          </span>
-          <span style={{ color: "#64748b", fontSize: "0.8rem" }}>{pct}%</span>
-        </div>
-        <div style={{ backgroundColor: "#0d1621", borderRadius: "6px", height: "10px", overflow: "hidden" }}>
-          <div style={{
-            width: `${pct}%`,
-            height: "100%",
-            backgroundColor: goalMet ? "#4ade80" : "#2e75b6",
-            borderRadius: "6px",
-            transition: "width 0.4s ease",
-          }} />
-        </div>
-        <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
-          {goalMet
-            ? "Goal reached! 🎉 Keep going for bonus practice."
-            : `${remaining} more to hit your daily goal`}
-        </div>
-      </div>
-
-      {/* Goal streak */}
-      {goalStreak > 0 && (
-        <div style={{ color: "#f59e0b", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
-          🔥 Goal streak: {goalStreak} day{goalStreak !== 1 ? "s" : ""} in a row
-        </div>
-      )}
-
-      {/* Weekly habit chart */}
-      {habitData.length > 0 && (
+      {hasLichess && (
         <div>
-          <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            This Week
-          </div>
-          <div style={{ display: "flex", gap: "0.3rem", alignItems: "flex-end" }}>
-            {habitData.map((entry) => {
-              const barPct = entry.goalSet > 0 ? Math.min(100, (entry.puzzlesSolved / entry.goalSet) * 100) : 0;
-              const isToday = entry.date === new Date().toISOString().slice(0, 10);
-              return (
-                <div key={entry.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem" }}>
-                  <div style={{
-                    width: "100%",
-                    height: "40px",
-                    backgroundColor: "#0d1621",
-                    borderRadius: "4px",
-                    overflow: "hidden",
-                    position: "relative",
-                    border: isToday ? "1px solid #2e75b6" : "1px solid transparent",
-                  }}
-                    title={`${entry.date}: ${entry.puzzlesSolved}/${entry.goalSet} puzzles`}
-                  >
-                    <div style={{
-                      position: "absolute",
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      height: `${barPct}%`,
-                      backgroundColor: entry.goalMet ? "#4ade80" : entry.puzzlesSolved > 0 ? "#2e75b6" : "#162030",
-                      transition: "height 0.3s ease",
-                    }} />
-                    {entry.goalMet && (
-                      <div style={{ position: "absolute", top: "2px", left: 0, right: 0, textAlign: "center", fontSize: "0.6rem" }}>✓</div>
-                    )}
-                  </div>
-                  <div style={{ color: isToday ? "#4ade80" : "#475569", fontSize: "0.62rem" }}>
-                    {getDayLabel(entry.date)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.4rem", fontSize: "0.68rem" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-              <span style={{ width: "8px", height: "8px", backgroundColor: "#4ade80", borderRadius: "2px", display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>Goal met</span>
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-              <span style={{ width: "8px", height: "8px", backgroundColor: "#2e75b6", borderRadius: "2px", display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>Partial</span>
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.2rem" }}>
-              <span style={{ width: "8px", height: "8px", backgroundColor: "#162030", borderRadius: "2px", display: "inline-block" }} />
-              <span style={{ color: "#64748b" }}>Missed</span>
-            </span>
-          </div>
+          <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>Lichess</div>
+          {["blitz", "rapid"].map((k) => {
+            const latest = snapshots.slice(-1)[0]?.lichess?.[k as "blitz" | "rapid"];
+            return latest ? (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", backgroundColor: "#162030", borderRadius: "6px", padding: "0.4rem 0.75rem", marginBottom: "0.25rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.8rem", textTransform: "capitalize" }}>{k}</span>
+                <span style={{ color: "#60a5fa", fontWeight: "bold" }}>{latest}</span>
+              </div>
+            ) : null;
+          })}
         </div>
       )}
     </div>
@@ -602,259 +738,90 @@ export default function Dashboard() {
   // Handle Stripe checkout success callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const sessionId = params.get('session_id');
+    const sessionId = params.get("session_id");
     if (sessionId) {
-      // Mark subscription as active (placeholder until webhook integration)
-      localStorage.setItem('subscription_status', 'active');
-      // Remove query param to avoid re-triggering
+      localStorage.setItem("subscription_status", "active");
       const url = new URL(window.location.href);
-      url.searchParams.delete('session_id');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.delete("session_id");
+      window.history.replaceState({}, "", url.toString());
     }
   }, []);
-
-  const { totalAttempted, reviewCount, weakestPattern, patternCount } = useMemo(() => {
-    const totalAttempted = getTotalAttempts();
-    const legacyDue = getDuePuzzleIds().length;
-    const sm2Due = getSM2DuePuzzleIds().length;
-    const reviewCount = legacyDue + sm2Due;
-    const weakestPattern = getWeakestPattern();
-    const patternStats = getAllPatternStats();
-    const patternCount = patternStats.length;
-    return { totalAttempted, reviewCount, weakestPattern, patternCount };
-  }, []);
-
-  const streakData = useMemo(() => getStreakData(), []);
-  const streak = streakData.currentStreak || useMemo(() => {
-    // Fall back to computed streak from raw attempts
-    const allDates = new Set<string>();
-    getAttempts().forEach((a) => allDates.add(a.timestamp.slice(0, 10)));
-    const sm2 = typeof window !== "undefined"
-      ? (() => { try { return JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as {timestamp:string;outcome:string}[]; } catch { return []; } })()
-      : [];
-    sm2.filter((a) => a.outcome === "solved-first-try" || a.outcome === "solved-after-retry")
-      .forEach((a) => allDates.add(a.timestamp.slice(0, 10)));
-    let s = 0;
-    const d = new Date();
-    while (true) {
-      const key = d.toISOString().slice(0, 10);
-      if (allDates.has(key)) { s++; d.setDate(d.getDate() - 1); } else break;
-    }
-    return s;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const stats = [
-    {
-      label: "Total Puzzles Attempted",
-      value: String(totalAttempted),
-      icon: "♟",
-      sub: "All-time",
-    },
-    {
-      label: "Review Queue",
-      value: String(reviewCount),
-      icon: "🔁",
-      sub: reviewCount === 0 ? "All caught up!" : "Due today",
-    },
-    {
-      label: "Weakest Pattern",
-      value: weakestPattern
-        ? weakestPattern.split(" ").slice(0, 2).join(" ")
-        : "—",
-      icon: "⚠️",
-      sub: weakestPattern ? "Lowest solve rate" : "No data yet",
-    },
-    {
-      label: "Patterns Practiced",
-      value: String(patternCount),
-      icon: "📊",
-      sub: "Unique patterns",
-    },
-  ];
 
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-      <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "1.5rem" }}>
-        Welcome back! Ready to train?
-      </h1>
-
-      {/* XP Bar */}
-      <div style={{ marginBottom: "1rem" }}>
-        <XPBar />
+      {/* Page header with help button */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", margin: 0 }}>
+          📊 Data
+        </h1>
+        <HelpModal title="How to Read Your Data">
+          <HelpBulletList items={[
+            "Your overall tactics rating is your headline number — focus on growing it over time",
+            "The weakness breakdown shows your worst patterns — those are where to focus your Drill Tactics sessions",
+            "Pattern cards show your rating, accuracy, and progress per pattern — green is strong, red needs work",
+            "The 30-day habit tracker shows your consistency — daily practice compounds faster than occasional long sessions",
+            "Achievements unlock automatically as you hit milestones",
+          ]} />
+        </HelpModal>
       </div>
 
-      {/* Tactics Rating — Sprint 7 */}
-      <div style={{ marginBottom: "1rem" }}>
-        <TacticsRatingCard />
-      </div>
+      {/* Hero — Overall Tactics Rating */}
+      <RatingHero />
 
-      {/* Stats grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1rem" }}>
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem" }}
-          >
-            <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>{stat.icon}</div>
-            <div style={{ color: "#4ade80", fontSize: "1.75rem", fontWeight: "bold" }}>{stat.value}</div>
-            <div style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "0.25rem" }}>{stat.label}</div>
-            <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.2rem" }}>{stat.sub}</div>
-          </div>
-        ))}
-      </div>
+      {/* Weakness Breakdown */}
+      <WeaknessBreakdown />
 
-      {/* Sprint 8: Social proof comparison card (free users only) */}
-      {!hasActiveSubscription() && (
-        <DashboardSocialProof onUpgrade={() => { window.location.href = "/pricing"; }} />
-      )}
+      {/* Pattern Ratings Grid */}
+      <PatternRatingsGrid />
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        {/* Streak Card */}
-        <StreakCard streak={streak} freezes={streakData.freezesAvailable} />
-        {/* Daily Quests */}
-        <DailyQuestsPanel />
-      </div>
+      {/* Activity Stats */}
+      <ActivityStats />
 
-      {/* Sprint 10: Daily Goal Progress */}
-      <div style={{ marginBottom: "1rem" }}>
-        <DailyGoalCard />
-      </div>
+      {/* Platform ratings if tracked */}
+      <RatingTrackingPanel />
 
-      {/* Rating History Chart — Sprint 7 */}
-      <div style={{ marginBottom: "1rem" }}>
+      {/* Rating history chart */}
+      <div style={{ marginBottom: "1.5rem" }}>
         <RatingHistoryChart />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "1rem" }}>
-        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem" }}>
-          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1.25rem" }}>
-            30-Day Activity
-          </h2>
-          <ActivityCalendar />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem" }}>
-            <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem" }}>
-              Training Summary
-            </h2>
-            {totalAttempted === 0 ? (
-              <div style={{ color: "#94a3b8", textAlign: "center", padding: "1rem 0" }}>
-                <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🎯</div>
-                <div>Start training to see your stats!</div>
-                <div style={{ color: "#475569", fontSize: "0.8rem", marginTop: "0.5rem" }}>
-                  Go to Puzzles → select a pattern
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
-                  <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>Patterns practiced</span>
-                  <span style={{ color: "#4ade80", fontWeight: "bold" }}>{patternCount}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
-                  <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>Due for review</span>
-                  <span style={{ color: reviewCount > 0 ? "#f59e0b" : "#4ade80", fontWeight: "bold" }}>{reviewCount}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem" }}>
-                  <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>Weakest pattern</span>
-                  <span style={{ color: "#ef4444", fontWeight: "bold", fontSize: "0.8rem" }}>
-                    {weakestPattern ?? "—"}
-                  </span>
-                </div>
-                {streak > 0 && (
-                  <div style={{ backgroundColor: "#162030", borderRadius: "8px", padding: "0.6rem 0.75rem", textAlign: "center" }}>
-                    <span style={{ color: "#f59e0b", fontSize: "0.9rem" }}>🔥 {streak} day streak — keep it up!</span>
-                  </div>
-                )}
-              </div>
-            )}
+      {/* Weekly report link for Serious tier */}
+      {getSubscriptionTier() >= 2 && (
+        <div style={{
+          backgroundColor: "#0a1f12",
+          border: "1px solid #1a4a2a",
+          borderRadius: "12px",
+          padding: "1rem 1.25rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          marginBottom: "1.5rem",
+        }}>
+          <div>
+            <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}>📧 Weekly Report</div>
+            <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.15rem" }}>Preview your email digest</div>
           </div>
-
-          {/* Rating Tracking */}
-          <RatingTrackingPanel />
-
-          {/* Sprint 9: Weekly Report link for Serious users */}
-          {getSubscriptionTier() >= 2 && (
-            <div style={{
-              backgroundColor: "#0a1f12",
-              border: "1px solid #1a4a2a",
-              borderRadius: "12px",
-              padding: "1rem 1.25rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-            }}>
-              <div>
-                <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}>📧 Weekly Report</div>
-                <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.15rem" }}>Preview your email digest</div>
-              </div>
-              <Link
-                href="/app/weekly-report"
-                style={{
-                  backgroundColor: "#4ade80",
-                  color: "#0f0f1a",
-                  padding: "0.4rem 0.85rem",
-                  borderRadius: "6px",
-                  textDecoration: "none",
-                  fontWeight: "bold",
-                  fontSize: "0.8rem",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Preview →
-              </Link>
-            </div>
-          )}
+          <Link
+            href="/app/weekly-report"
+            style={{
+              backgroundColor: "#4ade80",
+              color: "#0f0f1a",
+              padding: "0.4rem 0.85rem",
+              borderRadius: "6px",
+              textDecoration: "none",
+              fontWeight: "bold",
+              fontSize: "0.8rem",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Preview →
+          </Link>
         </div>
-      </div>
+      )}
 
-      {/* Free tier social proof banner */}
-      <SocialProofBanner />
-    </div>
-  );
-}
-
-// ── Social Proof Banner (free tier) ───────────────────────────────────────
-
-function SocialProofBanner() {
-  const [dismissed, setDismissed] = useState(false);
-
-  // Show to free users (all users for now since there's no paid auth)
-  const totalAttempts = useMemo(() => getTotalAttempts(), []);
-  if (dismissed || totalAttempts < 5) return null;
-
-  return (
-    <div style={{
-      marginTop: "1rem",
-      backgroundColor: "#0a1525",
-      border: "1px solid #1e3a5c",
-      borderRadius: "10px",
-      padding: "0.9rem 1.25rem",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: "1rem",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <span style={{ fontSize: "1.2rem" }}>💡</span>
-        <div>
-          <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
-            Users with spaced repetition retain 80% of learned patterns vs 20% without.
-          </span>
-          <a href="/pricing" style={{ color: "#4ade80", fontSize: "0.82rem", marginLeft: "0.5rem", textDecoration: "none", fontWeight: "bold" }}>
-            Start 30-day free trial →
-          </a>
-        </div>
-      </div>
-      <button
-        onClick={() => setDismissed(true)}
-        style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "1rem", padding: "0.25rem" }}
-      >
-        ✕
-      </button>
+      {/* Achievements — bottom */}
+      <AchievementsSection />
     </div>
   );
 }

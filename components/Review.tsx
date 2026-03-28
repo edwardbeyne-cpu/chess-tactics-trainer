@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Chess } from "chess.js";
 import puzzles from "@/data/puzzles";
+import { HelpModal, HelpBulletList } from "./HelpModal";
 import {
   getDuePuzzleIds,
   getSM2DuePuzzleIds,
@@ -19,6 +20,29 @@ import type { Puzzle } from "@/data/puzzles";
 import { fetchPuzzleById, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
 import { hasActiveSubscription } from "@/lib/trial";
 import ChessBoard from "./ChessBoard";
+
+// ── Review Queue (missed puzzles) helpers ──────────────────────────────────
+
+const REVIEW_QUEUE_KEY = "ctt_review_queue";
+
+function getReviewQueue(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(REVIEW_QUEUE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function removeFromReviewQueue(puzzleId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const queue = getReviewQueue().filter((id) => id !== puzzleId);
+    localStorage.setItem(REVIEW_QUEUE_KEY, JSON.stringify(queue));
+  } catch {
+    // ignore
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -306,55 +330,73 @@ function UpcomingQueue({
 
 type ReviewItem =
   | { type: "classic"; puzzle: Puzzle }
-  | { type: "sm2"; puzzle: AppPuzzle };
+  | { type: "sm2"; puzzle: AppPuzzle }
+  | { type: "missed"; puzzle: AppPuzzle };
 
 export default function Review() {
   const [dueIds, setDueIds] = useState(() => getDuePuzzleIds());
   const [sm2DueIds, setSM2DueIds] = useState<string[]>([]);
   const [sm2Puzzles, setSM2Puzzles] = useState<AppPuzzle[]>([]);
+  const [missedPuzzles, setMissedPuzzles] = useState<AppPuzzle[]>([]);
   const [loadingSM2, setLoadingSM2] = useState(false);
   const [queue, setQueue] = useState<ReviewItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [results, setResults] = useState<string[]>([]);
   const [sessionDone, setSessionDone] = useState(false);
+  const [missedQueueCount, setMissedQueueCount] = useState(0);
 
   const srs = getSRS();
 
-  // Load SM-2 due puzzle IDs on mount
+  // Load SM-2 due puzzle IDs and missed (review queue) puzzles on mount
   useEffect(() => {
     const ids = getSM2DuePuzzleIds();
     setSM2DueIds(ids);
+    const missedIds = getReviewQueue();
+    setMissedQueueCount(missedIds.length);
 
-    if (ids.length === 0) return;
+    // Fetch all needed puzzles in one batch
+    const allIdsToFetch = Array.from(new Set([...ids, ...missedIds]));
+    if (allIdsToFetch.length === 0) return;
 
-    // Fetch SM-2 due puzzles from Lichess
     setLoadingSM2(true);
-    Promise.all(ids.map((id) => fetchPuzzleById(id).catch(() => null)))
+    Promise.all(allIdsToFetch.map((id) => fetchPuzzleById(id).catch(() => null)))
       .then((results) => {
         const valid = results.filter((r): r is NonNullable<typeof r> => r !== null);
-        // Get theme from SM2 attempts
         const sm2AttemptsList = getSM2Attempts();
         const themeMap = new Map<string, string>();
         for (const a of sm2AttemptsList) {
           if (a.theme) themeMap.set(a.puzzleId, a.theme);
         }
-        const appPuzzles = valid.map((p) => {
+
+        // SM-2 due puzzles
+        const sm2Valid = valid.filter((p) => ids.includes(p.id));
+        const appSM2 = sm2Valid.map((p) => {
           const theme = themeMap.get(p.id) ?? "Tactic";
           return lichessPuzzleToApp(p, theme, 1);
         });
-        setSM2Puzzles(appPuzzles);
+        setSM2Puzzles(appSM2);
+
+        // Missed (review queue) puzzles — exclude those already in SM-2 due
+        const sm2IdSet = new Set(ids);
+        const missedValid = valid.filter((p) => missedIds.includes(p.id) && !sm2IdSet.has(p.id));
+        const appMissed = missedValid.map((p) => {
+          const theme = themeMap.get(p.id) ?? "Tactic";
+          return lichessPuzzleToApp(p, theme, 1);
+        });
+        setMissedPuzzles(appMissed);
       })
       .finally(() => setLoadingSM2(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Build queue once SM-2 puzzles are loaded
+  // Build queue once puzzles are loaded — missed puzzles go first
   useEffect(() => {
     const classicPuzzles = dueIds
       .map((id) => puzzles.find((p) => p.id === id))
       .filter((p): p is Puzzle => Boolean(p));
 
     const q: ReviewItem[] = [
+      ...missedPuzzles.map((p): ReviewItem => ({ type: "missed", puzzle: p })),
       ...classicPuzzles.map((p): ReviewItem => ({ type: "classic", puzzle: p })),
       ...sm2Puzzles.map((p): ReviewItem => ({ type: "sm2", puzzle: p })),
     ];
@@ -362,7 +404,7 @@ export default function Review() {
     setQueueIndex(0);
     setResults([]);
     setSessionDone(false);
-  }, [dueIds, sm2Puzzles]);
+  }, [dueIds, sm2Puzzles, missedPuzzles]);
 
   const allQueued = Object.entries(srs)
     .map(([id, entry]) => ({
@@ -400,22 +442,47 @@ export default function Review() {
     }, 1200);
   }
 
+  function handleMissedResult(outcome: SM2Outcome, puzzleId: string, theme?: string) {
+    const isSolved = outcome === "solved-first-try" || outcome === "solved-after-retry";
+    recordSM2Attempt({
+      puzzleId,
+      outcome,
+      timestamp: new Date().toISOString(),
+      theme,
+    });
+    // If solved → remove from review queue; if wrong → stays in queue
+    if (isSolved) {
+      removeFromReviewQueue(puzzleId);
+      setMissedQueueCount((c) => Math.max(0, c - 1));
+    }
+    setResults((r) => [...r, outcome]);
+    setTimeout(() => {
+      if (queueIndex + 1 >= queue.length) {
+        setSessionDone(true);
+      } else {
+        setQueueIndex((i) => i + 1);
+      }
+    }, 1200);
+  }
+
   function restartSession() {
     const fresh = getDuePuzzleIds();
     const freshSM2 = getSM2DuePuzzleIds();
+    const freshMissed = getReviewQueue();
     setDueIds(fresh);
     setSM2DueIds(freshSM2);
+    setMissedQueueCount(freshMissed.length);
     setResults([]);
     setSessionDone(false);
     setQueueIndex(0);
   }
 
-  const totalDue = dueIds.length + sm2DueIds.length;
+  const totalDue = dueIds.length + sm2DueIds.length + missedQueueCount;
 
   if (loadingSM2) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review Queue</h1>
+        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review</h1>
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
           <div style={{ color: "#94a3b8" }}>Loading review puzzles...</div>
         </div>
@@ -423,11 +490,23 @@ export default function Review() {
     );
   }
 
-  if (queue.length === 0) {
+  if (queue.length === 0 && !loadingSM2) {
     const isFreeUser = !hasActiveSubscription();
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review Queue</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "2rem" }}>
+          <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", margin: 0 }}>Review</h1>
+          <HelpModal title="How Review Works">
+            <HelpBulletList items={[
+              "Every puzzle you get wrong goes into your Review queue",
+              "Work through your missed puzzles here until you solve them correctly",
+              "Solving a puzzle correctly removes it from the queue",
+              "Missing it again keeps it in the queue",
+              "The goal is to get your Review queue to zero — that means you've genuinely learned from your mistakes",
+              "Check your Review count regularly — a growing queue means patterns that need more drilling",
+            ]} />
+          </HelpModal>
+        </div>
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
           <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✅</div>
           <div style={{ color: "#4ade80", fontSize: "1.25rem", fontWeight: "bold", marginBottom: "0.5rem" }}>No puzzles due today!</div>
@@ -495,7 +574,7 @@ export default function Review() {
     const failed = results.filter((r) => r !== "solved" && r !== "solved-first-try" && r !== "solved-after-retry").length;
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Session Complete</h1>
+        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review — Session Complete</h1>
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "2rem", textAlign: "center", marginBottom: "1.5rem" }}>
           <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🏁</div>
           <div style={{ display: "flex", justifyContent: "center", gap: "2rem", marginBottom: "1.5rem" }}>
@@ -521,12 +600,44 @@ export default function Review() {
 
   return (
     <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "1rem", marginBottom: "1.5rem" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold" }}>Review Queue</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.75rem" }}>
+        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", margin: 0 }}>Review</h1>
         <span style={{ color: "#4ade80", fontSize: "0.9rem", fontWeight: "bold" }}>
-          {queueIndex + 1} / {totalDue} due today
+          {queueIndex + 1} / {queue.length}
         </span>
+        <HelpModal title="How Review Works">
+          <HelpBulletList items={[
+            "Every puzzle you get wrong goes into your Review queue",
+            "Work through your missed puzzles here until you solve them correctly",
+            "Solving a puzzle correctly removes it from the queue",
+            "Missing it again keeps it in the queue",
+            "The goal is to get your Review queue to zero — that means you've genuinely learned from your mistakes",
+            "Check your Review count regularly — a growing queue means patterns that need more drilling",
+          ]} />
+        </HelpModal>
       </div>
+
+      {/* Missed queue count banner */}
+      {missedQueueCount > 0 && (
+        <div style={{
+          backgroundColor: "#1a0f0a",
+          border: "1px solid #4a2a0a",
+          borderRadius: "10px",
+          padding: "0.6rem 1rem",
+          marginBottom: "1rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.6rem",
+        }}>
+          <span style={{ fontSize: "1.1rem" }}>🔁</span>
+          <span style={{ color: "#f59e0b", fontSize: "0.88rem", fontWeight: "bold" }}>
+            {missedQueueCount} missed puzzle{missedQueueCount !== 1 ? "s" : ""} in your review queue
+          </span>
+          <span style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+            — solve them correctly to clear them
+          </span>
+        </div>
+      )}
 
       {currentItem.type === "classic" ? (
         <ReviewBoard
@@ -534,6 +645,31 @@ export default function Review() {
           puzzle={currentItem.puzzle}
           onResult={handleClassicResult}
         />
+      ) : currentItem.type === "missed" ? (
+        <div>
+          <div style={{
+            backgroundColor: "#1a0f0a",
+            border: "1px solid #4a2a0a",
+            borderRadius: "8px",
+            padding: "0.5rem 1rem",
+            marginBottom: "1rem",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+          }}>
+            <span>🔁</span>
+            <span style={{ color: "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
+              Missed Puzzle — solve it to clear from your review queue
+            </span>
+          </div>
+          <SM2ReviewBoard
+            key={`missed-${currentItem.puzzle.id}`}
+            puzzle={currentItem.puzzle}
+            onResult={(outcome) =>
+              handleMissedResult(outcome, currentItem.puzzle.id, currentItem.puzzle.theme)
+            }
+          />
+        </div>
       ) : (
         <SM2ReviewBoard
           key={`sm2-${currentItem.puzzle.id}`}

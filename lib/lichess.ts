@@ -324,7 +324,7 @@ export function lichessPuzzleToApp(
     theme: patternName.toUpperCase(),
     patternTier,
     difficulty,
-    description: `Find the best move! Rating: ${lichess.rating}`,
+    description: `Find the best move!`,
     fen,
     solution,
     hint: `Theme: ${lichess.themes.slice(0, 2).join(", ")}`,
