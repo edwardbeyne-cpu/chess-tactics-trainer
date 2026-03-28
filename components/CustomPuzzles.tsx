@@ -458,8 +458,8 @@ async function buildCustomQueue(
 
   const totalWeight = sorted.reduce((sum, [, c]) => sum + c, 0);
 
-  // Build 30 puzzles weighted by miss frequency
-  const TARGET = 30;
+  // Build 50 puzzles weighted by miss frequency
+  const TARGET = 50;
 
   for (const [pattern, count] of sorted) {
     const themeKey = PATTERN_TO_THEME[pattern];
