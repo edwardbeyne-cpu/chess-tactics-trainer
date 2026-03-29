@@ -8,20 +8,25 @@ import { HelpModal, HelpBulletList } from "@/components/HelpModal";
 function PuzzlePageContent() {
   return (
     <Paywall>
-      {/* Page header with help button */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.25rem" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", margin: 0 }}>
-          🎲 Puzzles
+      {/* Page header */}
+      <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
+        <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+          Puzzles
         </h1>
-        <HelpModal title="How Puzzles Works">
-          <HelpBulletList items={[
-            "Random puzzles from all tactical patterns, matched to your overall rating",
-            "As you solve puzzles correctly your rating climbs — miss them and it drops",
-            "The difficulty automatically adjusts to keep you challenged",
-            "This is your main training mode once you've built your pattern foundation",
-            "Your overall tactics rating shown here is your true strength indicator",
-          ]} />
-        </HelpModal>
+        <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 0.75rem", maxWidth: "540px", lineHeight: 1.6 }}>
+          Random puzzles matched to your rating — sharpen your pattern recognition across all tactics
+        </p>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <HelpModal title="How Puzzles Works">
+            <HelpBulletList items={[
+              "Random puzzles from all tactical patterns, matched to your Puzzle Rating",
+              "As you solve puzzles correctly your Puzzle Rating climbs — miss them and it drops",
+              "The difficulty automatically adjusts to keep you challenged",
+              "Your Puzzle Rating here is separate from your Drill Tactics pattern ratings",
+              "Use Drill Tactics to train specific patterns; use Puzzles for mixed practice",
+            ]} />
+          </HelpModal>
+        </div>
       </div>
       <PuzzlePage defaultMode="mixed" />
     </Paywall>

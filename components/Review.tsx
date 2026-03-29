@@ -14,6 +14,8 @@ import {
   scheduleCorrect,
   getSRS,
   SRS_INTERVALS,
+  getPuzzleTimes,
+  type PuzzleTimesMap,
 } from "@/lib/storage";
 import type { SM2Outcome } from "@/lib/storage";
 import type { Puzzle } from "@/data/puzzles";
@@ -234,8 +236,10 @@ function SM2ReviewBoard({
     if (status !== "solve") return false;
     const expected = puzzle.solution[moveIndex];
     if (src !== expected.slice(0, 2) || tgt !== expected.slice(2, 4)) {
-      setFirstTry(false);
-      setMessage("Incorrect move. Try again!");
+      // Wrong move — immediately fail; stays in review queue
+      setStatus("failed");
+      setMessage("Wrong move! Puzzle failed — stays in your review queue.");
+      onResult("failed");
       return false;
     }
     const game = new Chess(fen);
@@ -251,9 +255,9 @@ function SM2ReviewBoard({
     if (nextIndex >= puzzle.solution.length) {
       setMoveIndex(nextIndex);
       setStatus("solved");
-      const outcome: SM2Outcome = firstTry ? "solved-first-try" : "solved-after-retry";
-      setMessage(firstTry ? "Correct! Well done!" : "Solved — not on first try.");
-      onResult(outcome);
+      // Only first-try solves count — wrong move now fails immediately so this is always first-try
+      setMessage("Correct! Well done!");
+      onResult("solved-first-try");
       return true;
     }
     setStatus("waiting");
@@ -288,11 +292,7 @@ function SM2ReviewBoard({
         <ChessBoard fen={fen} onMove={handleMove} lastMove={lastMove} draggable={status === "solve"} boardWidth={460} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem" }}>
-          <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Source</div>
-          <div style={{ color: "#4ade80", fontWeight: "bold" }}>🌐 Lichess</div>
-          <a href={puzzle.gameUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#2e75b6", fontSize: "0.8rem" }}>View puzzle ↗</a>
-        </div>
+        {/* Source box removed — board gets full width */}
       </div>
     </div>
   );
@@ -334,16 +334,22 @@ type ReviewItem =
   | { type: "missed"; puzzle: AppPuzzle };
 
 export default function Review() {
+  // Sprint 12: Two tabs — Due Now (default) and All Missed
+  const [activeTab, setActiveTab] = useState<"due" | "all-missed">("due");
+
   const [dueIds, setDueIds] = useState(() => getDuePuzzleIds());
   const [sm2DueIds, setSM2DueIds] = useState<string[]>([]);
   const [sm2Puzzles, setSM2Puzzles] = useState<AppPuzzle[]>([]);
   const [missedPuzzles, setMissedPuzzles] = useState<AppPuzzle[]>([]);
+  const [allMissedPuzzles, setAllMissedPuzzles] = useState<AppPuzzle[]>([]);
   const [loadingSM2, setLoadingSM2] = useState(false);
   const [queue, setQueue] = useState<ReviewItem[]>([]);
+  const [allMissedQueue, setAllMissedQueue] = useState<ReviewItem[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [results, setResults] = useState<string[]>([]);
   const [sessionDone, setSessionDone] = useState(false);
   const [missedQueueCount, setMissedQueueCount] = useState(0);
+  const [puzzleTimes, setPuzzleTimes] = useState<PuzzleTimesMap>({});
 
   const srs = getSRS();
 
@@ -353,6 +359,7 @@ export default function Review() {
     setSM2DueIds(ids);
     const missedIds = getReviewQueue();
     setMissedQueueCount(missedIds.length);
+    setPuzzleTimes(getPuzzleTimes());
 
     // Fetch all needed puzzles in one batch
     const allIdsToFetch = Array.from(new Set([...ids, ...missedIds]));
@@ -376,7 +383,7 @@ export default function Review() {
         });
         setSM2Puzzles(appSM2);
 
-        // Missed (review queue) puzzles — exclude those already in SM-2 due
+        // Missed (review queue) puzzles for "Due Now" — exclude those already in SM-2 due
         const sm2IdSet = new Set(ids);
         const missedValid = valid.filter((p) => missedIds.includes(p.id) && !sm2IdSet.has(p.id));
         const appMissed = missedValid.map((p) => {
@@ -384,6 +391,14 @@ export default function Review() {
           return lichessPuzzleToApp(p, theme, 1);
         });
         setMissedPuzzles(appMissed);
+
+        // "All Missed" tab — ALL puzzles in review queue (regardless of SM-2 schedule)
+        const allMissedValid = valid.filter((p) => missedIds.includes(p.id));
+        const appAllMissed = allMissedValid.map((p) => {
+          const theme = themeMap.get(p.id) ?? "Tactic";
+          return lichessPuzzleToApp(p, theme, 1);
+        });
+        setAllMissedPuzzles(appAllMissed);
       })
       .finally(() => setLoadingSM2(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -401,10 +416,15 @@ export default function Review() {
       ...sm2Puzzles.map((p): ReviewItem => ({ type: "sm2", puzzle: p })),
     ];
     setQueue(q);
+
+    // All Missed queue — all puzzles in review queue, always accessible
+    const allMissedQ: ReviewItem[] = allMissedPuzzles.map((p): ReviewItem => ({ type: "missed", puzzle: p }));
+    setAllMissedQueue(allMissedQ);
+
     setQueueIndex(0);
     setResults([]);
     setSessionDone(false);
-  }, [dueIds, sm2Puzzles, missedPuzzles]);
+  }, [dueIds, sm2Puzzles, missedPuzzles, allMissedPuzzles]);
 
   const allQueued = Object.entries(srs)
     .map(([id, entry]) => ({
@@ -479,10 +499,87 @@ export default function Review() {
 
   const totalDue = dueIds.length + sm2DueIds.length + missedQueueCount;
 
+  // Shared tab header UI
+  const TabHeader = () => (
+    <div style={{ marginBottom: "1.25rem" }}>
+      {/* Page headline */}
+      <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+        <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+          Review
+        </h1>
+        <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto", maxWidth: "540px", lineHeight: 1.6 }}>
+          Revisit puzzles you&apos;ve missed — spaced repetition keeps the right puzzles in front of you at the right time
+        </p>
+      </div>
+      {/* Tabs */}
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", justifyContent: "center" }}>
+        <div style={{ display: "flex", backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "8px", overflow: "hidden" }}>
+          <button
+            onClick={() => { setActiveTab("due"); setQueueIndex(0); setSessionDone(false); setResults([]); }}
+            style={{
+              backgroundColor: activeTab === "due" ? "#2e75b6" : "transparent",
+              color: activeTab === "due" ? "white" : "#64748b",
+              border: "none",
+              padding: "0.55rem 1.25rem",
+              cursor: "pointer",
+              fontWeight: activeTab === "due" ? "bold" : "normal",
+              fontSize: "0.9rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            Due Now
+            {queue.length > 0 && (
+              <span style={{
+                backgroundColor: "#ef4444", color: "white", borderRadius: "999px",
+                fontSize: "0.65rem", fontWeight: "bold", padding: "0.1rem 0.35rem",
+                lineHeight: 1.4,
+              }}>{queue.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => { setActiveTab("all-missed"); setQueueIndex(0); setSessionDone(false); setResults([]); }}
+            style={{
+              backgroundColor: activeTab === "all-missed" ? "#2e75b6" : "transparent",
+              color: activeTab === "all-missed" ? "white" : "#64748b",
+              border: "none",
+              padding: "0.55rem 1.25rem",
+              cursor: "pointer",
+              fontWeight: activeTab === "all-missed" ? "bold" : "normal",
+              fontSize: "0.9rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            All Missed
+            {allMissedPuzzles.length > 0 && (
+              <span style={{
+                backgroundColor: "#f59e0b", color: "#0f0f1a", borderRadius: "999px",
+                fontSize: "0.65rem", fontWeight: "bold", padding: "0.1rem 0.35rem",
+                lineHeight: 1.4,
+              }}>{allMissedPuzzles.length}</span>
+            )}
+          </button>
+        </div>
+        <HelpModal title="How Review Works">
+          <HelpBulletList items={[
+            "Due Now — puzzles scheduled for review today by the SM-2 spaced repetition algorithm",
+            "All Missed — every puzzle you've ever gotten wrong, always accessible for extra drilling",
+            "Solving a puzzle correctly removes it from the review queue",
+            "Missing it again keeps it in the queue",
+            "The goal is to get your queue to zero — that means you've genuinely learned from your mistakes",
+          ]} />
+        </HelpModal>
+      </div>
+    </div>
+  );
+
   if (loadingSM2) {
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review</h1>
+        <TabHeader />
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
           <div style={{ color: "#94a3b8" }}>Loading review puzzles...</div>
         </div>
@@ -490,41 +587,104 @@ export default function Review() {
     );
   }
 
-  if (queue.length === 0 && !loadingSM2) {
+  // All Missed tab — show all missed puzzles queue
+  if (activeTab === "all-missed") {
+    if (allMissedQueue.length === 0) {
+      return (
+        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          <TabHeader />
+          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✅</div>
+            <div style={{ color: "#4ade80", fontSize: "1.25rem", fontWeight: "bold", marginBottom: "0.5rem" }}>No missed puzzles!</div>
+            <div style={{ color: "#94a3b8" }}>Every puzzle you&apos;ve tried, you&apos;ve gotten right. Keep it up!</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (sessionDone) {
+      const solved = results.filter((r) => r === "solved" || r === "solved-first-try" || r === "solved-after-retry").length;
+      const failed = results.filter((r) => r !== "solved" && r !== "solved-first-try" && r !== "solved-after-retry").length;
+      return (
+        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          <TabHeader />
+          <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
+            <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🏁</div>
+            <div style={{ display: "flex", justifyContent: "center", gap: "2rem", marginBottom: "1.5rem" }}>
+              <div>
+                <div style={{ color: "#4ade80", fontSize: "2rem", fontWeight: "bold" }}>{solved}</div>
+                <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Correct</div>
+              </div>
+              <div>
+                <div style={{ color: "#ef4444", fontSize: "2rem", fontWeight: "bold" }}>{failed}</div>
+                <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Failed</div>
+              </div>
+            </div>
+            <button onClick={() => { setQueueIndex(0); setSessionDone(false); setResults([]); }} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", border: "none", borderRadius: "8px", padding: "0.75rem 2rem", cursor: "pointer", fontWeight: "bold" }}>
+              Drill Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const allMissedItem = allMissedQueue[queueIndex];
+    if (!allMissedItem) return null;
+    return (
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+        <TabHeader />
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.75rem" }}>
+          <span style={{ color: "#f59e0b", fontSize: "0.9rem", fontWeight: "bold" }}>
+            {queueIndex + 1} / {allMissedQueue.length}
+          </span>
+        </div>
+        <div style={{
+          backgroundColor: "#1a0f0a", border: "1px solid #4a2a0a", borderRadius: "8px",
+          padding: "0.6rem 1rem", marginBottom: "1rem",
+          display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap",
+        }}>
+          <span style={{ color: "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
+            All Missed — solve to clear from your review queue
+          </span>
+        </div>
+        <SM2ReviewBoard
+          key={`all-missed-${allMissedItem.puzzle.id}-${queueIndex}`}
+          puzzle={(allMissedItem as { type: "missed"; puzzle: AppPuzzle }).puzzle}
+          onResult={(outcome) => {
+            handleMissedResult(outcome, (allMissedItem as { type: "missed"; puzzle: AppPuzzle }).puzzle.id, (allMissedItem as { type: "missed"; puzzle: AppPuzzle }).puzzle.theme);
+            setTimeout(() => {
+              if (queueIndex + 1 >= allMissedQueue.length) {
+                setSessionDone(true);
+              } else {
+                setQueueIndex((i) => i + 1);
+              }
+            }, 1200);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Due Now tab
+  if (queue.length === 0) {
     const isFreeUser = !hasActiveSubscription();
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "2rem" }}>
-          <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", margin: 0 }}>Review</h1>
-          <HelpModal title="How Review Works">
-            <HelpBulletList items={[
-              "Every puzzle you get wrong goes into your Review queue",
-              "Work through your missed puzzles here until you solve them correctly",
-              "Solving a puzzle correctly removes it from the queue",
-              "Missing it again keeps it in the queue",
-              "The goal is to get your Review queue to zero — that means you've genuinely learned from your mistakes",
-              "Check your Review count regularly — a growing queue means patterns that need more drilling",
-            ]} />
-          </HelpModal>
-        </div>
+        <TabHeader />
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
           <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>✅</div>
           <div style={{ color: "#4ade80", fontSize: "1.25rem", fontWeight: "bold", marginBottom: "0.5rem" }}>No puzzles due today!</div>
           <div style={{ color: "#94a3b8" }}>Solve new puzzles and come back when reviews are scheduled.</div>
         </div>
 
-        {/* Sprint 8: Social proof callout for free users */}
+        {/* Social proof callout for free users */}
         {isFreeUser && (
           <div style={{
-            backgroundColor: "#0a1520",
-            border: "1px solid #1e3a5c",
-            borderRadius: "12px",
-            padding: "1.5rem",
-            marginTop: "1.5rem",
+            backgroundColor: "#0a1520", border: "1px solid #1e3a5c", borderRadius: "12px",
+            padding: "1.5rem", marginTop: "1.5rem",
           }}>
-            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>🧠</div>
             <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.5rem" }}>
-              Improver users review an average of 12 puzzles per day and improve 2× faster.
+              Improver users review an average of 12 puzzles per day and improve 2x faster.
             </div>
             <div style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.65, marginBottom: "0.75rem" }}>
               Your missed puzzles are being forgotten right now. Without spaced repetition, you&apos;ll
@@ -534,14 +694,9 @@ export default function Review() {
             <a
               href="/pricing"
               style={{
-                display: "inline-block",
-                backgroundColor: "#4ade80",
-                color: "#0f1a0a",
-                padding: "0.6rem 1.25rem",
-                borderRadius: "8px",
-                textDecoration: "none",
-                fontWeight: "bold",
-                fontSize: "0.9rem",
+                display: "inline-block", backgroundColor: "#4ade80", color: "#0f1a0a",
+                padding: "0.6rem 1.25rem", borderRadius: "8px", textDecoration: "none",
+                fontWeight: "bold", fontSize: "0.9rem",
               }}
             >
               Unlock spaced repetition →
@@ -549,10 +704,8 @@ export default function Review() {
           </div>
         )}
 
-        {/* Non-free: show the educational SRS callout */}
         {!isFreeUser && (
           <div style={{ backgroundColor: "#0a1525", border: "1px solid #1e3a5c", borderRadius: "12px", padding: "1.5rem", marginTop: "1.5rem" }}>
-            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>🧠</div>
             <div style={{ color: "#e2e8f0", fontWeight: "bold", marginBottom: "0.5rem" }}>
               How Spaced Repetition Works
             </div>
@@ -574,7 +727,7 @@ export default function Review() {
     const failed = results.filter((r) => r !== "solved" && r !== "solved-first-try" && r !== "solved-after-retry").length;
     return (
       <div style={{ maxWidth: "900px", margin: "0 auto" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", marginBottom: "2rem" }}>Review — Session Complete</h1>
+        <TabHeader />
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "2rem", textAlign: "center", marginBottom: "1.5rem" }}>
           <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>🏁</div>
           <div style={{ display: "flex", justifyContent: "center", gap: "2rem", marginBottom: "1.5rem" }}>
@@ -588,7 +741,7 @@ export default function Review() {
             </div>
           </div>
           <button onClick={restartSession} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", border: "none", borderRadius: "8px", padding: "0.75rem 2rem", cursor: "pointer", fontWeight: "bold" }}>
-            🔄 Check for More Reviews
+            Check for More Reviews
           </button>
         </div>
         {allQueued.length > 0 && <UpcomingQueue allQueued={allQueued} />}
@@ -600,21 +753,11 @@ export default function Review() {
 
   return (
     <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+      <TabHeader />
       <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "0.75rem" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "2rem", fontWeight: "bold", margin: 0 }}>Review</h1>
         <span style={{ color: "#4ade80", fontSize: "0.9rem", fontWeight: "bold" }}>
           {queueIndex + 1} / {queue.length}
         </span>
-        <HelpModal title="How Review Works">
-          <HelpBulletList items={[
-            "Every puzzle you get wrong goes into your Review queue",
-            "Work through your missed puzzles here until you solve them correctly",
-            "Solving a puzzle correctly removes it from the queue",
-            "Missing it again keeps it in the queue",
-            "The goal is to get your Review queue to zero — that means you've genuinely learned from your mistakes",
-            "Check your Review count regularly — a growing queue means patterns that need more drilling",
-          ]} />
-        </HelpModal>
       </div>
 
       {/* Missed queue count banner */}
@@ -629,7 +772,6 @@ export default function Review() {
           alignItems: "center",
           gap: "0.6rem",
         }}>
-          <span style={{ fontSize: "1.1rem" }}>🔁</span>
           <span style={{ color: "#f59e0b", fontSize: "0.88rem", fontWeight: "bold" }}>
             {missedQueueCount} missed puzzle{missedQueueCount !== 1 ? "s" : ""} in your review queue
           </span>
@@ -647,21 +789,38 @@ export default function Review() {
         />
       ) : currentItem.type === "missed" ? (
         <div>
-          <div style={{
-            backgroundColor: "#1a0f0a",
-            border: "1px solid #4a2a0a",
-            borderRadius: "8px",
-            padding: "0.5rem 1rem",
-            marginBottom: "1rem",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-          }}>
-            <span>🔁</span>
-            <span style={{ color: "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
-              Missed Puzzle — solve it to clear from your review queue
-            </span>
-          </div>
+          {(() => {
+            const timeRecord = puzzleTimes[currentItem.puzzle.id] ?? null;
+            const missedTime = timeRecord?.history.filter(h => !h.correct).slice(-1)[0]?.time ?? null;
+            const bestSolveTime = timeRecord?.bestTime ?? null;
+            return (
+              <div style={{
+                backgroundColor: "#1a0f0a",
+                border: "1px solid #4a2a0a",
+                borderRadius: "8px",
+                padding: "0.6rem 1rem",
+                marginBottom: "1rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}>
+                <span style={{ color: "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
+                  Missed Puzzle — solve it to clear from your review queue
+                </span>
+                {missedTime && (
+                  <span style={{ color: "#ef4444", fontSize: "0.78rem", backgroundColor: "#1f0808", border: "1px solid #4a1a1a", borderRadius: "5px", padding: "0.15rem 0.5rem" }}>
+                    Missed in {missedTime}s
+                  </span>
+                )}
+                {bestSolveTime && (
+                  <span style={{ color: "#4ade80", fontSize: "0.78rem", backgroundColor: "#0a1f12", border: "1px solid #1a4a2a", borderRadius: "5px", padding: "0.15rem 0.5rem" }}>
+                    Previously solved in {bestSolveTime}s
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           <SM2ReviewBoard
             key={`missed-${currentItem.puzzle.id}`}
             puzzle={currentItem.puzzle}

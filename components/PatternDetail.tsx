@@ -181,7 +181,7 @@ export default function PatternDetail() {
               fontSize: "0.9rem",
             }}
           >
-            {dueCount > 0 ? `📅 Review ${dueCount} Due` : `▶ Continue (Puzzle #${nextPuzzleIndex})`}
+            {dueCount > 0 ? `Review ${dueCount} Due` : `Continue (Puzzle #${nextPuzzleIndex})`}
           </button>
           <button
             onClick={() => router.push(`/app/puzzles?pattern=${themeKey}&index=1`)}
@@ -195,7 +195,7 @@ export default function PatternDetail() {
               fontSize: "0.9rem",
             }}
           >
-            ↩ Start from #1
+            Start from #1
           </button>
         </div>
       </div>

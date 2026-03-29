@@ -30,6 +30,9 @@ const PGN_IMPORT_USAGE_KEY = "ctt_pgn_import_usage";
 const DAILY_TARGET_KEY = "ctt_daily_target";
 const DAILY_HABIT_KEY = "ctt_daily_habit";
 
+// Sprint 12 — Time Standards & Mastery
+const PUZZLE_TIMES_KEY = "ctt_puzzle_times";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy SRS interval ladder (Sprint 2 system — kept for backward compat)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2753,4 +2756,189 @@ export function getRatingSparkline(): SparklinePoint[] {
   return data.tacticsRatingHistory
     .filter((h) => h.date >= cutoff)
     .map((h) => ({ date: h.date, rating: h.rating }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 12 — Time Standards & Mastery Tracking
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface PuzzleTimeHistoryEntry {
+  time: number;       // seconds elapsed
+  correct: boolean;
+  date: string;       // YYYY-MM-DD
+}
+
+export interface PuzzleTimeRecord {
+  bestTime: number | null;
+  lastTime: number | null;
+  attempts: number;
+  correct: boolean;   // ever solved correctly
+  metStandard: boolean; // ever met the time standard while correct
+  history: PuzzleTimeHistoryEntry[];
+}
+
+export type PuzzleTimesMap = Record<string, PuzzleTimeRecord>;
+
+export const DEFAULT_TIME_STANDARD = 30; // seconds
+
+export function getPuzzleTimes(): PuzzleTimesMap {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(localStorage.getItem(PUZZLE_TIMES_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function savePuzzleTimes(map: PuzzleTimesMap): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(PUZZLE_TIMES_KEY, JSON.stringify(map));
+}
+
+/**
+ * Record a puzzle attempt with elapsed time.
+ * @param puzzleId   Lichess puzzle ID (string)
+ * @param elapsedSec Seconds taken (0 if unknown)
+ * @param correct    True if solved (first try or after retry)
+ * @param timeStandard Target seconds (from puzzle settings)
+ */
+export function recordPuzzleTime(
+  puzzleId: string,
+  elapsedSec: number,
+  correct: boolean,
+  timeStandard: number
+): PuzzleTimeRecord {
+  const map = getPuzzleTimes();
+  const existing: PuzzleTimeRecord = map[puzzleId] ?? {
+    bestTime: null,
+    lastTime: null,
+    attempts: 0,
+    correct: false,
+    metStandard: false,
+    history: [],
+  };
+
+  const metStandard = correct && elapsedSec > 0 && elapsedSec <= timeStandard;
+
+  const entry: PuzzleTimeHistoryEntry = {
+    time: elapsedSec,
+    correct,
+    date: new Date().toISOString().slice(0, 10),
+  };
+
+  const newBestTime =
+    correct && elapsedSec > 0
+      ? existing.bestTime === null
+        ? elapsedSec
+        : Math.min(existing.bestTime, elapsedSec)
+      : existing.bestTime;
+
+  const updated: PuzzleTimeRecord = {
+    bestTime: newBestTime,
+    lastTime: elapsedSec > 0 ? elapsedSec : existing.lastTime,
+    attempts: existing.attempts + 1,
+    correct: existing.correct || correct,
+    metStandard: existing.metStandard || metStandard,
+    history: [...existing.history, entry],
+  };
+
+  map[puzzleId] = updated;
+  savePuzzleTimes(map);
+  return updated;
+}
+
+/**
+ * Get per-pattern time-standard stats.
+ * Returns { solved, metStandard, total } for each pattern theme key.
+ * Uses ctt_puzzle_progress for puzzle→theme mapping, augmented with puzzle times.
+ */
+export interface PatternTimeStats {
+  theme: string;
+  solved: number;
+  metStandard: number;
+  total: number; // total attempted
+}
+
+export function getPatternTimeStats(): PatternTimeStats[] {
+  const timesMap = getPuzzleTimes();
+  const progressMap = getPuzzleProgressMap();
+
+  // Build theme → { solved, metStandard, total }
+  const byTheme: Record<string, { solved: number; metStandard: number; total: number }> = {};
+
+  for (const [puzzleId, progress] of Object.entries(progressMap)) {
+    const theme = progress.patternTheme;
+    if (!byTheme[theme]) byTheme[theme] = { solved: 0, metStandard: 0, total: 0 };
+    byTheme[theme].total++;
+    const isSolved = progress.status === "solved_first_try" || progress.status === "solved_retry";
+    if (isSolved) byTheme[theme].solved++;
+    const timeRecord = timesMap[puzzleId];
+    if (timeRecord?.metStandard) byTheme[theme].metStandard++;
+  }
+
+  return Object.entries(byTheme).map(([theme, stats]) => ({ theme, ...stats }));
+}
+
+/**
+ * Get time standard from puzzle settings (ctt_puzzle_settings).
+ * Falls back to DEFAULT_TIME_STANDARD if not set.
+ */
+export function getTimeStandard(): number {
+  if (typeof window === "undefined") return DEFAULT_TIME_STANDARD;
+  try {
+    const settings = JSON.parse(localStorage.getItem("ctt_puzzle_settings") || "null");
+    return settings?.timeStandard ?? DEFAULT_TIME_STANDARD;
+  } catch {
+    return DEFAULT_TIME_STANDARD;
+  }
+}
+
+export function saveTimeStandard(seconds: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    const settings = JSON.parse(localStorage.getItem("ctt_puzzle_settings") || "{}");
+    settings.timeStandard = seconds;
+    localStorage.setItem("ctt_puzzle_settings", JSON.stringify(settings));
+  } catch {
+    // ignore
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 12 — Puzzle Rating (Puzzles/mixed mode only)
+// Separate from tactics rating and pattern ratings.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PUZZLE_RATING_KEY = "ctt_puzzle_rating";
+const PUZZLE_RATING_DEFAULT = 800;
+
+export interface PuzzleRatingData {
+  rating: number;
+  totalPuzzlesRated: number;
+}
+
+export function getPuzzleRating(): PuzzleRatingData {
+  if (typeof window === "undefined") return { rating: PUZZLE_RATING_DEFAULT, totalPuzzlesRated: 0 };
+  try {
+    const stored = localStorage.getItem(PUZZLE_RATING_KEY);
+    if (stored) return JSON.parse(stored) as PuzzleRatingData;
+  } catch {
+    // ignore
+  }
+  return { rating: PUZZLE_RATING_DEFAULT, totalPuzzlesRated: 0 };
+}
+
+export function updatePuzzleRating(puzzleRating: number, won: boolean): { newRating: number; delta: number } {
+  if (typeof window === "undefined") return { newRating: PUZZLE_RATING_DEFAULT, delta: 0 };
+  const data = getPuzzleRating();
+  const K = data.totalPuzzlesRated < 30 ? 40 : 20;
+  const expected = 1 / (1 + Math.pow(10, (puzzleRating - data.rating) / 400));
+  const delta = Math.round(K * ((won ? 1 : 0) - expected));
+  const newRating = Math.max(400, data.rating + delta);
+  const updated: PuzzleRatingData = {
+    rating: newRating,
+    totalPuzzlesRated: data.totalPuzzlesRated + 1,
+  };
+  localStorage.setItem(PUZZLE_RATING_KEY, JSON.stringify(updated));
+  return { newRating, delta };
 }

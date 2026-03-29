@@ -1,11 +1,33 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import RewardfulScript from "@/components/RewardfulScript";
+
+export const viewport: Viewport = {
+  themeColor: "#0f1a2e",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "ChessTrainer — Science-Based Tactics Training",
   description:
     "Chess tactics training with spaced repetition — built around your games and your weaknesses. 3M+ Lichess puzzles, 28 tactical patterns, SM-2 algorithm.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Chess Tactics Trainer",
+  },
+  icons: {
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({

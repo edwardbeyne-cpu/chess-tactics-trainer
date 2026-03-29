@@ -87,6 +87,10 @@ export default function ChessBoard({
   onMoveRef.current = onMove;
   const fenRef = useRef(fen);
   fenRef.current = fen;
+  const draggableRef = useRef(draggable);
+  draggableRef.current = draggable;
+  const orientationRef = useRef(orientation);
+  orientationRef.current = orientation;
 
   // Convert file/rank to square key from mouse position
   const getSquareFromEvent = useCallback((e: MouseEvent): Key | null => {
@@ -98,15 +102,14 @@ export default function ChessBoard({
     const fileIndex = Math.floor((x / rect.width) * 8);
     const rankIndex = Math.floor((y / rect.height) * 8);
     if (fileIndex < 0 || fileIndex > 7 || rankIndex < 0 || rankIndex > 7) return null;
-    const file = String.fromCharCode(97 + (orientation === "white" ? fileIndex : 7 - fileIndex));
-    const rank = String(orientation === "white" ? 8 - rankIndex : rankIndex + 1);
+    const file = String.fromCharCode(97 + (orientationRef.current === "white" ? fileIndex : 7 - fileIndex));
+    const rank = String(orientationRef.current === "white" ? 8 - rankIndex : rankIndex + 1);
     return (file + rank) as Key;
-  }, [orientation]);
+  }, []);
 
   const applyAnnotations = useCallback(() => {
     if (!cgRef.current) return;
 
-    // Apply square highlights via chessground shapes
     const shapes = [
       ...arrows.current.map((a) => ({
         orig: a.from,
@@ -127,14 +130,21 @@ export default function ChessBoard({
     applyAnnotations();
   }, [applyAnnotations]);
 
+  // Initialize Chessground
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const movable = getMovable(fen, draggable);
+    // Destroy any previous instance
+    if (cgRef.current) {
+      cgRef.current.destroy();
+      cgRef.current = null;
+    }
+
+    const movable = getMovable(fenRef.current, draggableRef.current);
 
     const config: Config = {
-      fen,
-      orientation,
+      fen: fenRef.current,
+      orientation: orientationRef.current,
       turnColor: movable.turnColor,
       movable: {
         free: false,
@@ -145,11 +155,10 @@ export default function ChessBoard({
             if (onMoveRef.current) {
               const accepted = onMoveRef.current(orig, dest);
               if (accepted) {
-                // Clear annotations on any move played
                 clearAnnotations();
               } else if (cgRef.current) {
-                // Reset board to current position, preserving movable state
-                const currentMovable = getMovable(fenRef.current, true);
+                // Reset board to current position
+                const currentMovable = getMovable(fenRef.current, draggableRef.current);
                 cgRef.current.set({
                   fen: fenRef.current,
                   turnColor: currentMovable.turnColor,
@@ -166,7 +175,7 @@ export default function ChessBoard({
       },
       lastMove: lastMove as [Key, Key] | undefined,
       animation: { enabled: true, duration: 250 },
-      draggable: { enabled: draggable },
+      draggable: { enabled: draggableRef.current },
       highlight: { lastMove: true, check: true },
       premovable: { enabled: false },
       drawable: {
@@ -215,7 +224,6 @@ export default function ChessBoard({
       const color = getAnnotationColor(e);
 
       if (startSquare === endSquare) {
-        // Toggle highlight on square
         const idx = highlights.current.findIndex((h) => h.key === startSquare);
         if (idx >= 0 && highlights.current[idx].color === color) {
           highlights.current.splice(idx, 1);
@@ -225,7 +233,6 @@ export default function ChessBoard({
           highlights.current.push({ key: startSquare, color });
         }
       } else {
-        // Toggle arrow
         const idx = arrows.current.findIndex(
           (a) => a.from === startSquare && a.to === endSquare
         );
@@ -249,13 +256,16 @@ export default function ChessBoard({
       el.removeEventListener("contextmenu", handleContextMenu);
       el.removeEventListener("mousedown", handleMouseDown);
       el.removeEventListener("mouseup", handleMouseUp);
-      cgRef.current?.destroy();
-      cgRef.current = null;
+      if (cgRef.current) {
+        cgRef.current.destroy();
+        cgRef.current = null;
+      }
     };
+    // Re-initialize on key prop changes (puzzle.id used as key on ChessBoard)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update board when fen/draggable/orientation changes
+  // Update board when fen/draggable/orientation/lastMove changes
   useEffect(() => {
     if (!cgRef.current) return;
     const movable = getMovable(fen, draggable);

@@ -6,31 +6,53 @@ import patterns from "@/data/patterns";
 import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
 import {
   getPuzzleProgressMap,
+  getPuzzleTimes,
   getPatternRating,
   getPatternCurriculumSummary,
   getNextPuzzleForPattern,
+  getTimeStandard,
   type PuzzleProgress,
   type PuzzleStatus,
+  type PuzzleTimesMap,
 } from "@/lib/storage";
 
 // ── Status icon mapping ─────────────────────────────────────────────────
 
-function statusIcon(status: PuzzleStatus, isDue: boolean): string {
+function statusIcon(status: PuzzleStatus, isDue: boolean, metStandard?: boolean): string {
   if (isDue) return "📅";
+  if (metStandard) return "⚡"; // Correct AND met time standard
   switch (status) {
-    case "solved_first_try": return "✅";
-    case "solved_retry": return "🔄";
-    case "missed": return "❌";
+    case "solved_first_try": return "🟢";
+    case "solved_retry": return "🟢";
+    case "missed": return "🟡";
     default: return "⬜";
   }
 }
 
-function statusLabel(status: PuzzleStatus, isDue: boolean): string {
+function statusLabel(
+  status: PuzzleStatus,
+  isDue: boolean,
+  timeRecord?: { bestTime: number | null; lastTime: number | null; metStandard: boolean } | null,
+  timeStandard?: number,
+): string {
   if (isDue) return "Due for review";
+  const std = timeStandard ?? 30;
+  if (timeRecord?.metStandard && timeRecord.bestTime) {
+    return `Solved in ${timeRecord.bestTime}s ✅ (standard: ${std}s)`;
+  }
   switch (status) {
-    case "solved_first_try": return "Solved first try";
-    case "solved_retry": return "Solved after retry";
-    case "missed": return "Needs review";
+    case "solved_first_try": {
+      const t = timeRecord?.bestTime ?? timeRecord?.lastTime;
+      return t ? `Solved in ${t}s (standard: ${std}s)` : "Solved first try";
+    }
+    case "solved_retry": {
+      const t = timeRecord?.bestTime ?? timeRecord?.lastTime;
+      return t ? `Solved in ${t}s (standard: ${std}s)` : "Solved after retry";
+    }
+    case "missed": {
+      const t = timeRecord?.lastTime;
+      return t ? `Missed in ${t}s ❌` : "Needs review";
+    }
     default: return "Not attempted";
   }
 }
@@ -59,10 +81,14 @@ export default function PatternProgressModal({
 }: PatternProgressModalProps) {
   const router = useRouter();
   const [progressMap, setProgressMap] = useState<Record<string, PuzzleProgress>>({});
+  const [puzzleTimesMap, setPuzzleTimesMap] = useState<PuzzleTimesMap>({});
+  const [timeStandard, setTimeStandard] = useState(30);
 
   useEffect(() => {
     if (isOpen) {
       setProgressMap(getPuzzleProgressMap());
+      setPuzzleTimesMap(getPuzzleTimes());
+      setTimeStandard(getTimeStandard());
     }
   }, [isOpen, theme]);
 
@@ -294,9 +320,9 @@ export default function PatternProgressModal({
             }}
           >
             <span>⬜ Not attempted</span>
-            <span>✅ Solved first try</span>
-            <span>🔄 After retry</span>
-            <span>❌ Missed</span>
+            <span>🟡 Incorrect</span>
+            <span>🟢 Correct</span>
+            <span>⚡ Met standard ({timeStandard}s)</span>
             <span>📅 Due for review</span>
           </div>
 
@@ -323,12 +349,28 @@ export default function PatternProgressModal({
                 const orderIndex = idx + 1;
                 const progress = getPuzzleProgress(puzzle.id);
                 const due = isPuzzleDue(progress);
-                const icon = statusIcon(progress?.status ?? "not_attempted", due);
+                const timeRecord = puzzleTimesMap[puzzle.id] ?? null;
+                const metStandard = timeRecord?.metStandard ?? false;
+                const icon = statusIcon(progress?.status ?? "not_attempted", due, metStandard);
                 const label = statusLabel(
                   progress?.status ?? "not_attempted",
-                  due
+                  due,
+                  timeRecord,
+                  timeStandard,
                 );
                 const isNext = orderIndex === nextPuzzleIndex;
+
+                // Cell background color based on status
+                const cellBg = isNext ? "#162a4a"
+                  : metStandard ? "#1a0d2e"  // purple tint for standard-met
+                  : (progress?.status === "solved_first_try" || progress?.status === "solved_retry") ? "#0a1f12"  // green tint
+                  : progress?.status === "missed" ? "#1a1200"  // yellow tint
+                  : "#0f1621";  // default dark
+                const cellBorder = isNext ? "#2e75b6"
+                  : metStandard ? "#7c3aed"
+                  : (progress?.status === "solved_first_try" || progress?.status === "solved_retry") ? "#1a4a2a"
+                  : progress?.status === "missed" ? "#4a3000"
+                  : "#1e2a3a";
 
                 return (
                   <button
@@ -337,10 +379,10 @@ export default function PatternProgressModal({
                       onNavigateToPuzzle(theme, orderIndex);
                       onClose();
                     }}
-                    title={`Puzzle #${orderIndex} — ${puzzle.rating} — ${label}`}
+                    title={label}
                     style={{
-                      backgroundColor: isNext ? "#162a4a" : "#0f1621",
-                      border: `1px solid ${isNext ? "#2e75b6" : "#1e2a3a"}`,
+                      backgroundColor: cellBg,
+                      border: `1px solid ${cellBorder}`,
                       borderRadius: "7px",
                       padding: "0.5rem 0.65rem",
                       cursor: "pointer",
@@ -354,9 +396,7 @@ export default function PatternProgressModal({
                       (e.currentTarget.style.borderColor = "#2e75b6")
                     }
                     onMouseLeave={(e) =>
-                      (e.currentTarget.style.borderColor = isNext
-                        ? "#2e75b6"
-                        : "#1e2a3a")
+                      (e.currentTarget.style.borderColor = cellBorder)
                     }
                   >
                     <span style={{ fontSize: "0.9rem" }}>{icon}</span>

@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import patterns, { type Pattern } from "@/data/patterns";
 import { HelpModal, HelpBulletList } from "./HelpModal";
 import {
   getPatternCurriculumSummary,
+  getPatternTimeStats,
+  getTimeStandard,
+  saveTimeStandard,
   type PatternCurriculumSummary,
 } from "@/lib/storage";
+import {
+  loadPuzzleSettings,
+  savePuzzleSettings,
+} from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
 
 // ── Theme key mapping: pattern name → lichess theme key ──────────────────
@@ -61,10 +68,14 @@ function statusLabel(status: PatternCurriculumSummary["status"]): string {
 function CurriculumPatternCard({
   pattern,
   summary,
+  metStandard,
+  timeStandard,
   onClick,
 }: {
   pattern: Pattern;
   summary: PatternCurriculumSummary;
+  metStandard: number;
+  timeStandard: number;
   onClick: () => void;
 }) {
   const colors = TIER_COLORS[pattern.tier];
@@ -80,50 +91,43 @@ function CurriculumPatternCard({
       style={{
         backgroundColor: "#1a1a2e",
         border: `1px solid ${isMastered ? colors.accent : "#2e3a5c"}`,
-        borderRadius: "12px",
-        padding: "1.25rem",
+        borderRadius: "10px",
+        padding: "0.9rem 1rem",
         cursor: "pointer",
-        transition: "border-color 0.2s, transform 0.1s",
+        transition: "border-color 0.2s, background 0.15s",
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = colors.accent)}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = isMastered ? colors.accent : "#2e3a5c")}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.backgroundColor = "#1f2040"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = isMastered ? colors.accent : "#2e3a5c"; e.currentTarget.style.backgroundColor = "#1a1a2e"; }}
     >
       {/* Header row */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.75rem", marginBottom: "0.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flex: 1 }}>
-          <span style={{ fontSize: "1.5rem" }}>{pattern.icon}</span>
-          <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{pattern.icon}</span>
+          <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {pattern.name}
           </div>
         </div>
-        {/* Status indicator */}
         <span style={{
           color: statusColor(summary.status),
-          fontSize: "0.72rem",
+          fontSize: "0.65rem",
           fontWeight: "bold",
           backgroundColor: `${statusColor(summary.status)}15`,
           border: `1px solid ${statusColor(summary.status)}40`,
-          borderRadius: "5px",
-          padding: "0.2rem 0.5rem",
+          borderRadius: "4px",
+          padding: "0.15rem 0.4rem",
           whiteSpace: "nowrap",
+          flexShrink: 0,
         }}>
           {statusLabel(summary.status)}
         </span>
       </div>
 
-      {/* ELO rating */}
-      <div style={{ marginBottom: "0.5rem" }}>
-        <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-          ELO: <strong style={{ color: "#e2e8f0" }}>{summary.patternRating.toLocaleString()}</strong>
+      {/* ELO + progress inline */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
+        <span style={{ color: colors.accent, fontSize: "1.35rem", fontWeight: "bold", lineHeight: 1 }}>
+          {summary.patternRating.toLocaleString()}
         </span>
-      </div>
-
-      {/* Progress: X / totalPuzzles */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.35rem" }}>
-        <span style={{ color: "#94a3b8", fontSize: "0.75rem" }}>
-          Progress: <strong style={{ color: "#e2e8f0" }}>{summary.completed} / {summary.totalPuzzles}</strong>
-        </span>
-        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>{progressPct}%</span>
+        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>{summary.completed}/{summary.totalPuzzles} · {progressPct}%</span>
       </div>
 
       {/* Progress bar */}
@@ -136,6 +140,33 @@ function CurriculumPatternCard({
           transition: "width 0.3s ease",
         }} />
       </div>
+
+      {/* Time Standard Progress — Sprint 12 */}
+      {summary.completed > 0 && (
+        <div style={{ marginBottom: "0.4rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+            <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>
+              ⚡ Under {timeStandard}s: <strong style={{ color: metStandard > 0 ? "#a78bfa" : "#64748b" }}>{metStandard} / {summary.completed}</strong>
+            </span>
+            {metStandard > 0 && summary.completed > 0 && (
+              <span style={{ color: "#a78bfa", fontSize: "0.68rem" }}>
+                {Math.round((metStandard / summary.completed) * 100)}%
+              </span>
+            )}
+          </div>
+          {metStandard > 0 && summary.completed > 0 && (
+            <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "4px", overflow: "hidden" }}>
+              <div style={{
+                width: `${Math.round((metStandard / summary.completed) * 100)}%`,
+                height: "100%",
+                backgroundColor: "#7c3aed",
+                borderRadius: "4px",
+                transition: "width 0.3s ease",
+              }} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Due for review badge */}
       {summary.dueForReview > 0 && (
@@ -161,6 +192,30 @@ function CurriculumPatternCard({
 export default function Patterns() {
   const router = useRouter();
 
+  // Sprint 12: Global Time Standard selector
+  const [activeTimeStandard, setActiveTimeStandard] = useState<number>(0);
+
+  useEffect(() => {
+    // Load from settings on mount
+    const settings = loadPuzzleSettings();
+    setActiveTimeStandard(settings.timeStandard ?? 0);
+  }, []);
+
+  function handleTimeStandardSelect(seconds: number) {
+    setActiveTimeStandard(seconds);
+    // Update ctt_puzzle_settings.timeStandard
+    const settings = loadPuzzleSettings();
+    settings.timeStandard = seconds;
+    savePuzzleSettings(settings);
+  }
+
+  const timeStandardOptions = [
+    { label: "No Limit", value: 0 },
+    { label: "60s", value: 60 },
+    { label: "30s", value: 30 },
+    { label: "10s", value: 10 },
+  ];
+
   // Compute summaries for each pattern
   const summaries = useMemo(() => {
     const result: Record<string, PatternCurriculumSummary> = {};
@@ -171,6 +226,16 @@ export default function Patterns() {
     }
     return result;
   }, []);
+
+  // Sprint 12: time standard stats per pattern
+  const timeStatsByTheme = useMemo(() => {
+    const stats = getPatternTimeStats();
+    const map: Record<string, number> = {};
+    for (const s of stats) { map[s.theme] = s.metStandard; }
+    return map;
+  }, []);
+
+  const currentTimeStandard = activeTimeStandard > 0 ? activeTimeStandard : getTimeStandard();
 
 
 
@@ -189,24 +254,74 @@ export default function Patterns() {
     <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ marginBottom: "2rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.4rem" }}>
-          <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", margin: 0 }}>
-            ♟ Tactics Curriculum
+        <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+          <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+            Drill Tactics
           </h1>
-          <HelpModal title="How Drill Tactics Works">
-            <HelpBulletList items={[
-              "Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)",
-              "You'll work through up to 200 puzzles for that pattern, starting easy and getting progressively harder",
-              "Your rating for that specific pattern updates as you solve puzzles",
-              "Solve puzzles correctly to move up — miss them and they go into your Review queue",
-              "The goal is to internalize each pattern until it becomes instinct",
-              "Work one pattern at a time until you feel strong, then move to the next",
-            ]} />
-          </HelpModal>
+          <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 0.75rem", maxWidth: "540px", lineHeight: 1.6 }}>
+            Master tactical patterns one by one — 200 puzzles per pattern, sorted from easiest to hardest
+          </p>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <HelpModal title="How Drill Tactics Works">
+              <HelpBulletList items={[
+                "Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)",
+                "You'll work through up to 200 puzzles for that pattern, starting easy and getting progressively harder",
+                "Your rating for that specific pattern updates as you solve puzzles",
+                "Solve puzzles correctly to move up — miss them and they go into your Review queue",
+                "The goal is to internalize each pattern until it becomes instinct",
+                "Work one pattern at a time until you feel strong, then move to the next",
+              ]} />
+            </HelpModal>
+          </div>
         </div>
-        <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "1.25rem" }}>
-          Master tactical patterns one by one — 200 puzzles per pattern, sorted from easiest to hardest.
-        </p>
+
+        {/* Sprint 12: Global Time Standard selector */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          justifyContent: "center",
+          marginBottom: "1.25rem",
+          flexWrap: "wrap",
+        }}>
+          <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600" }}>Time Standard:</span>
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            {timeStandardOptions.map((opt) => {
+              const isActive = activeTimeStandard === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => handleTimeStandardSelect(opt.value)}
+                  style={{
+                    backgroundColor: isActive ? "#2e75b6" : "#1a1a2e",
+                    color: isActive ? "white" : "#64748b",
+                    border: `1px solid ${isActive ? "#2e75b6" : "#2e3a5c"}`,
+                    borderRadius: "20px",
+                    padding: "0.35rem 0.9rem",
+                    cursor: "pointer",
+                    fontSize: "0.82rem",
+                    fontWeight: isActive ? "bold" : "normal",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = "#4a7aac";
+                      e.currentTarget.style.color = "#94a3b8";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = "#2e3a5c";
+                      e.currentTarget.style.color = "#64748b";
+                    }
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* Overall progress bar */}
         <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem" }}>
@@ -250,16 +365,18 @@ export default function Patterns() {
               </span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
               {tierPatterns.map((p) => {
                 const summary = summaries[p.name];
+                const themeKey = getThemeKey(p.name);
                 return (
                   <CurriculumPatternCard
                     key={p.name}
                     pattern={p}
                     summary={summary}
+                    metStandard={timeStatsByTheme[themeKey] ?? 0}
+                    timeStandard={currentTimeStandard}
                     onClick={() => {
-                      const themeKey = getThemeKey(p.name);
                       router.push(`/app/patterns/${themeKey}`);
                     }}
                   />

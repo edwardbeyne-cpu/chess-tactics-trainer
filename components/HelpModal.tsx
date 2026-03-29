@@ -26,38 +26,40 @@ export function HelpModal({ title, children }: HelpModalProps) {
 
   return (
     <>
-      {/* ? button */}
+      {/* Guide button */}
       <button
         onClick={() => setOpen(true)}
         title="How this works"
-        aria-label="Help"
+        aria-label="Guide"
         style={{
-          width: "26px",
-          height: "26px",
-          borderRadius: "50%",
-          backgroundColor: "transparent",
+          height: "30px",
+          borderRadius: "6px",
+          backgroundColor: "#1e2a3a",
           border: "1px solid #2e3a5c",
-          color: "#475569",
-          fontSize: "0.75rem",
-          fontWeight: "bold",
+          color: "#94a3b8",
+          fontSize: "0.78rem",
+          fontWeight: "600",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           flexShrink: 0,
           lineHeight: 1,
-          transition: "border-color 0.15s, color 0.15s",
+          padding: "0 0.65rem",
+          transition: "border-color 0.15s, background 0.15s, color 0.15s",
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.borderColor = "#64748b";
-          e.currentTarget.style.color = "#94a3b8";
+          e.currentTarget.style.backgroundColor = "#253548";
+          e.currentTarget.style.color = "#e2e8f0";
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.borderColor = "#2e3a5c";
-          e.currentTarget.style.color = "#475569";
+          e.currentTarget.style.backgroundColor = "#1e2a3a";
+          e.currentTarget.style.color = "#94a3b8";
         }}
       >
-        ?
+        Guide
       </button>
 
       {/* Overlay */}

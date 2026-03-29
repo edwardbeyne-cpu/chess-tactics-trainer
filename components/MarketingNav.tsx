@@ -33,7 +33,7 @@ export default function MarketingNav() {
         ♔ <span style={{ color: "#4ade80" }}>Chess</span>Trainer
       </Link>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "1.5rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginLeft: "auto" }}>
         <Link
           href="/how-it-works"
           style={{
@@ -41,6 +41,7 @@ export default function MarketingNav() {
             textDecoration: "none",
             fontSize: "0.9rem",
             fontWeight: pathname === "/how-it-works" ? "600" : "normal",
+            padding: "0.5rem 0.85rem",
           }}
         >
           How It Works
@@ -52,6 +53,7 @@ export default function MarketingNav() {
             textDecoration: "none",
             fontSize: "0.9rem",
             fontWeight: pathname === "/pricing" ? "600" : "normal",
+            padding: "0.5rem 0.85rem",
           }}
         >
           Pricing
@@ -66,6 +68,8 @@ export default function MarketingNav() {
             textDecoration: "none",
             fontWeight: "bold",
             fontSize: "0.9rem",
+            marginLeft: "0.5rem",
+            marginRight: "1rem",
           }}
         >
           Start Free

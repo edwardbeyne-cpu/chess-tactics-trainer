@@ -10,7 +10,7 @@ const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
   { href: "/app/patterns", label: "Drill Tactics" },
   { href: "/app/puzzles", label: "Puzzles" },
   { href: "/app/review", label: "Review" },
-  { href: "/app/custom-puzzles", label: "Custom Puzzles", pro: true },
+  { href: "/app/custom-puzzles", label: "Custom", pro: true },
 ];
 
 export default function AppNav() {
@@ -18,26 +18,19 @@ export default function AppNav() {
   const [reviewCount, setReviewCount] = useState(0);
 
   useEffect(() => {
-    try {
-      const queue = JSON.parse(localStorage.getItem("ctt_review_queue") || "[]") as string[];
-      setReviewCount(queue.length);
-    } catch {
-      setReviewCount(0);
-    }
-    // Refresh count on storage changes
-    const handler = () => {
+    function updateCount() {
       try {
         const queue = JSON.parse(localStorage.getItem("ctt_review_queue") || "[]") as string[];
         setReviewCount(queue.length);
       } catch {
         setReviewCount(0);
       }
-    };
-    window.addEventListener("storage", handler);
-    // Also poll every 10s for same-tab changes
-    const interval = setInterval(handler, 10000);
+    }
+    updateCount();
+    window.addEventListener("storage", updateCount);
+    const interval = setInterval(updateCount, 10000);
     return () => {
-      window.removeEventListener("storage", handler);
+      window.removeEventListener("storage", updateCount);
       clearInterval(interval);
     };
   }, []);
@@ -47,30 +40,35 @@ export default function AppNav() {
       style={{
         backgroundColor: "#13132b",
         borderBottom: "1px solid #2e3a5c",
-        padding: "0 2rem",
+        padding: "0 1rem",
         display: "flex",
         alignItems: "center",
-        gap: "2rem",
+        gap: "1rem",
+        overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
       }}
     >
+      <style>{`nav::-webkit-scrollbar { display: none; }`}</style>
       <Link
         href="/"
         style={{
           color: "#e2e8f0",
           fontWeight: "bold",
-          fontSize: "1.1rem",
+          fontSize: "1rem",
           textDecoration: "none",
-          padding: "1rem 0",
+          padding: "0.9rem 0",
           display: "flex",
           alignItems: "center",
-          gap: "0.5rem",
+          gap: "0.4rem",
           flexShrink: 0,
+          whiteSpace: "nowrap",
         }}
       >
         ♔ <span style={{ color: "#4ade80" }}>Chess</span>Trainer
       </Link>
 
-      <div style={{ display: "flex", gap: "0.25rem", flex: 1, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "0.1rem", flex: 1, overflowX: "auto", scrollbarWidth: "none" }}>
         {mainNavItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -85,14 +83,16 @@ export default function AppNav() {
                 backgroundColor: "transparent",
                 borderBottom: isActive ? "2px solid #4ade80" : "2px solid transparent",
                 color: isActive ? "#e2e8f0" : "#64748b",
-                padding: "1rem",
+                padding: "0.9rem 0.75rem",
                 fontWeight: isActive ? "bold" : "normal",
-                fontSize: "0.9rem",
+                fontSize: "0.85rem",
                 textDecoration: "none",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "0.4rem",
+                gap: "0.35rem",
                 transition: "color 0.15s",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               {item.label}
@@ -102,11 +102,11 @@ export default function AppNav() {
                     backgroundColor: "#ef4444",
                     color: "white",
                     borderRadius: "999px",
-                    fontSize: "0.65rem",
+                    fontSize: "0.6rem",
                     fontWeight: "bold",
-                    padding: "0.1rem 0.4rem",
+                    padding: "0.1rem 0.35rem",
                     lineHeight: 1.4,
-                    minWidth: "18px",
+                    minWidth: "16px",
                     textAlign: "center",
                   }}
                 >
@@ -119,9 +119,9 @@ export default function AppNav() {
                     backgroundColor: "#a78bfa",
                     color: "#1a0a2e",
                     borderRadius: "999px",
-                    fontSize: "0.55rem",
+                    fontSize: "0.5rem",
                     fontWeight: "bold",
-                    padding: "0.1rem 0.4rem",
+                    padding: "0.1rem 0.35rem",
                     lineHeight: 1.4,
                     letterSpacing: "0.04em",
                   }}
@@ -134,18 +134,18 @@ export default function AppNav() {
         })}
       </div>
 
-      {/* Settings gear icon — top right */}
       <Link
         href="/app/settings"
         title="Settings"
         style={{
           color: pathname === "/app/settings" ? "#4ade80" : "#64748b",
           textDecoration: "none",
-          fontSize: "1.25rem",
+          fontSize: "1.1rem",
           padding: "0.5rem",
           display: "flex",
           alignItems: "center",
           transition: "color 0.15s",
+          flexShrink: 0,
         }}
       >
         ⚙️

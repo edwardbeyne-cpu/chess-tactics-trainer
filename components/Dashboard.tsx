@@ -31,6 +31,9 @@ import {
   getReviewQueueThemes,
   getAllTimeHighRating,
   getPatternRatings,
+  getPatternTimeStats,
+  getTimeStandard,
+  saveTimeStandard,
   type RatingSnapshot,
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
@@ -109,49 +112,49 @@ function RatingHero() {
       background: "linear-gradient(135deg, #0f1a2e 0%, #1a2a4e 100%)",
       border: "1px solid #2e3a5c",
       borderRadius: "16px",
-      padding: "2rem 2.5rem",
-      marginBottom: "1.5rem",
+      padding: "1.5rem 1.75rem",
+      marginBottom: "1.25rem",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
       flexWrap: "wrap",
-      gap: "2rem",
+      gap: "1.5rem",
     }}>
       <div>
-        <div style={{ color: "#64748b", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "0.5rem" }}>
-          ♟ Overall Tactics Rating
+        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: "0.35rem" }}>
+          Overall Tactics Rating
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "1rem" }}>
-          <div style={{ color: "#4ade80", fontSize: "4rem", fontWeight: "bold", lineHeight: 1 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ color: "#4ade80", fontSize: "4.5rem", fontWeight: "bold", lineHeight: 1 }}>
             {data.tacticsRating}
           </div>
           {weekTrend !== 0 && (
-            <div style={{ color: trendColor, fontSize: "1.4rem", fontWeight: "bold" }}>
+            <div style={{ color: trendColor, fontSize: "1.2rem", fontWeight: "bold" }}>
               {trendArrow} {trendLabel} this week
             </div>
           )}
           {weekTrend === 0 && data.totalPuzzlesRated > 0 && (
-            <div style={{ color: "#475569", fontSize: "1rem" }}>
+            <div style={{ color: "#334155", fontSize: "0.9rem" }}>
               No change this week
             </div>
           )}
         </div>
         {data.totalPuzzlesRated === 0 && (
-          <div style={{ color: "#475569", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+          <div style={{ color: "#475569", fontSize: "0.82rem", marginTop: "0.4rem" }}>
             Solve puzzles to start earning your rating!
           </div>
         )}
         {data.totalPuzzlesRated > 0 && (
-          <div style={{ color: "#475569", fontSize: "0.8rem", marginTop: "0.4rem" }}>
-            Based on {data.totalPuzzlesRated} rated puzzle{data.totalPuzzlesRated !== 1 ? "s" : ""}
+          <div style={{ color: "#334155", fontSize: "0.75rem", marginTop: "0.25rem" }}>
+            {data.totalPuzzlesRated} rated puzzle{data.totalPuzzlesRated !== 1 ? "s" : ""}
           </div>
         )}
       </div>
 
       {sparkline.length >= 2 && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.4rem" }}>
-          <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-            Last 30 days
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
+          <div style={{ color: "#334155", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            30-day trend
           </div>
           <svg width={sparkW} height={sparkH}>
             <polyline
@@ -163,6 +166,11 @@ function RatingHero() {
               strokeLinecap="round"
             />
           </svg>
+          {weekTrend !== 0 && (
+            <div style={{ color: trendColor, fontSize: "0.78rem", fontWeight: "bold" }}>
+              {trendArrow} {trendLabel} this week
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -199,9 +207,12 @@ function WeaknessBreakdown() {
       padding: "1.5rem",
       marginBottom: "1.5rem",
     }}>
-      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1.25rem", margin: "0 0 1.25rem" }}>
-        ⚠️ Weakness Breakdown
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.3rem" }}>
+        Weakness Breakdown
       </h2>
+      <p style={{ color: "#64748b", fontSize: "0.78rem", margin: "0 0 1.25rem" }}>
+        Your lowest accuracy patterns and puzzles still in your review queue
+      </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
         {/* Worst patterns */}
@@ -326,13 +337,18 @@ function PatternRatingsGrid() {
       marginBottom: "1.5rem",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-        <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: 0 }}>
-          🎯 Pattern Ratings
-        </h2>
+        <div>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.25rem" }}>
+            Pattern Ratings
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.78rem", margin: 0 }}>
+            Your ELO rating and accuracy for each of the 17 tactical patterns
+          </p>
+        </div>
         <span style={{ color: "#475569", fontSize: "0.75rem" }}>17 patterns</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.75rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "0.5rem" }}>
         {corePatterns.map((p) => {
           const themeKey = p.themes[0];
           const stat = statsByTheme[themeKey];
@@ -340,7 +356,7 @@ function PatternRatingsGrid() {
           const rating = pr?.rating ?? 800;
           const accuracy = stat ? Math.round(stat.solveRate * 100) : null;
           const progress = stat?.totalAttempts ?? 0;
-          const color = stat ? getAccuracyColor(stat.solveRate) : "#475569";
+          const color = stat ? getAccuracyColor(stat.solveRate) : "#334155";
           const bg = stat ? getAccuracyBg(stat.solveRate) : "#0d1621";
           const border = stat ? getAccuracyBorder(stat.solveRate) : "#1e2a3a";
 
@@ -348,49 +364,179 @@ function PatternRatingsGrid() {
             <div key={themeKey} style={{
               backgroundColor: bg,
               border: `1px solid ${border}`,
-              borderRadius: "10px",
-              padding: "0.85rem 1rem",
+              borderRadius: "8px",
+              padding: "0.65rem 0.75rem",
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                  <span style={{ fontSize: "1.2rem" }}>{p.icon}</span>
-                  <span style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "bold" }}>{p.name}</span>
-                </div>
-                {accuracy !== null && (
-                  <span style={{
-                    backgroundColor: bg,
-                    color: color,
-                    border: `1px solid ${border}`,
-                    borderRadius: "5px",
-                    padding: "0.1rem 0.4rem",
-                    fontSize: "0.68rem",
-                    fontWeight: "bold",
-                  }}>
-                    {getAccuracyLabel(stat!.solveRate)}
-                  </span>
-                )}
+              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", marginBottom: "0.3rem" }}>
+                <span style={{ fontSize: "1rem" }}>{p.icon}</span>
+                <span style={{ color: "#cbd5e1", fontSize: "0.78rem", fontWeight: "600" }}>{p.name}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", marginBottom: "0.4rem" }}>
-                <span style={{ color: "#94a3b8" }}>Rating: <strong style={{ color }}>{rating}</strong></span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
+                <span style={{ color: color, fontSize: "1.25rem", fontWeight: "bold", lineHeight: 1 }}>{rating}</span>
                 {accuracy !== null && (
-                  <span style={{ color: color }}>{accuracy}% accuracy</span>
+                  <span style={{ color, fontSize: "0.72rem", fontWeight: "600" }}>{accuracy}%</span>
                 )}
               </div>
               {/* Progress bar */}
-              <div style={{ backgroundColor: "#0d1621", borderRadius: "4px", height: "5px", overflow: "hidden" }}>
+              <div style={{ backgroundColor: "#0d1621", borderRadius: "3px", height: "4px", overflow: "hidden" }}>
                 <div style={{
                   width: `${Math.min(100, (progress / 200) * 100)}%`,
                   height: "100%",
                   backgroundColor: color,
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                 }} />
               </div>
-              <div style={{ color: "#475569", fontSize: "0.65rem", marginTop: "0.25rem" }}>
-                {progress}/200 attempted
+              <div style={{ color: "#334155", fontSize: "0.62rem", marginTop: "0.2rem" }}>
+                {progress}/200
               </div>
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ── Sprint 12: Time Standard Progress ─────────────────────────────────────
+
+const PATTERN_THEME_KEY_MAP: Record<string, string> = {
+  "Fork": "fork", "Pin": "pin", "Skewer": "skewer",
+  "Discovered Attack": "discoveredAttack", "Back Rank Mate": "backRankMate",
+  "Smothered Mate": "smotheredMate", "Double Check": "doubleCheck",
+  "Overloading": "overloading", "Deflection": "deflection",
+  "Interference": "interference", "Zugzwang": "zugzwang",
+  "Attraction": "attraction", "Clearance": "clearance",
+  "Trapped Piece": "trappedPiece", "Discovered Check": "discoveredCheck",
+  "Kingside Attack": "kingsideAttack", "Queenside Attack": "queensideAttack",
+};
+
+function TimeStandardProgress() {
+  const [timeStandard, setTimeStandard] = useState(30);
+  const [editingStandard, setEditingStandard] = useState(false);
+  const [draftStandard, setDraftStandard] = useState(30);
+
+  useEffect(() => {
+    const s = getTimeStandard();
+    setTimeStandard(s);
+    setDraftStandard(s);
+  }, []);
+
+  // Get time stats per pattern
+  const timeStats = useMemo(() => getPatternTimeStats(), []);
+  const statsByTheme: Record<string, { solved: number; metStandard: number; total: number }> = {};
+  for (const s of timeStats) statsByTheme[s.theme] = s;
+
+  // Build rows: only patterns with at least 1 attempt
+  const rows = patterns
+    .map((p) => {
+      const themeKey = PATTERN_THEME_KEY_MAP[p.name] ?? p.name.toLowerCase();
+      const s = statsByTheme[themeKey] ?? { solved: 0, metStandard: 0, total: 0 };
+      const pct = s.solved > 0 ? Math.round((s.metStandard / s.solved) * 100) : 0;
+      const readyToChallenge = s.solved === s.total && s.total > 0 && s.metStandard < s.solved;
+      return { name: p.name, themeKey, ...s, pct, readyToChallenge };
+    })
+    .filter((r) => r.total > 0)
+    .sort((a, b) => a.pct - b.pct); // worst first
+
+  if (rows.length === 0) return null;
+
+  function handleSaveStandard() {
+    const clamped = Math.max(5, Math.min(draftStandard, 300));
+    saveTimeStandard(clamped);
+    setTimeStandard(clamped);
+    setEditingStandard(false);
+  }
+
+  return (
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.25rem" }}>
+            Time Standard Progress
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.78rem", margin: 0 }}>
+            Track how many puzzles you&apos;ve solved under your time target — raise the bar as you improve
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>Standard:</span>
+          {editingStandard ? (
+            <>
+              <input
+                type="number"
+                value={draftStandard}
+                onChange={(e) => setDraftStandard(parseInt(e.target.value) || 30)}
+                min={5} max={300} step={5}
+                style={{
+                  width: "60px",
+                  backgroundColor: "#0f1621",
+                  border: "1px solid #2e75b6",
+                  borderRadius: "6px",
+                  color: "#e2e8f0",
+                  fontSize: "0.85rem",
+                  padding: "0.2rem 0.4rem",
+                }}
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleSaveStandard()}
+              />
+              <button onClick={handleSaveStandard} style={{
+                backgroundColor: "#2e75b6", color: "white", border: "none",
+                borderRadius: "6px", padding: "0.25rem 0.5rem", cursor: "pointer", fontSize: "0.78rem",
+              }}>Save</button>
+              <button onClick={() => setEditingStandard(false)} style={{
+                backgroundColor: "transparent", color: "#64748b", border: "1px solid #2e3a5c",
+                borderRadius: "6px", padding: "0.25rem 0.5rem", cursor: "pointer", fontSize: "0.78rem",
+              }}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <span style={{
+                color: "#a78bfa", fontWeight: "bold", fontSize: "0.9rem",
+                backgroundColor: "#1a0d2e", border: "1px solid #7c3aed",
+                borderRadius: "6px", padding: "0.2rem 0.5rem",
+              }}>{timeStandard}s</span>
+              <button onClick={() => { setDraftStandard(timeStandard); setEditingStandard(true); }} style={{
+                backgroundColor: "transparent", color: "#94a3b8", border: "1px solid #2e3a5c",
+                borderRadius: "6px", padding: "0.2rem 0.5rem", cursor: "pointer", fontSize: "0.72rem",
+              }}>✏️ Edit</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto auto", gap: "0.4rem 1rem", alignItems: "center" }}>
+        {/* Header */}
+        <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>Pattern</div>
+        <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right" }}>Solved</div>
+        <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right" }}>Met Standard</div>
+        <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "right" }}>%</div>
+
+        {rows.map((r) => (
+          <>
+            <div key={`name-${r.themeKey}`} style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <span style={{ color: "#e2e8f0", fontSize: "0.82rem" }}>{r.name}</span>
+              {r.readyToChallenge && (
+                <span title="100% solved but not all met standard — ready to challenge!" style={{
+                  fontSize: "0.65rem", color: "#a78bfa",
+                  backgroundColor: "#1a0d2e", border: "1px solid #7c3aed",
+                  borderRadius: "4px", padding: "0.1rem 0.3rem",
+                }}>⚡ Challenge</span>
+              )}
+            </div>
+            <div key={`solved-${r.themeKey}`} style={{ color: "#94a3b8", fontSize: "0.82rem", textAlign: "right" }}>{r.solved}/{r.total}</div>
+            <div key={`met-${r.themeKey}`} style={{ color: r.metStandard > 0 ? "#a78bfa" : "#475569", fontSize: "0.82rem", textAlign: "right" }}>{r.metStandard}</div>
+            <div key={`pct-${r.themeKey}`} style={{
+              color: r.pct >= 80 ? "#4ade80" : r.pct >= 50 ? "#f59e0b" : r.pct > 0 ? "#ef4444" : "#475569",
+              fontSize: "0.82rem", fontWeight: "bold", textAlign: "right",
+            }}>{r.solved > 0 ? `${r.pct}%` : "—"}</div>
+          </>
+        ))}
       </div>
     </div>
   );
@@ -490,51 +636,52 @@ function ActivityStats() {
       padding: "1.5rem",
       marginBottom: "1.5rem",
     }}>
-      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1.25rem", margin: "0 0 1.25rem" }}>
-        📈 Activity Stats
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.3rem" }}>
+        Activity &amp; Streak
       </h2>
+      <p style={{ color: "#64748b", fontSize: "0.78rem", margin: "0 0 1.25rem" }}>
+        Your training consistency and daily habit
+      </p>
 
-      {/* Puzzles solved */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
+      {/* Puzzles solved — bigger numbers, tighter cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.6rem", marginBottom: "1rem" }}>
         {stats.map((s) => (
           <div key={s.label} style={{
-            backgroundColor: "#162030",
+            backgroundColor: "#111827",
+            border: "1px solid #1e2a3a",
             borderRadius: "8px",
-            padding: "0.85rem",
+            padding: "0.75rem 0.5rem",
             textAlign: "center",
           }}>
-            <div style={{ fontSize: "1.5rem", marginBottom: "0.25rem" }}>{s.icon}</div>
-            <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{s.value}</div>
-            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>{s.label}</div>
+            <div style={{ color: "#4ade80", fontSize: "2rem", fontWeight: "bold", lineHeight: 1 }}>{s.value}</div>
+            <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.3rem" }}>{s.icon} {s.label}</div>
           </div>
         ))}
       </div>
 
       {/* Streak + personal best */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "1rem" }}>
         <div style={{
-          backgroundColor: "#162030",
-          borderRadius: "8px",
-          padding: "0.85rem",
+          backgroundColor: "#111827", border: "1px solid #1e2a3a",
+          borderRadius: "8px", padding: "0.75rem",
         }}>
-          <div style={{ color: "#f59e0b", fontSize: "1.5rem", fontWeight: "bold" }}>
-            🔥 {streakData.currentStreak}
+          <div style={{ color: "#f59e0b", fontSize: "2rem", fontWeight: "bold", lineHeight: 1 }}>
+            {streakData.currentStreak}
           </div>
-          <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>Day streak</div>
-          <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.1rem" }}>
+          <div style={{ color: "#64748b", fontSize: "0.68rem", marginTop: "0.3rem" }}>🔥 Day streak</div>
+          <div style={{ color: "#334155", fontSize: "0.65rem", marginTop: "0.15rem" }}>
             Best: {streakData.longestStreak}d
           </div>
         </div>
         <div style={{
-          backgroundColor: "#162030",
-          borderRadius: "8px",
-          padding: "0.85rem",
+          backgroundColor: "#111827", border: "1px solid #1e2a3a",
+          borderRadius: "8px", padding: "0.75rem",
         }}>
-          <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>
-            🥇 {allTimeHigh}
+          <div style={{ color: "#4ade80", fontSize: "2rem", fontWeight: "bold", lineHeight: 1 }}>
+            {allTimeHigh}
           </div>
-          <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>Personal best</div>
-          <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.1rem" }}>All-time high rating</div>
+          <div style={{ color: "#64748b", fontSize: "0.68rem", marginTop: "0.3rem" }}>🥇 Personal best</div>
+          <div style={{ color: "#334155", fontSize: "0.65rem", marginTop: "0.15rem" }}>All-time high</div>
         </div>
       </div>
 
@@ -572,9 +719,14 @@ function AchievementsSection() {
       marginBottom: "1.5rem",
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
-        <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: 0 }}>
-          🏆 Achievements
-        </h2>
+        <div>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.25rem" }}>
+            Achievements
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.78rem", margin: 0 }}>
+            Milestones earned through improvement and consistency
+          </p>
+        </div>
         <span style={{ color: "#ffd700", fontSize: "0.85rem" }}>
           {earned.length} / {achievements.length} earned
         </span>
@@ -697,8 +849,8 @@ function RatingTrackingPanel() {
       padding: "1.5rem",
       marginBottom: "1.5rem",
     }}>
-      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "1rem", margin: "0 0 1rem" }}>
-        🌐 Platform Ratings
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 1rem" }}>
+        Platform Ratings
       </h2>
       {hasChesscom && (
         <div style={{ marginBottom: "0.5rem" }}>
@@ -750,19 +902,24 @@ export default function Dashboard() {
   return (
     <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
       {/* Page header with help button */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
-        <h1 style={{ color: "#e2e8f0", fontSize: "1.6rem", fontWeight: "bold", margin: 0 }}>
-          📊 Data
+      <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+        <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+          Data
         </h1>
-        <HelpModal title="How to Read Your Data">
-          <HelpBulletList items={[
-            "Your overall tactics rating is your headline number — focus on growing it over time",
-            "The weakness breakdown shows your worst patterns — those are where to focus your Drill Tactics sessions",
-            "Pattern cards show your rating, accuracy, and progress per pattern — green is strong, red needs work",
-            "The 30-day habit tracker shows your consistency — daily practice compounds faster than occasional long sessions",
-            "Achievements unlock automatically as you hit milestones",
-          ]} />
-        </HelpModal>
+        <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 0.75rem", maxWidth: "540px", lineHeight: 1.6 }}>
+          Track your ratings, patterns, activity, and progress — everything you need to train smarter
+        </p>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <HelpModal title="How to Read Your Data">
+            <HelpBulletList items={[
+              "Your overall tactics rating is your headline number — focus on growing it over time",
+              "The weakness breakdown shows your worst patterns — those are where to focus your Drill Tactics sessions",
+              "Pattern cards show your rating, accuracy, and progress per pattern — green is strong, red needs work",
+              "The 30-day habit tracker shows your consistency — daily practice compounds faster than occasional long sessions",
+              "Achievements unlock automatically as you hit milestones",
+            ]} />
+          </HelpModal>
+        </div>
       </div>
 
       {/* Hero — Overall Tactics Rating */}
@@ -770,6 +927,9 @@ export default function Dashboard() {
 
       {/* Weakness Breakdown */}
       <WeaknessBreakdown />
+
+      {/* Sprint 12: Time Standard Progress */}
+      <TimeStandardProgress />
 
       {/* Pattern Ratings Grid */}
       <PatternRatingsGrid />
