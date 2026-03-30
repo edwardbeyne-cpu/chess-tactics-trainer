@@ -16,6 +16,72 @@ import {
   type FailureModeStats,
 } from "@/lib/storage";
 
+// ── Sprint 31: Pattern Mastery Tier helper ────────────────────────────────
+interface PatternMasteryTiers {
+  beginner: number;   // ELO < 1000
+  intermediate: number; // 1000–1399
+  advanced: number;   // 1400–1799
+  elite: number;      // 1800+
+}
+
+function getPatternMasteryTiers(): PatternMasteryTiers {
+  if (typeof window === "undefined") return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+  try {
+    const raw = localStorage.getItem("ctt_pattern_ratings");
+    if (!raw) return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+    const ratings = JSON.parse(raw) as Record<string, { rating: number }>;
+    const tiers: PatternMasteryTiers = { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+    for (const val of Object.values(ratings)) {
+      const r = val.rating ?? 0;
+      if (r >= 1800) tiers.elite++;
+      else if (r >= 1400) tiers.advanced++;
+      else if (r >= 1000) tiers.intermediate++;
+      else tiers.beginner++;
+    }
+    return tiers;
+  } catch {
+    return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+  }
+}
+
+// ── Sprint 31: Pattern Mastery Tier Display Component ─────────────────────
+function PatternMasteryTierDisplay() {
+  const tiers = getPatternMasteryTiers();
+  const tierItems = [
+    { label: "Beginner", count: tiers.beginner, color: "#94a3b8", dot: "#94a3b8" },
+    { label: "Intermediate", count: tiers.intermediate, color: "#60a5fa", dot: "#60a5fa" },
+    { label: "Advanced", count: tiers.advanced, color: "#a855f7", dot: "#a855f7" },
+    { label: "Elite", count: tiers.elite, color: "#f59e0b", dot: "#f59e0b" },
+  ];
+
+  return (
+    <div style={{
+      backgroundColor: "#0a1520",
+      border: "1px solid #1e3a5c",
+      borderRadius: "10px",
+      padding: "0.75rem 1rem",
+      marginTop: "0.75rem",
+    }}>
+      <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+        Pattern Mastery
+      </div>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+        {tierItems.map((tier, i) => (
+          <div key={tier.label} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            {i > 0 && <span style={{ color: "#1e3a5c", marginRight: "-0.5rem" }}>·</span>}
+            <span style={{
+              width: "8px", height: "8px", borderRadius: "50%",
+              backgroundColor: tier.dot, display: "inline-block", flexShrink: 0,
+            }} />
+            <span style={{ color: "#94a3b8", fontSize: "0.78rem" }}>{tier.label}</span>
+            <span style={{ color: tier.color, fontWeight: "bold", fontSize: "0.82rem" }}>{tier.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── localStorage keys ──────────────────────────────────────────────────────
 const CUSTOM_USERNAME_KEY = "ctt_custom_username";
 const CUSTOM_PLATFORM_KEY = "ctt_custom_platform";
@@ -455,9 +521,7 @@ export default function TrainingPlan() {
 
   // ── Start Today routing ───────────────────────────────────────────────────
   function handleStartToday() {
-    const firstIncomplete = tasks.find((t) => t.progress < t.target);
-    if (!firstIncomplete) return; // all done
-    router.push(firstIncomplete.actionHref);
+    router.push("/app/training");
   }
 
   const allTasksDone = tasks.every((t) => t.progress >= t.target);
@@ -590,6 +654,8 @@ export default function TrainingPlan() {
                 </div>
               )}
             </div>
+            {/* Sprint 31: Pattern Mastery Tier breakdown */}
+            <PatternMasteryTierDisplay />
           </>
         ) : (
           <>
@@ -1036,13 +1102,13 @@ function buildTrainingTasks(
     priority1Label = "Back Rank Mate";
   }
 
-  const p1Progress = getWeekPatternProgress(priority1Theme);
+  const p1Progress = Math.min(30, getWeekPatternProgress(priority1Theme));
   tasks.push({
     id: "task1",
     priority: 1,
     label: priority1Label,
-    description: `→ Drill 20 puzzles in Drill Tactics`,
-    target: 20,
+    description: `→ Drill 30 puzzles at your current rating`,
+    target: 30,
     progress: p1Progress,
     actionHref: `/app/patterns/${priority1Slug}`,
     actionLabel: "Drill →",
@@ -1082,9 +1148,9 @@ function buildTrainingTasks(
       id: "task2",
       priority: 2,
       label: p2Label,
-      description: "→ Drill 15 puzzles in Drill Tactics",
+      description: "→ Drill 15 puzzles at your current rating",
       target: 15,
-      progress: getWeekPatternProgress(p2Theme),
+      progress: Math.min(15, getWeekPatternProgress(p2Theme)),
       actionHref: `/app/patterns/${p2Slug}`,
       actionLabel: "Drill →",
     };
