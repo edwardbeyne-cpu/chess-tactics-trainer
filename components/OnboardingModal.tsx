@@ -166,7 +166,7 @@ async function fetchAllRatings(platform: Platform, username: string): Promise<Al
       const bullet: number | null = data?.chess_bullet?.last?.rating ?? null;
       const blitz: number | null = data?.chess_blitz?.last?.rating ?? null;
       const rapid: number | null = data?.chess_rapid?.last?.rating ?? null;
-      const main = blitz ?? rapid ?? bullet;
+      const main = rapid ?? blitz ?? bullet;
       return { bullet, blitz, rapid, main };
     } else {
       const res = await fetch(
@@ -180,7 +180,7 @@ async function fetchAllRatings(platform: Platform, username: string): Promise<Al
       const bullet: number | null = perfs?.bullet?.rating ?? null;
       const blitz: number | null = perfs?.blitz?.rating ?? null;
       const rapid: number | null = perfs?.rapid?.rating ?? null;
-      const main = blitz ?? rapid ?? bullet;
+      const main = rapid ?? blitz ?? bullet;
       return { bullet, blitz, rapid, main };
     }
   } catch {
@@ -330,7 +330,7 @@ export default function OnboardingModal() {
           bullet: allRatings.bullet,
           blitz: allRatings.blitz,
           rapid: allRatings.rapid,
-          main: allRatings.blitz ? "blitz" : allRatings.rapid ? "rapid" : "bullet",
+          main: allRatings.rapid ? "rapid" : allRatings.blitz ? "blitz" : "bullet",
         };
         localStorage.setItem(PLATFORM_RATINGS_V2_KEY, JSON.stringify(ratingsV2));
       }
@@ -584,7 +584,7 @@ export default function OnboardingModal() {
                       {fetchedRating}
                     </div>
                     <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>
-                      Platform rating — used to seed your training
+                      Rapid rating — used to seed your training
                     </div>
                   </div>
                 )}
