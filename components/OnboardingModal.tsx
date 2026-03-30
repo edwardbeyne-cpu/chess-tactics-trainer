@@ -641,6 +641,10 @@ export default function OnboardingModal() {
 
               {/* Username input */}
               <div style={{ marginBottom: connectError ? "0.5rem" : "1rem" }}>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "#94a3b8", marginBottom: "0.4rem" }}>
+                  {platform === "chesscom" ? "Chess.com username" : "Lichess username"}
+                  <span style={{ color: "#ef4444", marginLeft: "3px" }}>*</span>
+                </label>
                 <input
                   type="text"
                   placeholder={platform === "chesscom" ? "Your Chess.com username" : "Your Lichess username"}
