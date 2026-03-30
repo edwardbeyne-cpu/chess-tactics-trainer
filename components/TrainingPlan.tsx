@@ -981,9 +981,16 @@ export default function TrainingPlan() {
         <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
           🏁 Next Milestone
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
           <span style={{ fontSize: "1.5rem" }}>{milestone.emoji}</span>
-          <span style={{ color: "#e2e8f0", fontSize: "0.92rem" }}>{milestone.text}</span>
+          <div>
+            <div style={{ color: "#e2e8f0", fontSize: "0.92rem" }}>{milestone.text}</div>
+            {milestone.text.includes("Tactical DNA") && (
+              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
+                Your Tactical DNA Profile maps your strengths and weaknesses across all 24 patterns — showing you exactly which tactics you're sharp on and which are costing you rating points.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
