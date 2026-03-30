@@ -842,10 +842,10 @@ export default function TrainingPlan() {
         }}>
           <div style={{ display: "flex", gap: "1.5rem" }}>
             <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-              <span style={{ color: "#94a3b8" }}>Daily target:</span> 15 puzzles
+              <span style={{ color: "#94a3b8" }}>Weekly goal:</span> {tasks.reduce((sum, t) => sum + t.target, 0)} puzzles
             </div>
             <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-              <span style={{ color: "#94a3b8" }}>Est. time:</span> ~20 min/day
+              <span style={{ color: "#94a3b8" }}>Daily pace:</span> ~{Math.ceil(tasks.reduce((sum, t) => sum + Math.max(0, t.target - t.progress), 0) / 7)} puzzles/day
             </div>
           </div>
 
