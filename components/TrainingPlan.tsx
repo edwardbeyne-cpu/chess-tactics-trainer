@@ -867,7 +867,7 @@ export default function TrainingPlan() {
                 width: "100%",
               }}
             >
-              Start Today →
+              Start Training →
             </button>
           )}
         </div>
