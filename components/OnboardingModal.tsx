@@ -248,6 +248,7 @@ export default function OnboardingModal() {
   const [connectedUsername, setConnectedUsername] = useState("");
   const [connectedPlatform, setConnectedPlatform] = useState<Platform>("chesscom");
   const [fetchedRating, setFetchedRating] = useState<number | null>(null);
+  const [fetchedRatings, setFetchedRatings] = useState<{bullet: number|null, blitz: number|null, rapid: number|null} | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
 
   const router = useRouter();
@@ -336,6 +337,7 @@ export default function OnboardingModal() {
       }
 
       setFetchedRating(platformRating);
+      setFetchedRatings({ bullet: allRatings.bullet, blitz: allRatings.blitz, rapid: allRatings.rapid });
       setConnectedUsername(uname);
       setConnectedPlatform(platform);
       setConnected(true);
@@ -572,20 +574,29 @@ export default function OnboardingModal() {
                 <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "0.75rem" }}>
                   {connectedPlatform === "chesscom" ? "♟ Chess.com" : "🐴 Lichess"}
                 </div>
-                {fetchedRating !== null && (
+                {fetchedRatings !== null && (
                   <div style={{
                     backgroundColor: "#0a1520",
                     border: "1px solid #1e3a5c",
                     borderRadius: "8px",
-                    padding: "0.5rem",
+                    padding: "0.6rem 0.75rem",
                     marginBottom: "0.5rem",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "0.5rem",
                   }}>
-                    <div style={{ color: "#4ade80", fontSize: "1.6rem", fontWeight: "bold", lineHeight: 1 }}>
-                      {fetchedRating}
-                    </div>
-                    <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.2rem" }}>
-                      Rapid rating — used to seed your training
-                    </div>
+                    {[
+                      { label: "Bullet", value: fetchedRatings.bullet },
+                      { label: "Blitz", value: fetchedRatings.blitz },
+                      { label: "Rapid", value: fetchedRatings.rapid },
+                    ].map(({ label, value }) => (
+                      <div key={label} style={{ textAlign: "center", flex: 1 }}>
+                        <div style={{ color: value ? "#4ade80" : "#475569", fontSize: "1.3rem", fontWeight: "bold", lineHeight: 1 }}>
+                          {value ?? "—"}
+                        </div>
+                        <div style={{ color: "#64748b", fontSize: "0.7rem", marginTop: "0.2rem" }}>{label}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {analysisRunning && (
