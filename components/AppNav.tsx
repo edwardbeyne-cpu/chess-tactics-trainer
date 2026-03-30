@@ -6,11 +6,13 @@ import { useEffect, useState } from "react";
 import AuthButton from "./AuthButton";
 
 const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
-  { href: "/app/dashboard", label: "Data" },
+  { href: "/app/training-plan", label: "Training Plan" },
+  { href: "/app/training", label: "Training" },
   { href: "/app/patterns", label: "Drill Tactics" },
   { href: "/app/puzzles", label: "Puzzles" },
   { href: "/app/review", label: "Review" },
   { href: "/app/custom-puzzles", label: "Custom", pro: true },
+  { href: "/app/dashboard", label: "Data" },
 ];
 
 export default function AppNav() {
