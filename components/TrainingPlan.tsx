@@ -735,12 +735,15 @@ export default function TrainingPlan() {
               </>
             ) : (
               <>
-                <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "0.5rem" }}>
-                  Solve 20+ puzzles to generate your diagnosis.
+                <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                  Start here — run your diagnosis
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
+                  Solve 20 puzzles and we'll identify your weakest patterns and build your personalized training plan.
                 </div>
                 <div style={{
                   backgroundColor: "#0d1621", borderRadius: "999px", height: "6px",
-                  overflow: "hidden", border: "1px solid #1e2a3a", margin: "0.5rem auto", maxWidth: "200px",
+                  overflow: "hidden", border: "1px solid #1e2a3a", margin: "0 auto 0.5rem", maxWidth: "200px",
                 }}>
                   <div style={{
                     height: "100%", backgroundColor: "#3b82f6", borderRadius: "999px",
@@ -748,9 +751,18 @@ export default function TrainingPlan() {
                     transition: "width 0.4s",
                   }} />
                 </div>
-                <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
-                  {totalPuzzlesSolved}/20 puzzles solved
+                <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "1rem" }}>
+                  {totalPuzzlesSolved}/20 puzzles completed
                 </div>
+                <a href="/app/puzzles" style={{
+                  display: "inline-block",
+                  backgroundColor: "#4ade80", color: "#0a1520",
+                  fontWeight: 700, fontSize: "0.88rem",
+                  padding: "0.5rem 1.25rem", borderRadius: "8px",
+                  textDecoration: "none",
+                }}>
+                  Start Diagnosis →
+                </a>
               </>
             )}
           </div>
