@@ -355,7 +355,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       calibEloRef.current = newElo;
       try {
         localStorage.setItem("ctt_calibration_rating", String(newElo));
-        localStorage.setItem("ctt_calibration_complete", "true");
+        // NOTE: ctt_calibration_complete is set when user clicks "Start Training"
+        // NOT here — setting it here causes the page to redirect before showing reveal
       } catch { /* ignore */ }
       setPhase("reveal");
     } else {

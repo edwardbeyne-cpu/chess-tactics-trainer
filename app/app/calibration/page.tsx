@@ -21,6 +21,7 @@ export default function CalibrationPage() {
   }, [router]);
 
   function handleComplete(_finalElo: number) {
+    try { localStorage.setItem("ctt_calibration_complete", "true"); } catch { /* ignore */ }
     router.replace("/app/training-plan");
   }
 
