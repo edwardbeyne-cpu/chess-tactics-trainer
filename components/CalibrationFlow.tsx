@@ -161,7 +161,19 @@ async function fetchRecentGames(platform: Platform, username: string): Promise<A
 // ── Puzzle selection & calibration math ────────────────────────────────────
 
 function getOrientation(fen: string): "white" | "black" {
+  // The player solves from the side that moves in this FEN position
+  // (opponent already moved first to reach this position)
   return fen.split(" ")[1] === "w" ? "white" : "black";
+}
+
+function getPlayerOrientation(puzzle: LichessCachedPuzzle): "white" | "black" {
+  // In Lichess puzzles, moves[0] is the opponent's move that creates the tactic.
+  // The player is the side that moves AFTER the opponent's first move.
+  // So if the original FEN has white to move, opponent (white) plays moves[0],
+  // then the player (black) needs to find the solution.
+  const originalSideToMove = puzzle.fen.split(" ")[1];
+  // Player is the opposite of who moves first
+  return originalSideToMove === "w" ? "black" : "white";
 }
 
 function selectPuzzle(targetElo: number, usedIds: Set<string>): LichessCachedPuzzle | null {
@@ -341,6 +353,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       if (!isCorrect) {
         setMadeError(true);
         madeErrorRef.current = true;
+        // Auto-advance after 1.5 seconds on wrong move — don't leave user stuck
+        setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 1500);
         return false;
       }
 
@@ -894,7 +908,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     );
   }
 
-  const orientation = getOrientation(currentFen);
+  const orientation = currentPuzzle ? getPlayerOrientation(currentPuzzle) : getOrientation(currentFen);
   const bw = boardSize.current;
 
   // ── Solving screen ─────────────────────────────────────────────────────────
