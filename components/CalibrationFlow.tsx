@@ -267,6 +267,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const timerActiveRef = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<LichessCachedPuzzle | null>(null);
+  const nextPuzzleFenRef = useRef<string>("");
   const lastPuzzleRef = useRef<LichessCachedPuzzle | null>(null);
 
   // Board width — use same logic as Puzzle.tsx useResponsiveBoardWidth
@@ -300,10 +301,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     used.add(puzzle.id);
     lastPuzzleRef.current = puzzle;
 
-    // Preload next puzzle in background immediately
-    setTimeout(() => {
-      nextPuzzleRef.current = selectPuzzle(elo, used);
-    }, 0);
+    // Preload next puzzle synchronously — ensures it's ready before user taps Next
+    nextPuzzleRef.current = selectPuzzle(elo, used);
 
     // Apply the opponent's first move so the player sees the position they need to solve
     // In Lichess puzzles, moves[0] is the opponent's move that creates the tactic
@@ -376,8 +375,22 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     setLastResult(skipped ? "wrong" : correct ? "correct" : "wrong");
     setNewElo(calculatedElo);
     setEloChange(change);
-    // Preload next puzzle in background
-    nextPuzzleRef.current = selectPuzzle(calculatedElo, usedIds.current);
+    // Preload next puzzle + pre-compute its startFen while user reads transition screen
+    setTimeout(() => {
+      const next = selectPuzzle(calculatedElo, usedIds.current);
+      if (next) {
+        let startFen = next.fen;
+        if (next.moves && next.moves.length > 0) {
+          try {
+            const chess = new Chess(next.fen);
+            chess.move({ from: next.moves[0].slice(0,2), to: next.moves[0].slice(2,4), promotion: next.moves[0][4] || undefined });
+            startFen = chess.fen();
+          } catch { /* ignore */ }
+        }
+        nextPuzzleRef.current = next;
+        nextPuzzleFenRef.current = startFen;
+      }
+    }, 50);
     setPhase("between");
   }
 
@@ -1012,16 +1025,32 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         <div style={{ width: "100%", maxWidth: "360px" }}>
           <button
             onClick={() => {
-              // Set phase and clear result FIRST before any state updates
-              // so solving screen never renders with stale puzzle data
               setLastResult(null);
               setCalibElo(newElo);
               calibEloRef.current = newElo;
               setPuzzleIndex(puzzleIndex + 1);
               puzzleIndexRef.current = puzzleIndex + 1;
               const preloaded = nextPuzzleRef.current;
+              const preloadedFen = nextPuzzleFenRef.current;
               nextPuzzleRef.current = null;
-              loadPuzzle(newElo, usedIds.current, preloaded);
+              nextPuzzleFenRef.current = "";
+              // If we have precomputed FEN, apply it directly — no computation needed on tap
+              if (preloaded && preloadedFen) {
+                lastPuzzleRef.current = preloaded;
+                usedIds.current.add(preloaded.id);
+                setCurrentFen(preloadedFen);
+                setCurrentPuzzle(preloaded);
+                setMoveIndex(1);
+                setMadeError(false);
+                madeErrorRef.current = false;
+                setLastMove(undefined);
+                setElapsed(0);
+                setSkipVisible(false);
+                startTimeRef.current = Date.now();
+                timerActiveRef.current = true;
+              } else {
+                loadPuzzle(newElo, usedIds.current, null);
+              }
               setPhase("solving");
             }}
             style={{
