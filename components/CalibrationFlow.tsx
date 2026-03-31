@@ -312,6 +312,10 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       setFinalElo(newElo);
       setCalibElo(newElo);
       calibEloRef.current = newElo;
+      try {
+        localStorage.setItem("ctt_calibration_rating", String(newElo));
+        localStorage.setItem("ctt_calibration_complete", "true");
+      } catch { /* ignore */ }
       setPhase("reveal");
     } else {
       setCalibElo(newElo);

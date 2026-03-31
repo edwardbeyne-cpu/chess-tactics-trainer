@@ -3059,3 +3059,16 @@ export function setWarmedUpToday(): void {
   if (typeof window === "undefined") return;
   try { localStorage.setItem("ctt_warmed_up", new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
 }
+
+// First puzzles start below calibration for confidence building
+export function getPatternStartingELO(): number {
+  if (typeof window === "undefined") return 800;
+  try {
+    const raw = localStorage.getItem("ctt_calibration_rating");
+    if (raw) {
+      const rating = parseInt(raw, 10);
+      if (!isNaN(rating)) return Math.max(400, rating - 150);
+    }
+  } catch { /* ignore */ }
+  return 800;
+}

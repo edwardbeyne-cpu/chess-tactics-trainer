@@ -1,7 +1,7 @@
 import Dashboard from "@/components/Dashboard";
 
 export const metadata = {
-  title: "Dashboard — ChessTrainer",
+  title: "Data — ChessTrainer",
 };
 
 export default function DashboardPage() {
