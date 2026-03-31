@@ -268,13 +268,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
   useEffect(() => {
     function handleResize() {
-      // Use the same hook logic as Puzzle.tsx — measure available height and width
-      const vw = window.innerWidth;
-      const availH = window.innerHeight - 56 - 60 - 48 - 48; // nav + header + padding + controls
-      const maxFromH = Math.min(availH, 520);
-      if (vw < 640) setBoardWidth(Math.min(vw - 48, maxFromH, 360));
-      else if (vw <= 1024) setBoardWidth(Math.min(maxFromH, Math.floor(vw * 0.45)));
-      else setBoardWidth(Math.min(maxFromH, 460));
+      // Account for: 2rem padding each side (64px) + scrollbar (17px) = 81px total
+      const available = window.innerWidth - 81;
+      setBoardWidth(Math.min(available, 480));
     }
     handleResize();
     window.addEventListener("resize", handleResize);
