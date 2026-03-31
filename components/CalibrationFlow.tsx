@@ -265,6 +265,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const timerActiveRef = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<LichessCachedPuzzle | null>(null);
+  const lastPuzzleRef = useRef<LichessCachedPuzzle | null>(null);
 
   // Board width — use same logic as Puzzle.tsx useResponsiveBoardWidth
   const [boardWidth, setBoardWidth] = useState<number>(360);
@@ -295,6 +296,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     const puzzle = preloaded ?? selectPuzzle(elo, used);
     if (!puzzle) return;
     used.add(puzzle.id);
+    lastPuzzleRef.current = puzzle;
 
     // Preload next puzzle in background immediately
     setTimeout(() => {
@@ -949,15 +951,15 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   }
 
   // ── Loading / transition state ─────────────────────────────────────────────
-  if (!currentPuzzle && boardOpacity > 0) {
+  // Use last known puzzle during fade transition so board never goes blank
+  const displayPuzzle = currentPuzzle ?? lastPuzzleRef.current;
+  if (!displayPuzzle) {
     return (
       <div style={{ textAlign: "center", padding: "4rem 1rem", color: "#64748b", fontSize: "0.9rem" }}>
         Loading…
       </div>
     );
   }
-
-  if (!currentPuzzle) return null;
 
   // After applying opponent's first move, currentFen shows whose turn it is (the player's)
   const orientation = getOrientation(currentFen);
