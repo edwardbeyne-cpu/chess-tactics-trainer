@@ -372,11 +372,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         calibEloRef.current = newElo;
         setPuzzleIndex(nextIdx);
         puzzleIndexRef.current = nextIdx;
-        setPhase("transitioning");
-        setTimeout(() => {
-          setPhase("solving");
-          loadPuzzle(newElo, usedIds.current);
-        }, 350);
+        loadPuzzle(newElo, usedIds.current);
       }
     }, delay);
   }
@@ -939,7 +935,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   }
 
   // ── Loading / transition state ─────────────────────────────────────────────
-  if (!currentPuzzle || phase === "transitioning") {
+  if (!currentPuzzle) {
     return (
       <div style={{ textAlign: "center", padding: "4rem 1rem", color: "#64748b", fontSize: "0.9rem" }}>
         Loading…
