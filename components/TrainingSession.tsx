@@ -564,9 +564,14 @@ function BlunderBoard({ puzzleData, onResult }: BlunderBoardProps) {
         </div>
       </div>
 
-      {/* Board */}
+      {/* Board — orient to side that needs to find the safe move (active side in FEN) */}
       <div style={{ display: "flex", justifyContent: "center" }}>
-        <ChessBoard fen={puzzleData.fen} draggable={false} boardWidth={boardWidth} />
+        <ChessBoard
+          fen={puzzleData.fen}
+          draggable={false}
+          boardWidth={boardWidth}
+          orientation={puzzleData.fen.includes(" b ") ? "black" : "white"}
+        />
       </div>
 
       {/* Choices */}
