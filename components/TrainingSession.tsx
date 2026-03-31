@@ -783,7 +783,7 @@ function SessionCompleteScreen({
             color: "#64748b", fontSize: "0.88rem", cursor: "pointer",
           }}
         >
-          Keep going anyway →
+          Keep Going Anyway →
         </button>
       </div>
     </div>
