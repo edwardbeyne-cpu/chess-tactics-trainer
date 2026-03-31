@@ -233,6 +233,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [skipVisible, setSkipVisible] = useState(false);
   const [finalElo, setFinalElo] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
+  const [resultFlash, setResultFlash] = useState<"correct" | "wrong" | null>(null);
 
   // Reveal sub-step: rating → daily_goal → connect
   const [revealStep, setRevealStep] = useState<"rating" | "daily_goal" | "connect">("rating");
@@ -346,30 +347,38 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
-    const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
-    const nextIdx = puzzleIndexRef.current + 1;
 
-    if (nextIdx >= TOTAL_PUZZLES) {
-      setFinalElo(newElo);
-      setCalibElo(newElo);
-      calibEloRef.current = newElo;
-      try {
-        localStorage.setItem("ctt_calibration_rating", String(newElo));
-        // NOTE: ctt_calibration_complete is set when user clicks "Start Training"
-        // NOT here — setting it here causes the page to redirect before showing reveal
-      } catch { /* ignore */ }
-      setPhase("reveal");
-    } else {
-      setCalibElo(newElo);
-      calibEloRef.current = newElo;
-      setPuzzleIndex(nextIdx);
-      puzzleIndexRef.current = nextIdx;
-      setPhase("transitioning");
-      setTimeout(() => {
-        setPhase("solving");
-        loadPuzzle(newElo, usedIds.current);
-      }, 350);
+    // Show result flash for 900ms before advancing
+    if (!skipped) {
+      setResultFlash(correct ? "correct" : "wrong");
+      setTimeout(() => setResultFlash(null), 900);
     }
+
+    const delay = skipped ? 0 : 900;
+    setTimeout(() => {
+      const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
+      const nextIdx = puzzleIndexRef.current + 1;
+
+      if (nextIdx >= TOTAL_PUZZLES) {
+        setFinalElo(newElo);
+        setCalibElo(newElo);
+        calibEloRef.current = newElo;
+        try {
+          localStorage.setItem("ctt_calibration_rating", String(newElo));
+        } catch { /* ignore */ }
+        setPhase("reveal");
+      } else {
+        setCalibElo(newElo);
+        calibEloRef.current = newElo;
+        setPuzzleIndex(nextIdx);
+        puzzleIndexRef.current = nextIdx;
+        setPhase("transitioning");
+        setTimeout(() => {
+          setPhase("solving");
+          loadPuzzle(newElo, usedIds.current);
+        }, 350);
+      }
+    }, delay);
   }
 
   const handleMove = useCallback(
@@ -990,6 +999,20 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             boardWidth={bw}
             orientation={orientation}
           />
+          {/* Result flash overlay */}
+          {resultFlash && (
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundColor: resultFlash === "correct" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              borderRadius: "4px", pointerEvents: "none",
+              fontSize: "2.5rem", fontWeight: "900",
+              color: resultFlash === "correct" ? "#22c55e" : "#ef4444",
+              textShadow: "0 2px 8px rgba(0,0,0,0.5)",
+            }}>
+              {resultFlash === "correct" ? "✓" : "✗"}
+            </div>
+          )}
         </div>
       </div>
       <p style={{
