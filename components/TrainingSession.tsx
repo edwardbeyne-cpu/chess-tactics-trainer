@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js";
 import ChessBoard from "@/components/ChessBoard";
+import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import {
   getAllPatternStats,
@@ -683,7 +684,9 @@ interface SessionCompleteProps {
   sessionTotal: number;
   sessionUnder10s: number;
   sessionNewMastered: number;
+  missedCount: number;
   onContinue: () => void;
+  onReviewMissed: () => void;
 }
 
 function SessionCompleteScreen({
@@ -694,7 +697,9 @@ function SessionCompleteScreen({
   sessionTotal,
   sessionUnder10s,
   sessionNewMastered,
+  missedCount,
   onContinue,
+  onReviewMissed,
 }: SessionCompleteProps) {
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
@@ -743,6 +748,19 @@ function SessionCompleteScreen({
         }}>
           Come back tomorrow to keep your streak!
         </div>
+        {missedCount > 0 && (
+          <button
+            onClick={onReviewMissed}
+            style={{
+              backgroundColor: "#1a1a2e", border: "1px solid #ef4444",
+              borderRadius: "10px", padding: "0.75rem",
+              color: "#ef4444", fontSize: "0.88rem", cursor: "pointer", width: "100%",
+              fontWeight: "600",
+            }}
+          >
+            Review {missedCount} Missed Puzzle{missedCount > 1 ? "s" : ""} →
+          </button>
+        )}
         <button
           onClick={onContinue}
           style={{
@@ -858,6 +876,11 @@ export default function TrainingSession() {
   const [dailyCompleted, setDailyCompleted] = useState(0);
 
   const [keepGoing, setKeepGoing] = useState(false); // bypass daily goal after "Keep going anyway"
+  const [sessionMissedPuzzles, setSessionMissedPuzzles] = useState<Array<{id: string; fen: string; solution: string[]}>>([]);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState<Array<{id: string; fen: string; solution: string[]}>>([]);
+  const [reviewIdx, setReviewIdx] = useState(0);
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -947,6 +970,15 @@ export default function TrainingSession() {
     if (correct) {
       setSessionCorrect((c) => c + 1);
       if (solveTimeMs < MASTERY_TIME_LIMIT_MS) setSessionUnder10s((u) => u + 1);
+    } else {
+      // Track missed puzzles for end-of-session review
+      if (puzzle.type === "tactic" && puzzle.puzzleData) {
+        const pd = puzzle.puzzleData as { fen: string; solution: string[] };
+        setSessionMissedPuzzles((prev) => {
+          if (prev.some((p) => p.id === puzzle.id)) return prev;
+          return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
+        });
+      }
     }
     if (masteryAwarded && masteryHits === 3) {
       setSessionNewMastered((m) => m + 1);
@@ -1067,7 +1099,17 @@ export default function TrainingSession() {
         sessionTotal={sessionTotal}
         sessionUnder10s={sessionUnder10s}
         sessionNewMastered={sessionNewMastered}
+        missedCount={sessionMissedPuzzles.length}
         onContinue={handleContinue}
+        onReviewMissed={() => {
+          if (sessionMissedPuzzles.length === 0) return;
+          setReviewQueue([...sessionMissedPuzzles]);
+          setReviewIdx(0);
+          setReviewMode(true);
+          setShowAnalysis(false);
+          setPhase("solving");
+          setKeepGoing(true);
+        }}
       />
     );
   }
@@ -1164,16 +1206,42 @@ export default function TrainingSession() {
         )}
       </div>
 
-      {/* ── Mastery dots ─────────────────────────────────────────────────────── */}
+      {/* ── Mastery dots + Analysis ──────────────────────────────────────────── */}
       <div style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem",
         backgroundColor: "#13132b", border: "1px solid #1e2a3a",
         borderRadius: "10px", padding: "0.75rem",
       }}>
+        {reviewMode && (
+          <div style={{ color: "#f59e0b", fontSize: "0.72rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.2rem" }}>
+            Review Mode — Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
+          </div>
+        )}
         <MasteryDots hits={puzzle.masteryHits} size={14} />
         <div style={{ color: "#475569", fontSize: "0.75rem" }}>
           Solve in under 10s to earn a mastery point
         </div>
+        {/* Stockfish analysis button */}
+        <button
+          onClick={() => setShowAnalysis((v) => !v)}
+          style={{
+            marginTop: "0.25rem",
+            backgroundColor: "transparent", border: "1px solid #2e3a5c",
+            borderRadius: "6px", padding: "0.3rem 0.75rem",
+            color: "#475569", fontSize: "0.72rem", cursor: "pointer",
+          }}
+        >
+          {showAnalysis ? "Hide Analysis" : "🔍 Analyze with Engine"}
+        </button>
+        {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
+          <div style={{ width: "100%", marginTop: "0.5rem" }}>
+            <StockfishAnalysis
+              fen={(puzzle.puzzleData as {fen: string}).fen}
+              orientation={(puzzle.puzzleData as {fen: string}).fen.includes(" b ") ? "black" : "white"}
+              onClose={() => setShowAnalysis(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
