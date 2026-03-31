@@ -1012,15 +1012,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         <div style={{ width: "100%", maxWidth: "360px" }}>
           <button
             onClick={() => {
-              const preloaded = nextPuzzleRef.current;
-              nextPuzzleRef.current = null;
-              loadPuzzle(newElo, usedIds.current, preloaded);
+              // Set phase and clear result FIRST before any state updates
+              // so solving screen never renders with stale puzzle data
+              setLastResult(null);
               setCalibElo(newElo);
               calibEloRef.current = newElo;
               setPuzzleIndex(puzzleIndex + 1);
               puzzleIndexRef.current = puzzleIndex + 1;
+              const preloaded = nextPuzzleRef.current;
+              nextPuzzleRef.current = null;
+              loadPuzzle(newElo, usedIds.current, preloaded);
               setPhase("solving");
-              setLastResult(null);
             }}
             style={{
               backgroundColor: "#4ade80",
