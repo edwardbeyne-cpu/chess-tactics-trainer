@@ -269,10 +269,12 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   useEffect(() => {
     function handleResize() {
       const vw = window.innerWidth;
-      if (vw >= 1200) setBoardWidth(520);
-      else if (vw >= 900) setBoardWidth(460);
-      else if (vw >= 640) setBoardWidth(400);
-      else setBoardWidth(Math.min(vw - 96, 360));
+      const vh = window.innerHeight;
+      // Use 60% of viewport height as the cap (board shouldn't dominate the screen)
+      const maxFromHeight = Math.floor(vh * 0.60);
+      // On mobile: nearly full width. On desktop: content area is typically ~700-900px wide
+      const fromWidth = vw < 640 ? vw - 96 : Math.min(Math.floor(vw * 0.45), 600);
+      setBoardWidth(Math.min(fromWidth, maxFromHeight));
     }
     handleResize();
     window.addEventListener("resize", handleResize);
