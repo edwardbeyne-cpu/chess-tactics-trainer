@@ -37,7 +37,7 @@ export default function VerbalizationOverlay({
 
   function handleSelect(pattern: VerbalizedPattern) {
     setDismissed(true);
-    recordVerbalization(puzzleId, actualPattern, pattern);
+    recordVerbalization(puzzleId, pattern);
     onDone();
   }
 

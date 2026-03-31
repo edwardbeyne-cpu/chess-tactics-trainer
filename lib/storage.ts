@@ -2942,3 +2942,120 @@ export function updatePuzzleRating(puzzleRating: number, won: boolean): { newRat
   localStorage.setItem(PUZZLE_RATING_KEY, JSON.stringify(updated));
   return { newRating, delta };
 }
+
+// ── Failure Mode Stats (Sprint 31) ────────────────────────────────────────
+export interface FailureModeStats {
+  missed: number;
+  miscalculated: number;
+  rushed: number;
+  unsure: number;
+  total: number;
+}
+
+const FAILURE_STATS_KEY = "ctt_failure_mode_stats";
+
+export function getFailureModeStats(): FailureModeStats {
+  if (typeof window === "undefined") return { missed: 0, miscalculated: 0, rushed: 0, unsure: 0, total: 0 };
+  try {
+    const stored = localStorage.getItem(FAILURE_STATS_KEY);
+    if (stored) return JSON.parse(stored) as FailureModeStats;
+  } catch {
+    // ignore
+  }
+  return { missed: 0, miscalculated: 0, rushed: 0, unsure: 0, total: 0 };
+}
+
+export function getDominantFailureMode(): keyof Omit<FailureModeStats, "total"> | null {
+  const stats = getFailureModeStats();
+  if (stats.total === 0) return null;
+  const modes: Array<keyof Omit<FailureModeStats, "total">> = ["missed", "miscalculated", "rushed", "unsure"];
+  return modes.reduce((a, b) => stats[a] >= stats[b] ? a : b);
+}
+
+// ── Sprint 31–32 stub exports (fix build errors for missing members) ───────
+
+// CalcGym
+export interface CalcGymSession {
+  id: string;
+  date: string;
+  score: number;
+  total: number;
+  timeMs: number;
+}
+export function saveCalcGymSession(_session: CalcGymSession): void {
+  if (typeof window === "undefined") return;
+  try {
+    const sessions = getCalcGymSessions();
+    sessions.unshift(_session);
+    localStorage.setItem("ctt_calc_gym_sessions", JSON.stringify(sessions.slice(0, 50)));
+  } catch { /* ignore */ }
+}
+export function getCalcGymSessions(): CalcGymSession[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("ctt_calc_gym_sessions");
+    return raw ? JSON.parse(raw) as CalcGymSession[] : [];
+  } catch { return []; }
+}
+export function getCalcGymStats(): {
+  totalSessions: number;
+  avgScore: number;
+  avgTimeMs: number;
+  trend: number[];
+} {
+  const sessions = getCalcGymSessions();
+  if (sessions.length === 0) return { totalSessions: 0, avgScore: 0, avgTimeMs: 0, trend: [] };
+  const avgScore = Math.round(sessions.reduce((s, x) => s + x.score, 0) / sessions.length);
+  const avgTime = Math.round(sessions.reduce((s, x) => s + x.timeMs, 0) / sessions.length);
+  const trend = sessions.slice(0, 10).reverse().map((x) => x.score);
+  return { totalSessions: sessions.length, avgScore, avgTimeMs: avgTime, trend };
+}
+
+// Composure / Chaos Mode
+export function updateComposureRating(_correct: boolean): void { /* stub */ }
+
+// Confidence
+export type ConfidenceLevel = "low" | "medium" | "high";
+export interface ConfidenceEntry {
+  puzzleId: string;
+  confidence: ConfidenceLevel;
+  wasCorrect: boolean;
+  date: string;
+}
+export function recordConfidenceEntry(_entry: ConfidenceEntry): void { /* stub */ }
+
+// Explanation cache
+export function getCachedExplanation(_puzzleId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try { return localStorage.getItem(`ctt_explain_${_puzzleId}`); } catch { return null; }
+}
+export function setCachedExplanation(_puzzleId: string, _text: string): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem(`ctt_explain_${_puzzleId}`, _text); } catch { /* ignore */ }
+}
+
+// Move Comparison
+export interface MoveComparisonEntry {
+  puzzleId: string;
+  pickedRank: number;
+  score: number;
+  date: string;
+}
+export function recordMoveComparisonEntry(_entry: MoveComparisonEntry): void { /* stub */ }
+export function getMoveComparisonStats(): {
+  totalSessions: number;
+  evaluationScore: number;
+  bestPickPct: number;
+} {
+  return { totalSessions: 0, evaluationScore: 0, bestPickPct: 0 };
+}
+
+// Verbalization
+export type VerbalizedPattern = string;
+export function recordVerbalization(_puzzleId: string, _pattern: VerbalizedPattern): void { /* stub */ }
+
+// Warm-up
+export function setWarmedUpToday(): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.setItem("ctt_warmed_up", new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+}

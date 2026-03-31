@@ -337,7 +337,7 @@ export default function OnboardingModal() {
       }
 
       setFetchedRating(platformRating);
-      setFetchedRatings({ bullet: allRatings.bullet, blitz: allRatings.blitz, rapid: allRatings.rapid });
+      setFetchedRatings({ bullet: allRatings!.bullet, blitz: allRatings!.blitz, rapid: allRatings!.rapid });
       setConnectedUsername(uname);
       setConnectedPlatform(platform);
       setConnected(true);

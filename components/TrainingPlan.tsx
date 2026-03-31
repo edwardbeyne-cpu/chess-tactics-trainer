@@ -100,11 +100,6 @@ interface PlatformRatings {
   main: TimeControl;
 }
 
-interface ChesscomProfile {
-  username: string;
-  avatar: string | null;
-}
-
 interface TrainingTask {
   id: string;
   priority: number;
@@ -154,23 +149,6 @@ function getTrainingDaysCount(): number {
   }
 }
 
-function getTodayPatternProgress(pattern: string): number {
-  // Count SM2 attempts today for a given pattern
-  if (typeof window === "undefined") return 0;
-  try {
-    const today = getTodayKey();
-    const attempts = JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as Array<{
-      theme?: string; timestamp: string;
-    }>;
-    return attempts.filter(
-      (a) => a.theme?.toUpperCase() === pattern.toUpperCase() &&
-        a.timestamp.slice(0, 10) === today
-    ).length;
-  } catch {
-    return 0;
-  }
-}
-
 function getWeekPatternProgress(pattern: string): number {
   if (typeof window === "undefined") return 0;
   try {
@@ -195,27 +173,6 @@ function getWeekPatternProgress(pattern: string): number {
   }
 }
 
-function getWeekReviewCleared(): number {
-  if (typeof window === "undefined") return 0;
-  try {
-    const now = new Date();
-    const day = now.getDay();
-    const daysToMonday = day === 0 ? 6 : day - 1;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - daysToMonday);
-    monday.setHours(0, 0, 0, 0);
-    const mondayStr = monday.toISOString().slice(0, 10);
-
-    const attempts = JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as Array<{
-      timestamp: string;
-    }>;
-    // Review cleared = all SM2 attempts this week (rough proxy)
-    return attempts.filter((a) => a.timestamp.slice(0, 10) >= mondayStr).length;
-  } catch {
-    return 0;
-  }
-}
-
 function formatDate(dateStr: string): string {
   try {
     const d = new Date(dateStr + "T00:00:00");
@@ -225,8 +182,30 @@ function formatDate(dateStr: string): string {
   }
 }
 
+// ── Check if trained today ─────────────────────────────────────────────────
+function hasTrainedToday(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const today = getTodayKey();
+    const log = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || "[]") as string[];
+    return log.includes(today);
+  } catch {
+    return false;
+  }
+}
+
 // ── Progress Bar ───────────────────────────────────────────────────────────
-function ProgressBar({ value, max, color = "#4ade80" }: { value: number; max: number; color?: string }) {
+function ProgressBar({
+  value,
+  max,
+  color = "#4ade80",
+  pulsing = false,
+}: {
+  value: number;
+  max: number;
+  color?: string;
+  pulsing?: boolean;
+}) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div style={{
@@ -243,6 +222,7 @@ function ProgressBar({ value, max, color = "#4ade80" }: { value: number; max: nu
         borderRadius: "999px",
         width: `${pct}%`,
         transition: "width 0.4s ease",
+        animation: pulsing ? "pulsebar 1.4s ease-in-out infinite" : undefined,
       }} />
     </div>
   );
@@ -447,6 +427,7 @@ export default function TrainingPlan() {
   const [reviewDueCount, setReviewDueCount] = useState(0);
   const [totalPuzzlesSolved, setTotalPuzzlesSolved] = useState(0);
   const [goal, setGoal] = useState<string | null>(null);
+  const [trainedToday, setTrainedToday] = useState(false);
 
   // Weekly plan tasks
   const [tasks, setTasks] = useState<TrainingTask[]>([]);
@@ -478,6 +459,7 @@ export default function TrainingPlan() {
     setTrainingStartDate(startDate);
     setTrainingDays(daysCount);
     setGoal(userGoal);
+    setTrainedToday(hasTrainedToday());
 
     // Build training tasks
     const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, dueIds.length, userGoal ?? "structured_plan");
@@ -519,6 +501,13 @@ export default function TrainingPlan() {
     .slice(0, 3);
   const dominantMode = getDominantFailureMode();
 
+  // Diagnosis urgency: how close to 20 puzzles
+  const diagnosisPuzzlesLeft = Math.max(0, 20 - totalPuzzlesSolved);
+  const isNearDiagnosis = !hasDiagnosis && diagnosisPuzzlesLeft <= 5 && diagnosisPuzzlesLeft > 0;
+  const diagnosisCTA = isNearDiagnosis
+    ? `Almost there — ${diagnosisPuzzlesLeft} more puzzle${diagnosisPuzzlesLeft === 1 ? "" : "s"} to unlock your diagnosis. Start now →`
+    : "Start Diagnosis →";
+
   // ── Start Today routing ───────────────────────────────────────────────────
   function handleStartToday() {
     router.push("/app/training");
@@ -552,522 +541,543 @@ export default function TrainingPlan() {
     loadData();
   }
 
+  // ── Section header style ──────────────────────────────────────────────────
+  const sectionHeaderStyle: React.CSSProperties = {
+    color: "#e2e8f0",
+    fontSize: "0.82rem",
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    marginBottom: "1rem",
+  };
+
   return (
-    <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <>
+      {/* Pulse animation for near-diagnosis progress bar */}
+      <style>{`
+        @keyframes pulsebar {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.55; }
+        }
+      `}</style>
 
-      {/* ── Section 1: Where You Are ────────────────────────────────────────── */}
-      <div style={{
-        backgroundColor: "#13132b",
-        border: "1px solid #2e3a5c",
-        borderRadius: "16px",
-        padding: "1.5rem",
-      }}>
-        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-          📍 Where You Are
-        </div>
+      <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-        {username && platformRatings ? (
-          <>
-            {/* Profile row */}
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
-              {chesscomAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={chesscomAvatar}
-                  alt="Chess.com avatar"
-                  style={{ width: "52px", height: "52px", borderRadius: "50%", border: "2px solid #4ade80", objectFit: "cover" }}
-                />
-              ) : (
-                <div style={{
-                  width: "52px", height: "52px", borderRadius: "50%",
-                  backgroundColor: "#0d2a1a", border: "2px solid #4ade80",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "#4ade80", fontSize: "1.4rem",
-                }}>
-                  ♟
-                </div>
-              )}
-              <div>
-                <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem" }}>{username}</div>
-                <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
-                  {platform === "chesscom" ? "Chess.com" : "Lichess"}
-                  {trainingStartDate && ` · Training since ${formatDate(trainingStartDate)}`}
-                </div>
-              </div>
-            </div>
-
-            {/* Ratings grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
-              {(["bullet", "blitz", "rapid"] as TimeControl[]).map((tc) => {
-                const rating = platformRatings[tc];
-                const isMain = platformRatings.main === tc;
-                return (
-                  <div key={tc} style={{
-                    backgroundColor: isMain ? "#0d2a1a" : "#0d1621",
-                    border: `1px solid ${isMain ? "#4ade80" : "#1e3a5c"}`,
-                    borderRadius: "10px",
-                    padding: "0.75rem",
-                    textAlign: "center",
-                    position: "relative",
-                  }}>
-                    {isMain && (
-                      <div style={{
-                        position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)",
-                        backgroundColor: "#4ade80", color: "#0f1a0a", fontSize: "0.6rem",
-                        fontWeight: "bold", padding: "1px 6px", borderRadius: "999px",
-                      }}>
-                        MAIN
-                      </div>
-                    )}
-                    <div style={{ color: "#64748b", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-                      {tc === "bullet" ? "⚡" : tc === "blitz" ? "⏱" : "🕐"} {tc}
-                    </div>
-                    <div style={{ color: rating ? "#e2e8f0" : "#334155", fontSize: "1.4rem", fontWeight: "bold" }}>
-                      {rating ?? "—"}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Tactics rating row */}
-            <div style={{
-              backgroundColor: "#0a1520",
-              border: "1px solid #1e3a5c",
-              borderRadius: "10px",
-              padding: "0.75rem 1rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-              <div>
-                <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
-                <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
-              </div>
-              {ratingDelta !== 0 && (
-                <div style={{
-                  color: ratingDelta > 0 ? "#4ade80" : "#ef4444",
-                  fontSize: "0.9rem",
-                  fontWeight: "bold",
-                }}>
-                  {ratingDelta > 0 ? "+" : ""}{ratingDelta} all-time
-                </div>
-              )}
-            </div>
-            {/* Sprint 31: Pattern Mastery Tier breakdown */}
-            <PatternMasteryTierDisplay />
-          </>
-        ) : (
-          <>
-            {/* No Chess.com connected */}
-            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-              <div style={{
-                width: "52px", height: "52px", borderRadius: "50%", flexShrink: 0,
-                backgroundColor: "#0d1621", border: "2px dashed #2e3a5c",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#334155", fontSize: "1.4rem",
-              }}>
-                ♟
-              </div>
-              <div>
-                <div style={{ color: "#94a3b8", fontSize: "0.92rem", marginBottom: "0.5rem" }}>
-                  Connect Chess.com to see your full profile with Bullet, Blitz, and Rapid ratings.
-                </div>
-                <button
-                  onClick={() => setShowConnectModal(true)}
-                  style={{
-                    backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
-                    borderRadius: "8px", color: "#4ade80", fontSize: "0.85rem",
-                    fontWeight: "bold", padding: "0.5rem 1rem", cursor: "pointer",
-                  }}
-                >
-                  Connect Chess.com →
-                </button>
-              </div>
-            </div>
-
-            {/* Still show tactics rating */}
-            <div style={{
-              backgroundColor: "#0a1520",
-              border: "1px solid #1e3a5c",
-              borderRadius: "10px",
-              padding: "0.75rem 1rem",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-              <div>
-                <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
-                <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
-              </div>
-              {trainingStartDate && (
-                <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "right" }}>
-                  Training since<br />{formatDate(trainingStartDate)}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Section 2: Your Diagnosis ───────────────────────────────────────── */}
-      <div style={{
-        backgroundColor: "#13132b",
-        border: "1px solid #2e3a5c",
-        borderRadius: "16px",
-        padding: "1.5rem",
-      }}>
-        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-          🔍 Your Diagnosis
-        </div>
-
-        {hasDiagnosis ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {/* Weaknesses */}
-            <div>
-              <div style={{ color: "#94a3b8", fontSize: "0.8rem", marginBottom: "0.5rem" }}>You struggle with:</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                {top3Weaknesses.map((s) => (
-                  <div key={s.theme} style={{
-                    display: "flex", alignItems: "center", gap: "0.75rem",
-                    backgroundColor: "#0f0f1a", borderRadius: "8px", padding: "0.5rem 0.75rem",
-                  }}>
-                    <span style={{ color: "#ef4444", fontSize: "0.75rem", flexShrink: 0 }}>⚠</span>
-                    <span style={{ color: "#e2e8f0", fontSize: "0.85rem", flex: 1 }}>
-                      {s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase().replace(/_/g, " ")}
-                    </span>
-                    <span style={{
-                      color: s.solveRate >= 0.6 ? "#f59e0b" : "#ef4444",
-                      fontSize: "0.82rem",
-                      fontWeight: "bold",
-                    }}>
-                      {Math.round(s.solveRate * 100)}% accuracy
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Failure mode */}
-            {dominantMode && (
-              <div style={{
-                backgroundColor: "#1a1200", border: "1px solid #4a3000",
-                borderRadius: "8px", padding: "0.75rem",
-              }}>
-                <div style={{ color: "#f59e0b", fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
-                  How you fail:
-                </div>
-                <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                  {dominantMode === "missed" && `You often don't see the tactic (${Math.round((failureStats.missed / failureStats.total) * 100)}% of failures)`}
-                  {dominantMode === "miscalculated" && `You spot it but miscalculate (${Math.round((failureStats.miscalculated / failureStats.total) * 100)}% of failures)`}
-                  {dominantMode === "rushed" && `You move too fast (${Math.round((failureStats.rushed / failureStats.total) * 100)}% of failures)`}
-                  {dominantMode === "unsure" && `You often feel uncertain (${Math.round((failureStats.unsure / failureStats.total) * 100)}% of failures)`}
-                </div>
-              </div>
-            )}
-
-            {/* Opportunity */}
-            {top3Weaknesses[0] && (
-              <div style={{
-                backgroundColor: "#0d2a1a", border: "1px solid #1a4a2a",
-                borderRadius: "8px", padding: "0.75rem",
-              }}>
-                <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
-                  Your biggest gain:
-                </div>
-                <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                  Improving {top3Weaknesses[0].theme.toLowerCase()} awareness could save ~{Math.ceil((1 - top3Weaknesses[0].solveRate) * 5)} rating points per 10 games
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            {!username ? (
-              <>
-                <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "0.75rem" }}>
-                  Connect Chess.com to get your personalized weakness diagnosis.
-                </div>
-                <button
-                  onClick={() => setShowConnectModal(true)}
-                  style={{
-                    backgroundColor: "transparent", border: "1px solid #2e3a5c",
-                    borderRadius: "8px", color: "#64748b", fontSize: "0.85rem",
-                    padding: "0.5rem 1rem", cursor: "pointer",
-                  }}
-                >
-                  Connect Chess.com →
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.4rem" }}>
-                  Start here — run your diagnosis
-                </div>
-                <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
-                  Solve 20 puzzles and we'll identify your weakest patterns and build your personalized training plan.
-                </div>
-                <div style={{
-                  backgroundColor: "#0d1621", borderRadius: "999px", height: "6px",
-                  overflow: "hidden", border: "1px solid #1e2a3a", margin: "0 auto 0.5rem", maxWidth: "200px",
-                }}>
-                  <div style={{
-                    height: "100%", backgroundColor: "#3b82f6", borderRadius: "999px",
-                    width: `${Math.min(100, Math.round((totalPuzzlesSolved / 20) * 100))}%`,
-                    transition: "width 0.4s",
-                  }} />
-                </div>
-                <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "1rem" }}>
-                  {totalPuzzlesSolved}/20 puzzles completed
-                </div>
-                <a href="/app/puzzles" style={{
-                  display: "inline-block",
-                  backgroundColor: "#4ade80", color: "#0a1520",
-                  fontWeight: 700, fontSize: "0.88rem",
-                  padding: "0.5rem 1.25rem", borderRadius: "8px",
-                  textDecoration: "none",
-                }}>
-                  Start Diagnosis →
-                </a>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Section 3: Your Plan ────────────────────────────────────────────── */}
-      <div style={{
-        backgroundColor: "#13132b",
-        border: "1px solid #2e3a5c",
-        borderRadius: "16px",
-        padding: "1.5rem",
-      }}>
+        {/* ── Section 1: This Week's Plan ───────────────────────────────────── */}
         <div style={{
-          display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem",
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
         }}>
-          <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
-            📋 This Week&apos;s Plan
-          </div>
-          <div style={{ color: "#334155", fontSize: "0.72rem" }}>Resets Monday</div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.25rem" }}>
-          {tasks.map((task) => {
-            const done = task.progress >= task.target;
-            return (
-              <div key={task.id} style={{
-                backgroundColor: done ? "#0d2a1a" : "#0d1621",
-                border: `1px solid ${done ? "#1a4a2a" : "#1e3a5c"}`,
-                borderRadius: "12px",
-                padding: "1rem",
-              }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-                  <div>
-                    <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.2rem" }}>
-                      Priority {task.priority}
-                    </div>
-                    <div style={{ color: done ? "#4ade80" : "#e2e8f0", fontWeight: "bold", fontSize: "0.92rem" }}>
-                      {done ? "✓ " : ""}{task.label}
-                    </div>
-                    <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.2rem" }}>
-                      {task.description}
-                    </div>
-                  </div>
-                  {!done && (
-                    <button
-                      onClick={() => router.push(task.actionHref)}
-                      style={{
-                        backgroundColor: "transparent", border: "1px solid #2e3a5c",
-                        borderRadius: "6px", color: "#94a3b8", fontSize: "0.72rem",
-                        padding: "0.25rem 0.6rem", cursor: "pointer", flexShrink: 0,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {task.actionLabel}
-                    </button>
-                  )}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                  <ProgressBar value={task.progress} max={task.target} color="#3b82f6" />
-                  <span style={{ color: done ? "#4ade80" : "#64748b", fontSize: "0.78rem", whiteSpace: "nowrap", fontWeight: done ? "bold" : "normal" }}>
-                    {Math.min(task.progress, task.target)}/{task.target}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Daily target + CTA */}
-        <div style={{
-          borderTop: "1px solid #1e2a3a",
-          paddingTop: "1rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.75rem",
-        }}>
-          <div style={{ display: "flex", gap: "1.5rem" }}>
-            <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-              <span style={{ color: "#94a3b8" }}>Weekly goal:</span> {tasks.reduce((sum, t) => sum + t.target, 0)} puzzles
-            </div>
-            <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-              <span style={{ color: "#94a3b8" }}>Daily pace:</span> ~{Math.ceil(tasks.reduce((sum, t) => sum + Math.max(0, t.target - t.progress), 0) / 7)} puzzles/day
-            </div>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem",
+          }}>
+            <div style={sectionHeaderStyle}>📋 This Week&apos;s Plan</div>
+            <div style={{ color: "#334155", fontSize: "0.72rem" }}>Resets Monday</div>
           </div>
 
-          {allTasksDone ? (
-            <div style={{
-              backgroundColor: "#0d2a1a", border: "1px solid #4ade80",
-              borderRadius: "10px", padding: "0.85rem", textAlign: "center",
-              color: "#4ade80", fontWeight: "bold", fontSize: "0.95rem",
-            }}>
-              🎉 Great work today! Come back tomorrow.
-            </div>
-          ) : (
-            <button
-              onClick={handleStartToday}
-              style={{
-                backgroundColor: "#4ade80", color: "#0f1a0a",
-                border: "none", borderRadius: "10px", padding: "0.9rem",
-                fontSize: "0.95rem", fontWeight: "bold", cursor: "pointer",
-                width: "100%",
-              }}
-            >
-              Start Training →
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ── Section 4: It's Working ─────────────────────────────────────────── */}
-      <div style={{
-        backgroundColor: "#13132b",
-        border: "1px solid #2e3a5c",
-        borderRadius: "16px",
-        padding: "1.5rem",
-      }}>
-        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-          📈 It&apos;s Working
-        </div>
-
-        {hasEnoughData ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {/* Rating improvement */}
-            <div style={{
-              backgroundColor: "#0d2a1a", border: "1px solid #1a4a2a",
-              borderRadius: "10px", padding: "1rem",
-            }}>
-              <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
-                Tactics Rating
-              </div>
-              <div style={{ color: "#e2e8f0", fontSize: "1.4rem", fontWeight: "bold" }}>
-                {tacticsRatingStart} → {tacticsRating}
-                {ratingDelta !== 0 && (
-                  <span style={{ color: ratingDelta > 0 ? "#4ade80" : "#ef4444", fontSize: "1rem", marginLeft: "0.5rem" }}>
-                    ({ratingDelta > 0 ? "+" : ""}{ratingDelta} in {trainingDays} days)
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Biggest improvement */}
-            {top3Weaknesses.length > 0 && (() => {
-              const best = patternStats
-                .filter((s) => s.totalAttempts >= 10 && s.solveRate >= 0.6)
-                .sort((a, b) => b.solveRate - a.solveRate)[0];
-              if (!best) return null;
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1.25rem" }}>
+            {tasks.map((task) => {
+              const done = task.progress >= task.target;
+              // Sprint 33: "Train →" for Priority 1 and 2, route to /app/training
+              const isTrainTask = task.priority <= 2;
+              const buttonLabel = isTrainTask ? "Train →" : task.actionLabel;
+              const buttonHref = isTrainTask ? "/app/training" : task.actionHref;
               return (
-                <div style={{
-                  backgroundColor: "#0a1520", border: "1px solid #1e3a5c",
-                  borderRadius: "10px", padding: "0.75rem 1rem",
+                <div key={task.id} style={{
+                  backgroundColor: done ? "#0d2a1a" : "#0d1621",
+                  border: `1px solid ${done ? "#1a4a2a" : "#1e3a5c"}`,
+                  borderRadius: "12px",
+                  padding: "1rem",
                 }}>
-                  <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                    <span style={{ color: "#4ade80", fontWeight: "bold" }}>
-                      {best.theme.charAt(0).toUpperCase() + best.theme.slice(1).toLowerCase()} accuracy:
-                    </span>{" "}
-                    {Math.round(best.solveRate * 100)}% — strong and improving
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <div>
+                      <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.2rem" }}>
+                        Priority {task.priority}
+                      </div>
+                      <div style={{ color: done ? "#4ade80" : "#e2e8f0", fontWeight: "bold", fontSize: "0.92rem" }}>
+                        {done ? "✓ " : ""}{task.label}
+                      </div>
+                      <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                        {task.description}
+                      </div>
+                    </div>
+                    {!done && (
+                      <button
+                        onClick={() => router.push(buttonHref)}
+                        style={{
+                          backgroundColor: "transparent", border: "1px solid #2e3a5c",
+                          borderRadius: "6px", color: "#94a3b8", fontSize: "0.72rem",
+                          padding: "0.25rem 0.6rem", cursor: "pointer", flexShrink: 0,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {buttonLabel}
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <ProgressBar value={task.progress} max={task.target} color="#3b82f6" />
+                    <span style={{ color: done ? "#4ade80" : "#64748b", fontSize: "0.78rem", whiteSpace: "nowrap", fontWeight: done ? "bold" : "normal" }}>
+                      {Math.min(task.progress, task.target)}/{task.target}
+                    </span>
                   </div>
                 </div>
               );
-            })()}
+            })}
+          </div>
 
-            {/* Streak */}
-            {streakDays > 0 && (
-              <div style={{
-                backgroundColor: "#1a1200", border: "1px solid #4a3000",
-                borderRadius: "10px", padding: "0.75rem 1rem",
-                color: "#f59e0b", fontSize: "0.88rem", fontWeight: "bold",
-              }}>
-                🔥 You&apos;ve trained {streakDays} day{streakDays !== 1 ? "s" : ""} in a row
+          {/* Daily target + CTA */}
+          <div style={{
+            borderTop: "1px solid #1e2a3a",
+            paddingTop: "1rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+          }}>
+            <div style={{ display: "flex", gap: "1.5rem" }}>
+              <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                <span style={{ color: "#94a3b8" }}>Weekly goal:</span> {tasks.reduce((sum, t) => sum + t.target, 0)} puzzles
               </div>
-            )}
+              <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                <span style={{ color: "#94a3b8" }}>Daily pace:</span> ~{Math.ceil(tasks.reduce((sum, t) => sum + Math.max(0, t.target - t.progress), 0) / 7)} puzzles/day
+              </div>
+            </div>
 
-            {/* ELO estimate */}
-            {ratingDelta > 50 && (
+            {allTasksDone ? (
               <div style={{
-                backgroundColor: "#0a1520", border: "1px solid #1e3a5c",
-                borderRadius: "10px", padding: "0.75rem 1rem",
-                color: "#64748b", fontSize: "0.82rem",
+                backgroundColor: "#0d2a1a", border: "1px solid #4ade80",
+                borderRadius: "10px", padding: "0.85rem", textAlign: "center",
+                color: "#4ade80", fontWeight: "bold", fontSize: "0.95rem",
               }}>
-                Estimated Chess.com impact: ~+{Math.round(ratingDelta * 0.15)} ELO
-                <span style={{ color: "#334155", fontSize: "0.75rem" }}> (based on tactics improvement)</span>
+                🎉 Great work today! Come back tomorrow.
               </div>
+            ) : (
+              <button
+                onClick={handleStartToday}
+                style={{
+                  backgroundColor: "#4ade80", color: "#0f1a0a",
+                  border: "none", borderRadius: "10px", padding: "0.9rem",
+                  fontSize: "0.95rem", fontWeight: "bold", cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                Start Training →
+              </button>
             )}
           </div>
-        ) : (
-          <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
-            <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "0.75rem" }}>
-              Keep training — your progress report unlocks after 7 days.
-            </div>
-            <div style={{
-              backgroundColor: "#0d1621", borderRadius: "999px", height: "6px",
-              overflow: "hidden", border: "1px solid #1e2a3a", margin: "0 auto 0.5rem", maxWidth: "160px",
-            }}>
+        </div>
+
+        {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
+        <div style={{
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
+        }}>
+          <div style={sectionHeaderStyle}>📍 Where You Are</div>
+
+          {username && platformRatings ? (
+            <>
+              {/* Profile row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
+                {chesscomAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={chesscomAvatar}
+                    alt="Chess.com avatar"
+                    style={{ width: "52px", height: "52px", borderRadius: "50%", border: "2px solid #4ade80", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div style={{
+                    width: "52px", height: "52px", borderRadius: "50%",
+                    backgroundColor: "#0d2a1a", border: "2px solid #4ade80",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#4ade80", fontSize: "1.4rem",
+                  }}>
+                    ♟
+                  </div>
+                )}
+                <div>
+                  <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem" }}>{username}</div>
+                  <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
+                    {platform === "chesscom" ? "Chess.com" : "Lichess"}
+                    {trainingStartDate && ` · Training since ${formatDate(trainingStartDate)}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Ratings grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
+                {(["bullet", "blitz", "rapid"] as TimeControl[]).map((tc) => {
+                  const rating = platformRatings[tc];
+                  const isMain = platformRatings.main === tc;
+                  return (
+                    <div key={tc} style={{
+                      backgroundColor: isMain ? "#0d2a1a" : "#0d1621",
+                      border: `1px solid ${isMain ? "#4ade80" : "#1e3a5c"}`,
+                      borderRadius: "10px",
+                      padding: "0.75rem",
+                      textAlign: "center",
+                      position: "relative",
+                    }}>
+                      {isMain && (
+                        <div style={{
+                          position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)",
+                          backgroundColor: "#4ade80", color: "#0f1a0a", fontSize: "0.6rem",
+                          fontWeight: "bold", padding: "1px 6px", borderRadius: "999px",
+                        }}>
+                          MAIN
+                        </div>
+                      )}
+                      <div style={{ color: "#64748b", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+                        {tc === "bullet" ? "⚡" : tc === "blitz" ? "⏱" : "🕐"} {tc}
+                      </div>
+                      <div style={{ color: rating ? "#e2e8f0" : "#334155", fontSize: "1.4rem", fontWeight: "bold" }}>
+                        {rating ?? "—"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tactics rating row */}
               <div style={{
-                height: "100%", backgroundColor: "#f59e0b", borderRadius: "999px",
-                width: `${Math.round((trainingDays / 7) * 100)}%`,
-                transition: "width 0.4s",
-              }} />
+                backgroundColor: "#0a1520",
+                border: "1px solid #1e3a5c",
+                borderRadius: "10px",
+                padding: "0.75rem 1rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
+                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
+                </div>
+                {ratingDelta !== 0 && (
+                  <div style={{
+                    color: ratingDelta > 0 ? "#4ade80" : "#ef4444",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold",
+                  }}>
+                    {ratingDelta > 0 ? "+" : ""}{ratingDelta} all-time
+                  </div>
+                )}
+              </div>
+              {/* Sprint 31: Pattern Mastery Tier breakdown */}
+              <PatternMasteryTierDisplay />
+            </>
+          ) : (
+            <>
+              {/* No Chess.com connected */}
+              <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div style={{
+                  width: "52px", height: "52px", borderRadius: "50%", flexShrink: 0,
+                  backgroundColor: "#0d1621", border: "2px dashed #2e3a5c",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#334155", fontSize: "1.4rem",
+                }}>
+                  ♟
+                </div>
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.92rem", marginBottom: "0.5rem" }}>
+                    Connect Chess.com to see your full profile with Bullet, Blitz, and Rapid ratings.
+                  </div>
+                  <button
+                    onClick={() => setShowConnectModal(true)}
+                    style={{
+                      backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
+                      borderRadius: "8px", color: "#4ade80", fontSize: "0.85rem",
+                      fontWeight: "bold", padding: "0.5rem 1rem", cursor: "pointer",
+                    }}
+                  >
+                    Connect Chess.com →
+                  </button>
+                </div>
+              </div>
+
+              {/* Still show tactics rating */}
+              <div style={{
+                backgroundColor: "#0a1520",
+                border: "1px solid #1e3a5c",
+                borderRadius: "10px",
+                padding: "0.75rem 1rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
+                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
+                </div>
+                {trainingStartDate && (
+                  <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "right" }}>
+                    Training since<br />{formatDate(trainingStartDate)}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Section 3: Your Diagnosis ─────────────────────────────────────── */}
+        <div style={{
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
+        }}>
+          <div style={sectionHeaderStyle}>🔍 Your Diagnosis</div>
+
+          {hasDiagnosis ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* Weaknesses */}
+              <div>
+                <div style={{ color: "#94a3b8", fontSize: "0.8rem", marginBottom: "0.5rem" }}>You struggle with:</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {top3Weaknesses.map((s) => (
+                    <div key={s.theme} style={{
+                      display: "flex", alignItems: "center", gap: "0.75rem",
+                      backgroundColor: "#0f0f1a", borderRadius: "8px", padding: "0.5rem 0.75rem",
+                    }}>
+                      <span style={{ color: "#ef4444", fontSize: "0.75rem", flexShrink: 0 }}>⚠</span>
+                      <span style={{ color: "#e2e8f0", fontSize: "0.85rem", flex: 1 }}>
+                        {s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase().replace(/_/g, " ")}
+                      </span>
+                      <span style={{
+                        color: s.solveRate >= 0.6 ? "#f59e0b" : "#ef4444",
+                        fontSize: "0.82rem",
+                        fontWeight: "bold",
+                      }}>
+                        {Math.round(s.solveRate * 100)}% accuracy
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Failure mode */}
+              {dominantMode && (
+                <div style={{
+                  backgroundColor: "#1a1200", border: "1px solid #4a3000",
+                  borderRadius: "8px", padding: "0.75rem",
+                }}>
+                  <div style={{ color: "#f59e0b", fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
+                    How you fail:
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                    {dominantMode === "missed" && `You often don't see the tactic (${Math.round((failureStats.missed / failureStats.total) * 100)}% of failures)`}
+                    {dominantMode === "miscalculated" && `You spot it but miscalculate (${Math.round((failureStats.miscalculated / failureStats.total) * 100)}% of failures)`}
+                    {dominantMode === "rushed" && `You move too fast (${Math.round((failureStats.rushed / failureStats.total) * 100)}% of failures)`}
+                    {dominantMode === "unsure" && `You often feel uncertain (${Math.round((failureStats.unsure / failureStats.total) * 100)}% of failures)`}
+                  </div>
+                </div>
+              )}
+
+              {/* Opportunity */}
+              {top3Weaknesses[0] && (
+                <div style={{
+                  backgroundColor: "#0d2a1a", border: "1px solid #1a4a2a",
+                  borderRadius: "8px", padding: "0.75rem",
+                }}>
+                  <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
+                    Your biggest gain:
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                    Improving {top3Weaknesses[0].theme.toLowerCase()} awareness could save ~{Math.ceil((1 - top3Weaknesses[0].solveRate) * 5)} rating points per 10 games
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-              Day {trainingDays} of 7
+          ) : (
+            <div style={{ textAlign: "center", padding: "1rem 0" }}>
+              {!username ? (
+                <>
+                  <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "0.75rem" }}>
+                    Connect Chess.com to get your personalized weakness diagnosis.
+                  </div>
+                  <button
+                    onClick={() => setShowConnectModal(true)}
+                    style={{
+                      backgroundColor: "transparent", border: "1px solid #2e3a5c",
+                      borderRadius: "8px", color: "#64748b", fontSize: "0.85rem",
+                      padding: "0.5rem 1rem", cursor: "pointer",
+                    }}
+                  >
+                    Connect Chess.com →
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 600, marginBottom: "0.4rem" }}>
+                    Start here — run your diagnosis
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginBottom: "0.75rem" }}>
+                    Solve 20 puzzles and we&apos;ll identify your weakest patterns and build your personalized training plan.
+                  </div>
+                  {/* Sprint 33: pulsing progress bar when close to threshold */}
+                  <div style={{
+                    backgroundColor: "#0d1621", borderRadius: "999px", height: "6px",
+                    overflow: "hidden", border: "1px solid #1e2a3a", margin: "0 auto 0.5rem", maxWidth: "200px",
+                  }}>
+                    <div style={{
+                      height: "100%",
+                      backgroundColor: isNearDiagnosis ? "#f59e0b" : "#3b82f6",
+                      borderRadius: "999px",
+                      width: `${Math.min(100, Math.round((totalPuzzlesSolved / 20) * 100))}%`,
+                      transition: "width 0.4s",
+                      animation: isNearDiagnosis ? "pulsebar 1.4s ease-in-out infinite" : undefined,
+                    }} />
+                  </div>
+                  <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "1rem" }}>
+                    {totalPuzzlesSolved}/20 puzzles completed
+                  </div>
+                  <a href="/app/puzzles" style={{
+                    display: "inline-block",
+                    backgroundColor: "#4ade80", color: "#0a1520",
+                    fontWeight: 700, fontSize: "0.88rem",
+                    padding: "0.5rem 1.25rem", borderRadius: "8px",
+                    textDecoration: "none",
+                  }}>
+                    {diagnosisCTA}
+                  </a>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 4: It's Working ───────────────────────────────────────── */}
+        <div style={{
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
+        }}>
+          <div style={sectionHeaderStyle}>📈 It&apos;s Working</div>
+
+          {hasEnoughData ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {/* Rating improvement */}
+              <div style={{
+                backgroundColor: "#0d2a1a", border: "1px solid #1a4a2a",
+                borderRadius: "10px", padding: "1rem",
+              }}>
+                <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.85rem", marginBottom: "0.25rem" }}>
+                  Tactics Rating
+                </div>
+                <div style={{ color: "#e2e8f0", fontSize: "1.4rem", fontWeight: "bold" }}>
+                  {tacticsRatingStart} → {tacticsRating}
+                  {ratingDelta !== 0 && (
+                    <span style={{ color: ratingDelta > 0 ? "#4ade80" : "#ef4444", fontSize: "1rem", marginLeft: "0.5rem" }}>
+                      ({ratingDelta > 0 ? "+" : ""}{ratingDelta} in {trainingDays} days)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Biggest improvement */}
+              {top3Weaknesses.length > 0 && (() => {
+                const best = patternStats
+                  .filter((s) => s.totalAttempts >= 10 && s.solveRate >= 0.6)
+                  .sort((a, b) => b.solveRate - a.solveRate)[0];
+                if (!best) return null;
+                return (
+                  <div style={{
+                    backgroundColor: "#0a1520", border: "1px solid #1e3a5c",
+                    borderRadius: "10px", padding: "0.75rem 1rem",
+                  }}>
+                    <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                      <span style={{ color: "#4ade80", fontWeight: "bold" }}>
+                        {best.theme.charAt(0).toUpperCase() + best.theme.slice(1).toLowerCase()} accuracy:
+                      </span>{" "}
+                      {Math.round(best.solveRate * 100)}% — strong and improving
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Streak */}
+              {streakDays > 0 && (
+                <div style={{
+                  backgroundColor: "#1a1200", border: "1px solid #4a3000",
+                  borderRadius: "10px", padding: "0.75rem 1rem",
+                  color: "#f59e0b", fontSize: "0.88rem", fontWeight: "bold",
+                }}>
+                  🔥 You&apos;ve trained {streakDays} day{streakDays !== 1 ? "s" : ""} in a row
+                </div>
+              )}
+
+              {/* ELO estimate */}
+              {ratingDelta > 50 && (
+                <div style={{
+                  backgroundColor: "#0a1520", border: "1px solid #1e3a5c",
+                  borderRadius: "10px", padding: "0.75rem 1rem",
+                  color: "#64748b", fontSize: "0.82rem",
+                }}>
+                  Estimated Chess.com impact: ~+{Math.round(ratingDelta * 0.15)} ELO
+                  <span style={{ color: "#334155", fontSize: "0.75rem" }}> (based on tactics improvement)</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+              {/* Sprint 33: warmth copy based on trained today */}
+              <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "0.75rem" }}>
+                {trainedToday
+                  ? "You trained today ✅ — come back tomorrow to build your streak."
+                  : "Train today to keep your streak going 🔥"}
+              </div>
+              <div style={{
+                backgroundColor: "#0d1621", borderRadius: "999px", height: "6px",
+                overflow: "hidden", border: "1px solid #1e2a3a", margin: "0 auto 0.5rem", maxWidth: "160px",
+              }}>
+                <div style={{
+                  height: "100%", backgroundColor: "#f59e0b", borderRadius: "999px",
+                  width: `${Math.round((trainingDays / 7) * 100)}%`,
+                  transition: "width 0.4s",
+                }} />
+              </div>
+              <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                Day {trainingDays} of 7
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 5: Next Milestone ─────────────────────────────────────── */}
+        <div style={{
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
+          marginBottom: "0.5rem",
+        }}>
+          <div style={sectionHeaderStyle}>🏁 Next Milestone</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+            <span style={{ fontSize: "1.5rem" }}>{milestone.emoji}</span>
+            <div>
+              <div style={{ color: "#e2e8f0", fontSize: "0.92rem" }}>{milestone.text}</div>
+              {milestone.text.includes("Tactical DNA") && (
+                <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
+                  Your Tactical DNA Profile maps your strengths and weaknesses across all 24 patterns — showing you exactly which tactics you&apos;re sharp on and which are costing you rating points.
+                </div>
+              )}
             </div>
           </div>
+        </div>
+
+        {/* Connect modal */}
+        {showConnectModal && (
+          <ConnectModal
+            onClose={() => setShowConnectModal(false)}
+            onConnected={handleConnected}
+          />
         )}
       </div>
-
-      {/* ── Section 5: Next Milestone ───────────────────────────────────────── */}
-      <div style={{
-        backgroundColor: "#13132b",
-        border: "1px solid #2e3a5c",
-        borderRadius: "16px",
-        padding: "1.5rem",
-        marginBottom: "0.5rem",
-      }}>
-        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-          🏁 Next Milestone
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-          <span style={{ fontSize: "1.5rem" }}>{milestone.emoji}</span>
-          <div>
-            <div style={{ color: "#e2e8f0", fontSize: "0.92rem" }}>{milestone.text}</div>
-            {milestone.text.includes("Tactical DNA") && (
-              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
-                Your Tactical DNA Profile maps your strengths and weaknesses across all 24 patterns — showing you exactly which tactics you're sharp on and which are costing you rating points.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Connect modal */}
-      {showConnectModal && (
-        <ConnectModal
-          onClose={() => setShowConnectModal(false)}
-          onConnected={handleConnected}
-        />
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1085,20 +1095,16 @@ function buildTrainingTasks(
   const weakest = statsWithData.sort((a, b) => a.solveRate - b.solveRate)[0];
 
   let priority1Theme = "FORK";
-  let priority1Slug = "fork";
   let priority1Label = "Fork";
 
   if (weakest) {
     priority1Theme = weakest.theme.toUpperCase();
-    priority1Slug = weakest.theme.toLowerCase().replace(/ /g, "-");
     priority1Label = weakest.theme.charAt(0).toUpperCase() + weakest.theme.slice(1).toLowerCase();
   } else if (goal === "find_weaknesses") {
     priority1Theme = "PIN";
-    priority1Slug = "pin";
     priority1Label = "Pin";
   } else if (goal === "from_my_games") {
     priority1Theme = "BACK RANK MATE";
-    priority1Slug = "backrankmate";
     priority1Label = "Back Rank Mate";
   }
 
@@ -1110,8 +1116,9 @@ function buildTrainingTasks(
     description: `→ Drill 30 puzzles at your current rating`,
     target: 30,
     progress: p1Progress,
-    actionHref: `/app/patterns/${priority1Slug}`,
-    actionLabel: "Drill →",
+    // Sprint 33: routes to /app/training, button label handled at render
+    actionHref: `/app/training`,
+    actionLabel: "Train →",
   });
 
   // ── Task 2: Failure mode or calculation ───────────────────────────────────
@@ -1131,15 +1138,14 @@ function buildTrainingTasks(
       label: "Calculation",
       description: "→ Complete 2 Calculation Gym sessions",
       target: 2,
-      progress: Math.min(2, Math.floor(getWeekPatternProgress("FORK") / 10)), // rough proxy
-      actionHref: "/app/patterns",
+      progress: Math.min(2, Math.floor(getWeekPatternProgress("FORK") / 10)),
+      actionHref: "/app/training",
       actionLabel: "Train →",
     };
   } else {
     // Second weakest pattern
     const secondWeakest = statsWithData.sort((a, b) => a.solveRate - b.solveRate)[1];
     const p2Theme = secondWeakest?.theme.toUpperCase() ?? "PIN";
-    const p2Slug = secondWeakest?.theme.toLowerCase() ?? "pin";
     const p2Label = secondWeakest
       ? secondWeakest.theme.charAt(0).toUpperCase() + secondWeakest.theme.slice(1).toLowerCase()
       : "Pin";
@@ -1151,8 +1157,8 @@ function buildTrainingTasks(
       description: "→ Drill 15 puzzles at your current rating",
       target: 15,
       progress: Math.min(15, getWeekPatternProgress(p2Theme)),
-      actionHref: `/app/patterns/${p2Slug}`,
-      actionLabel: "Drill →",
+      actionHref: `/app/training`,
+      actionLabel: "Train →",
     };
   }
   tasks.push(task2);

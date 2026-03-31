@@ -16,6 +16,41 @@ body {
   padding: 0;
 }
 
+/* ── Chessground rank/file label visibility — Sprint 3 ── */
+.cg-wrap coords coord {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* ── Unified puzzle container — Sprint 3 ── */
+.puzzle-unified-container {
+  background: #0d1621;
+  border: 1px solid #1e2a3a;
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+/* ── Board status overlay — Sprint 3 ── */
+@keyframes fadeOutOverlay {
+  0%   { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.board-status-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 33%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 4px 4px;
+  pointer-events: none;
+  animation: fadeOutOverlay 1.5s ease forwards;
+  z-index: 10;
+}
+
 /* ── Chessground styles ── */
 .cg-wrap {
   position: relative;

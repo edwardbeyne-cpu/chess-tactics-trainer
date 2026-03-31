@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import patterns, { type Pattern } from "@/data/patterns";
-import { HelpModal, HelpBulletList } from "./HelpModal";
 import {
   getPatternCurriculumSummary,
   getPatternTimeStats,
@@ -16,6 +15,9 @@ import {
   savePuzzleSettings,
 } from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
+
+// ── Sprint 33: localStorage flag for explainer dismissal ──────────────────
+const DRILL_EXPLAINER_DISMISSED_KEY = "ctt_drill_explainer_dismissed";
 
 // ── Theme key mapping: pattern name → lichess theme key ──────────────────
 
@@ -43,6 +45,81 @@ function getThemeKey(patternName: string): string {
   return PATTERN_THEME_KEY[patternName] ?? patternName.toLowerCase().replace(/\s+/g, '');
 }
 
+// ── Sprint 33: Short display names for truncated patterns ─────────────────
+const PATTERN_SHORT_NAME: Record<string, string> = {
+  "Discovered Attack": "Discovery",
+  "Back Rank Mate": "Back Rank",
+  "Smothered Mate": "Smothered",
+  "Double Check": "Dbl Check",
+  "Queenside Attack": "Q-side Atk",
+  "Kingside Attack": "K-side Atk",
+  "Greek Gift Sacrifice": "Greek Gift",
+  "Removing the Defender": "Rm Defender",
+  "Perpetual Check": "Perpetual",
+  "Queen Sacrifice": "Queen Sac",
+  "Positional Sacrifice": "Pos. Sac",
+  "Trapped Piece": "Trapped",
+  "King March": "King March",
+  "Discovered Check": "Disc. Check",
+};
+
+function getDisplayName(patternName: string): string {
+  return PATTERN_SHORT_NAME[patternName] ?? patternName;
+}
+
+// ── Pattern Mastery Tier helpers (mirrors TrainingPlan.tsx) ──────────────
+
+interface PatternMasteryTiers {
+  beginner: number;
+  intermediate: number;
+  advanced: number;
+  elite: number;
+}
+
+function getPatternMasteryTiers(): PatternMasteryTiers {
+  if (typeof window === "undefined") return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+  try {
+    const raw = localStorage.getItem("ctt_pattern_ratings");
+    if (!raw) return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+    const ratings = JSON.parse(raw) as Record<string, { rating: number }>;
+    const tiers: PatternMasteryTiers = { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+    for (const val of Object.values(ratings)) {
+      const r = val.rating ?? 0;
+      if (r >= 1800) tiers.elite++;
+      else if (r >= 1400) tiers.advanced++;
+      else if (r >= 1000) tiers.intermediate++;
+      else tiers.beginner++;
+    }
+    return tiers;
+  } catch {
+    return { beginner: 0, intermediate: 0, advanced: 0, elite: 0 };
+  }
+}
+
+function PatternMasteryTierDisplay() {
+  const tiers = getPatternMasteryTiers();
+  const items = [
+    { label: "Beginner",     count: tiers.beginner,     color: "#94a3b8", dot: "#94a3b8" },
+    { label: "Intermediate", count: tiers.intermediate, color: "#60a5fa", dot: "#60a5fa" },
+    { label: "Advanced",     count: tiers.advanced,     color: "#a855f7", dot: "#a855f7" },
+    { label: "Elite",        count: tiers.elite,        color: "#f59e0b", dot: "#f59e0b" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
+      {items.map((tier) => (
+        <div key={tier.label} style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+          <span style={{
+            width: "8px", height: "8px", borderRadius: "50%",
+            backgroundColor: tier.dot, display: "inline-block", flexShrink: 0,
+          }} />
+          <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>{tier.label}</span>
+          <span style={{ color: tier.color, fontWeight: "bold", fontSize: "0.88rem", marginLeft: "0.1rem" }}>{tier.count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Color helpers ─────────────────────────────────────────────────────────
 
 const TIER_COLORS: Record<number, { accent: string; bg: string; border: string; label: string }> = {
@@ -54,7 +131,8 @@ const TIER_COLORS: Record<number, { accent: string; bg: string; border: string; 
 function statusColor(status: PatternCurriculumSummary["status"]): string {
   if (status === "mastered") return "#4ade80";
   if (status === "in_progress") return "#f59e0b";
-  return "#64748b";
+  // Sprint 33: "Unstarted" uses muted blue instead of grey
+  return "#3b5a7a";
 }
 
 function statusLabel(status: PatternCurriculumSummary["status"]): string {
@@ -84,10 +162,13 @@ function CurriculumPatternCard({
     : 0;
 
   const isMastered = summary.status === "mastered";
+  // Sprint 33: Use short display name; title attr for full name
+  const displayName = getDisplayName(pattern.name);
 
   return (
     <div
       onClick={onClick}
+      title={pattern.name}
       style={{
         backgroundColor: "#1a1a2e",
         border: `1px solid ${isMastered ? colors.accent : "#2e3a5c"}`,
@@ -101,18 +182,27 @@ function CurriculumPatternCard({
     >
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: "1.25rem", flexShrink: 0 }}>{pattern.icon}</span>
-          <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {pattern.name}
-          </div>
+        {/* Sprint 33: No emoji icon prefix — just the name */}
+        <div
+          style={{
+            color: "#e2e8f0",
+            fontWeight: "bold",
+            fontSize: "0.88rem",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+          title={pattern.name}
+        >
+          {displayName}
         </div>
         <span style={{
           color: statusColor(summary.status),
           fontSize: "0.65rem",
           fontWeight: "bold",
-          backgroundColor: `${statusColor(summary.status)}15`,
-          border: `1px solid ${statusColor(summary.status)}40`,
+          backgroundColor: `${statusColor(summary.status)}20`,
+          border: `1px solid ${statusColor(summary.status)}50`,
           borderRadius: "4px",
           padding: "0.15rem 0.4rem",
           whiteSpace: "nowrap",
@@ -123,11 +213,14 @@ function CurriculumPatternCard({
       </div>
 
       {/* ELO + progress inline */}
+      {/* Sprint 33: slightly larger + bolder puzzle count/accuracy */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
         <span style={{ color: colors.accent, fontSize: "1.35rem", fontWeight: "bold", lineHeight: 1 }}>
           {summary.patternRating.toLocaleString()}
         </span>
-        <span style={{ color: "#64748b", fontSize: "0.72rem" }}>{summary.completed}/{summary.totalPuzzles} · {progressPct}%</span>
+        <span style={{ color: "#94a3b8", fontSize: "0.78rem", fontWeight: 600 }}>
+          {summary.completed}/{summary.totalPuzzles} · {progressPct}%
+        </span>
       </div>
 
       {/* Progress bar */}
@@ -194,12 +287,26 @@ export default function Patterns() {
 
   // Sprint 12: Global Time Standard selector
   const [activeTimeStandard, setActiveTimeStandard] = useState<number>(0);
+  // Tier display needs to be client-only (reads localStorage)
+  const [mounted, setMounted] = useState(false);
+
+  // Sprint 33: Explainer card dismissal
+  const [showExplainer, setShowExplainer] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     // Load from settings on mount
     const settings = loadPuzzleSettings();
     setActiveTimeStandard(settings.timeStandard ?? 0);
+    // Check if explainer was already dismissed
+    const dismissed = localStorage.getItem(DRILL_EXPLAINER_DISMISSED_KEY);
+    setShowExplainer(!dismissed);
   }, []);
+
+  function handleDismissExplainer() {
+    localStorage.setItem(DRILL_EXPLAINER_DISMISSED_KEY, "1");
+    setShowExplainer(false);
+  }
 
   function handleTimeStandardSelect(seconds: number) {
     setActiveTimeStandard(seconds);
@@ -237,13 +344,6 @@ export default function Patterns() {
 
   const currentTimeStandard = activeTimeStandard > 0 ? activeTimeStandard : getTimeStandard();
 
-
-
-  // Overall stats
-  const totalCompleted = Object.values(summaries).reduce((s, x) => s + x.completed, 0);
-  const totalPossible = Object.values(summaries).reduce((s, x) => s + x.totalPuzzles, 0);
-  const masteredCount = Object.values(summaries).filter(x => x.status === "mastered").length;
-
   // Group by tier
   const byTier: Record<number, Pattern[]> = { 1: [], 2: [], 3: [] };
   for (const p of patterns) {
@@ -252,27 +352,15 @@ export default function Patterns() {
 
   return (
     <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-      {/* Header */}
+      {/* Header — Sprint 33: headline + one subheadline + time standard only */}
       <div style={{ marginBottom: "2rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
           <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
             Drill Tactics
           </h1>
-          <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 0.75rem", maxWidth: "540px", lineHeight: 1.6 }}>
-            Master tactical patterns one by one — 200 puzzles per pattern, sorted from easiest to hardest
+          <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 1.25rem", maxWidth: "540px", lineHeight: 1.6 }}>
+            Master tactical patterns one by one — up to 200 puzzles per pattern, sorted from easiest to hardest
           </p>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <HelpModal title="How Drill Tactics Works">
-              <HelpBulletList items={[
-                "Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)",
-                "You'll work through up to 200 puzzles for that pattern, starting easy and getting progressively harder",
-                "Your rating for that specific pattern updates as you solve puzzles",
-                "Solve puzzles correctly to move up — miss them and they go into your Review queue",
-                "The goal is to internalize each pattern until it becomes instinct",
-                "Work one pattern at a time until you feel strong, then move to the next",
-              ]} />
-            </HelpModal>
-          </div>
         </div>
 
         {/* Sprint 12: Global Time Standard selector */}
@@ -281,7 +369,7 @@ export default function Patterns() {
           alignItems: "center",
           gap: "0.75rem",
           justifyContent: "center",
-          marginBottom: "1.25rem",
+          marginBottom: showExplainer ? "1rem" : "1.25rem",
           flexWrap: "wrap",
         }}>
           <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600" }}>Time Standard:</span>
@@ -323,24 +411,50 @@ export default function Patterns() {
           </div>
         </div>
 
-        {/* Overall progress bar */}
-        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-            <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
-              Overall: <strong style={{ color: "#e2e8f0" }}>{totalCompleted.toLocaleString()} / {totalPossible.toLocaleString()}</strong> puzzles
-            </span>
-            <span style={{ color: "#4ade80", fontSize: "0.85rem" }}>
-              🏆 {masteredCount} patterns mastered
-            </span>
+        {/* Sprint 33: Explainer card — dismissable, removed from DOM when dismissed */}
+        {mounted && showExplainer && (
+          <div style={{
+            backgroundColor: "#13132b",
+            border: "1px solid #2e3a5c",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.25rem",
+            position: "relative",
+          }}>
+            <button
+              onClick={handleDismissExplainer}
+              aria-label="Dismiss"
+              style={{
+                position: "absolute", top: "0.75rem", right: "0.75rem",
+                background: "none", border: "none", color: "#475569",
+                fontSize: "1.1rem", cursor: "pointer", lineHeight: 1, padding: "0.2rem",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "#475569"; }}
+            >×</button>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+              How Drill Tactics Works
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.7, display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+              <li>Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)</li>
+              <li>Work through up to 200 puzzles per pattern, starting easy and getting harder</li>
+              <li>Your rating for that specific pattern updates as you solve puzzles</li>
+              <li>Missed puzzles go into your Review queue automatically</li>
+              <li>Work one pattern at a time until it becomes instinct</li>
+            </ul>
           </div>
-          <div style={{ backgroundColor: "#0d1621", borderRadius: "6px", height: "10px", overflow: "hidden" }}>
-            <div style={{
-              width: `${totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0}%`,
-              height: "100%",
-              backgroundColor: "#2e75b6",
-              borderRadius: "6px",
-            }} />
+        )}
+
+        {/* Pattern mastery tier breakdown */}
+        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.25rem" }}>
+          <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
+            Pattern Mastery
           </div>
+          {mounted ? (
+            <PatternMasteryTierDisplay />
+          ) : (
+            <div style={{ color: "#334155", fontSize: "0.82rem" }}>Loading…</div>
+          )}
         </div>
       </div>
 
@@ -351,6 +465,7 @@ export default function Patterns() {
 
         return (
           <div key={tier} style={{ marginBottom: "2rem" }}>
+            {/* Sprint 33: Group name without emoji prefix */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1rem" }}>
               <span style={{
                 color: tierColors.accent,
@@ -365,7 +480,7 @@ export default function Patterns() {
               </span>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "0.75rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "0.75rem" }}>
               {tierPatterns.map((p) => {
                 const summary = summaries[p.name];
                 const themeKey = getThemeKey(p.name);

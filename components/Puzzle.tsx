@@ -327,15 +327,18 @@ function XPToast({ xp, onDone }: { xp: number; onDone: () => void }) {
   );
 }
 
-// ── Responsive board width hook ────────────────────────────────────────────
+// ── Responsive board width hook — Sprint 3: viewport-aware, never cut off ──
 
 function useResponsiveBoardWidth(): number {
   const getWidth = () => {
     if (typeof window === "undefined") return 520;
     const vw = window.innerWidth;
-    if (vw < 640) return Math.min(vw - 32, 380);
-    if (vw <= 1024) return Math.min(520, Math.floor(vw * 0.9));
-    return 520;
+    // Available height = viewport - nav (~56px) - page header (~60px) - container padding (~48px) - controls row (~48px)
+    const availableHeight = window.innerHeight - 56 - 60 - 48 - 48;
+    const maxFromHeight = Math.min(availableHeight, 560);
+    if (vw < 640) return Math.min(vw - 32, maxFromHeight, 380);
+    if (vw <= 1024) return Math.min(maxFromHeight, Math.floor(vw * 0.55));
+    return Math.min(maxFromHeight, 520);
   };
 
   const [boardWidth, setBoardWidth] = useState<number>(getWidth);
@@ -585,7 +588,7 @@ function LichessPuzzleBoard({
 
   const isMobile = boardWidth < 480;
 
-  // Compute rating data for header
+  // Compute rating data for right panel
   const headerRatingData = (() => {
     const themeKey = patternThemeKey ?? (isMixedMode && (status === "solved" || status === "failed") && revealedPattern
       ? (PATTERN_NAME_TO_THEME_KEY[revealedPattern] ?? revealedPattern?.toLowerCase())
@@ -602,226 +605,317 @@ function LichessPuzzleBoard({
     return { patternData, patternName, trendArrow, trendColor };
   })();
 
+  // Difficulty dots: easy=1-2, medium=3, hard=4-5
+  const difficultyDots = (() => {
+    const filled = puzzle.difficulty === "easy" ? 2 : puzzle.difficulty === "medium" ? 3 : 5;
+    return Array.from({ length: 5 }, (_, i) => i < filled);
+  })();
+
+  // Status overlay: only show briefly after move result
+  const [showOverlay, setShowOverlay] = useState(false);
+  const overlayKeyRef = useRef(0);
+
+  useEffect(() => {
+    if (status === "solved" || status === "failed") {
+      overlayKeyRef.current += 1;
+      setShowOverlay(true);
+      const t = setTimeout(() => setShowOverlay(false), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [status]);
+
+  // Sprint 3: unified container
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: isMobile ? "1fr" : "auto 1fr",
-      gap: isMobile ? "0.75rem" : "1.5rem",
-      alignItems: "start",
-    }}>
-      <div>
-        {/* ── Puzzle Header — hidden in Mixed Mode, board moves up ── */}
-        {!isMixedMode && (
-          <div style={{
-            backgroundColor: "#1a1a2e",
-            border: boardFlash === "green" ? "2px solid #4ade80" : "1px solid #2e3a5c",
-            borderRadius: "12px",
-            padding: "1rem 1.25rem",
-            marginBottom: "0.75rem",
-            transition: "border-color 0.3s",
-            boxShadow: boardFlash === "green" ? "0 0 16px rgba(74,222,128,0.3)" : "none",
-          }}>
-            {/* Row 1: Pattern name (large) + timer (subtle) */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.25rem" }}>
-              <div style={{ color: "#e2e8f0", fontSize: isMobile ? "1rem" : "1.15rem", fontWeight: "bold", minWidth: 0 }}>
-                {puzzle.theme.charAt(0) + puzzle.theme.slice(1).toLowerCase()}
-              </div>
-              {/* Timer only (settings moved to right panel) */}
-              {settings.timeLimit > 0 && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "0.25rem",
-                  backgroundColor: "#0f1621",
-                  border: `1px solid ${timerColor}`,
-                  borderRadius: "6px",
-                  padding: "0.15rem 0.45rem",
-                  flexShrink: 0,
+    <div
+      className="puzzle-unified-container"
+      style={{
+        transition: "box-shadow 0.3s",
+        boxShadow: boardFlash === "green" ? "0 0 24px rgba(74,222,128,0.15)" : "none",
+      }}
+    >
+      <div style={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: "1.5rem",
+        alignItems: "flex-start",
+      }}>
+        {/* ── Left: Board + controls below ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", flexShrink: 0 }}>
+          {/* Board with status overlay */}
+          <div style={{ position: "relative", width: boardWidth, height: boardWidth }}>
+            <ChessBoard
+              key={puzzle.id}
+              fen={fen}
+              orientation={orientation}
+              onMove={handleMove}
+              lastMove={lastMove}
+              draggable={status === "solve"}
+              boardWidth={boardWidth}
+            />
+            {/* Status overlay on board */}
+            {showOverlay && (
+              <div
+                key={overlayKeyRef.current}
+                className="board-status-overlay"
+                style={{
+                  backgroundColor: status === "solved"
+                    ? "rgba(22, 101, 52, 0.88)"
+                    : "rgba(127, 29, 29, 0.88)",
+                }}
+              >
+                <span style={{
+                  color: status === "solved" ? "#86efac" : "#fca5a5",
+                  fontSize: "1.1rem",
+                  fontWeight: "bold",
+                  textShadow: "0 1px 3px rgba(0,0,0,0.6)",
                 }}>
-                  <span style={{ fontSize: "0.65rem" }}>⏱</span>
-                  <span style={{ color: timerColor, fontSize: "0.8rem", fontWeight: "bold", fontFamily: "monospace" }}>
-                    {minutes}:{String(seconds).padStart(2, "0")}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Row 2: Puzzle X of N (muted, medium) */}
-            {puzzleIndex !== undefined && totalPuzzles !== undefined && (
-              <div style={{ color: "#475569", fontSize: "0.78rem", marginBottom: "0.6rem" }}>
-                Puzzle {puzzleIndex} of {totalPuzzles}
-              </div>
-            )}
-
-            {/* Row 3: Your Pattern Rating — the hero number */}
-            {headerRatingData.patternData && (
-              <div style={{
-                display: "flex", alignItems: "baseline", gap: "0.5rem",
-                padding: "0.6rem 0.75rem",
-                backgroundColor: "#111827",
-                borderRadius: "8px",
-                marginBottom: "0.6rem",
-                border: "1px solid #1e2a3a",
-              }}>
-                <span style={{ color: "#4ade80", fontSize: isMobile ? "2rem" : "2.25rem", fontWeight: "bold", lineHeight: 1 }}>
-                  {headerRatingData.patternData.rating.toLocaleString()}
-                </span>
-                {headerRatingData.trendArrow && (
-                  <span style={{ color: headerRatingData.trendColor, fontSize: "1.25rem", fontWeight: "bold" }}>
-                    {headerRatingData.trendArrow}
-                  </span>
-                )}
-                <span style={{ color: "#64748b", fontSize: "0.78rem" }}>
-                  Your {headerRatingData.patternName ?? "pattern"} rating
+                  {status === "solved" ? "Correct! ✓" : "Wrong move — keep trying"}
                 </span>
               </div>
             )}
-
-            {/* Row 4: Status message */}
-            <div style={{ color: messageColor, fontSize: "0.92rem" }}>{message}</div>
           </div>
-        )}
-        <ChessBoard
-          key={puzzle.id}
-          fen={fen}
-          orientation={orientation}
-          onMove={handleMove}
-          lastMove={lastMove}
-          draggable={status === "solve"}
-          boardWidth={boardWidth}
-        />
-      </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {/* Controls — Hint, Repeat, Puzzle Settings (in that order) */}
-        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.25rem" }}>
-          <div style={{ color: "#475569", fontSize: "0.7rem", marginBottom: "0.6rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Controls</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {/* Controls row — below board, inside unified container */}
+          <div style={{
+            display: "flex",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}>
             <button
               onClick={handleHint}
               disabled={status !== "solve"}
               style={{
-                backgroundColor: status === "solve" ? "#1e3a5f" : "#111827",
+                backgroundColor: "transparent",
                 color: status === "solve" ? "#93c5fd" : "#334155",
                 border: `1px solid ${status === "solve" ? "#2e5a9f" : "#1e2a3a"}`,
-                borderRadius: "8px", padding: "0.6rem",
+                borderRadius: "6px",
+                padding: "0.35rem 0.75rem",
                 cursor: status === "solve" ? "pointer" : "not-allowed",
-                fontWeight: "600", fontSize: "0.85rem",
-                transition: "background 0.15s",
+                fontWeight: "500",
+                fontSize: "0.8rem",
+                transition: "background 0.15s, border-color 0.15s",
               }}
+              onMouseEnter={(e) => { if (status === "solve") e.currentTarget.style.backgroundColor = "#1e3a5f"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
             >
               Hint
             </button>
-            {/* Repeat Puzzle */}
             {onRepeat && (
               <button
                 onClick={onRepeat}
                 style={{
-                  backgroundColor: "#111827",
+                  backgroundColor: "transparent",
                   color: "#64748b",
                   border: "1px solid #1e2a3a",
-                  borderRadius: "8px",
-                  padding: "0.6rem",
+                  borderRadius: "6px",
+                  padding: "0.35rem 0.75rem",
                   cursor: "pointer",
-                  fontSize: "0.85rem",
-                  transition: "background 0.15s",
+                  fontSize: "0.8rem",
+                  fontWeight: "500",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#1e2a3a"; e.currentTarget.style.color = "#cbd5e1"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#64748b"; }}
               >
                 Repeat
               </button>
             )}
-            {/* Puzzle Settings — text button */}
-            <button
-              onClick={onOpenSettings}
-              style={{
-                backgroundColor: "#111827",
-                color: "#94a3b8",
-                border: "1px solid #1e2a3a",
-                borderRadius: "8px",
-                padding: "0.6rem",
-                cursor: "pointer",
-                fontSize: "0.85rem",
-                fontWeight: "600",
-                transition: "background 0.15s, color 0.15s",
-                textAlign: "center",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#1e2a3a"; e.currentTarget.style.color = "#e2e8f0"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#111827"; e.currentTarget.style.color = "#94a3b8"; }}
-            >
-              Puzzle Settings
-            </button>
             {(status === "solved" || status === "failed") && !settings.autoAdvance && (
               <button
                 onClick={onNext}
                 style={{
-                  backgroundColor: "#166534", color: "#86efac",
+                  backgroundColor: "transparent",
+                  color: "#86efac",
                   border: "1px solid #15803d",
-                  borderRadius: "8px", padding: "0.6rem", cursor: "pointer", fontWeight: "bold", fontSize: "0.85rem",
+                  borderRadius: "6px",
+                  padding: "0.35rem 0.75rem",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "0.8rem",
+                  transition: "background 0.15s",
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#14532d"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
               >
-                Next Puzzle
+                Next Puzzle →
               </button>
             )}
-          </div>
-        </div>
-
-        {/* Puzzle info — includes Puzzle Rating when in mixed mode */}
-        <div style={{
-          backgroundColor: "#1a1a2e",
-          border: boardFlash === "green" ? "2px solid #4ade80" : "1px solid #2e3a5c",
-          borderRadius: "12px",
-          padding: "0.9rem 1.1rem",
-          transition: "border-color 0.3s",
-          boxShadow: boardFlash === "green" ? "0 0 12px rgba(74,222,128,0.25)" : "none",
-        }}>
-          <div style={{ color: "#475569", fontSize: "0.68rem", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>Puzzle Info</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.8rem" }}>
-            {/* Mixed mode status + timer inline at top of Puzzle Info */}
-            {isMixedMode && (
-              <div style={{ marginBottom: "0.4rem", paddingBottom: "0.4rem", borderBottom: "1px solid #1e2a3a" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.25rem" }}>
-                  <span style={{ color: messageColor, fontSize: "0.88rem", fontWeight: status !== "solve" ? "bold" : "normal" }}>{message}</span>
-                  {settings.timeLimit > 0 && (
-                    <span style={{ color: timerColor, fontSize: "0.8rem", fontWeight: "bold", fontFamily: "monospace", flexShrink: 0 }}>
-                      ⏱ {minutes}:{String(seconds).padStart(2, "0")}
-                    </span>
-                  )}
-                </div>
-                {(status === "solved" || status === "failed") && revealedPattern && (
-                  <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.82rem" }}>Pattern: {revealedPattern}</div>
-                )}
-              </div>
-            )}
-            {isMixedMode && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.25rem" }}>
-                <span style={{ color: "#94a3b8", fontSize: "0.72rem" }}>Your Rating</span>
-                <span style={{ color: "#4ade80", fontWeight: "bold", fontSize: "1.1rem" }}>
-                  {typeof window !== "undefined" ? getPuzzleRating().rating : 800}
+            <button
+              onClick={onOpenSettings}
+              style={{
+                backgroundColor: "transparent",
+                color: "#475569",
+                border: "1px solid #1e2a3a",
+                borderRadius: "6px",
+                padding: "0.35rem 0.75rem",
+                cursor: "pointer",
+                fontSize: "0.8rem",
+                fontWeight: "500",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#1e2a3a"; e.currentTarget.style.color = "#94a3b8"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#475569"; }}
+            >
+              ⚙ Settings
+            </button>
+            {/* Timer inline with controls when active */}
+            {settings.timeLimit > 0 && (
+              <div style={{
+                marginLeft: "auto",
+                display: "flex", alignItems: "center", gap: "0.25rem",
+                backgroundColor: "#0f1621",
+                border: `1px solid ${timerColor}`,
+                borderRadius: "6px",
+                padding: "0.2rem 0.5rem",
+              }}>
+                <span style={{ fontSize: "0.65rem" }}>⏱</span>
+                <span style={{ color: timerColor, fontSize: "0.8rem", fontWeight: "bold", fontFamily: "monospace" }}>
+                  {minutes}:{String(seconds).padStart(2, "0")}
                 </span>
               </div>
             )}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#64748b" }}>Difficulty</span>
-              <span style={{
-                color: puzzle.difficulty === "easy" ? "#4ade80" : puzzle.difficulty === "medium" ? "#f59e0b" : "#ef4444",
-                textTransform: "capitalize", fontWeight: "600",
-              }}>{puzzle.difficulty}</span>
+          </div>
+
+          {/* Warm-up link — subtle, below controls */}
+          {/* Sprint 3: no pill, just a quiet text link */}
+        </div>
+
+        {/* ── Right panel: info only ── */}
+        <div style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+          minWidth: 0,
+          paddingTop: "0.25rem",
+        }}>
+          {/* Instruction */}
+          <div>
+            <div style={{
+              color: "#e2e8f0",
+              fontSize: "1rem",
+              fontWeight: "600",
+              lineHeight: 1.4,
+              marginBottom: "0.25rem",
+            }}>
+              {puzzle.fen.includes(" w ") ? "White" : "Black"} to move — find the winning tactic
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#64748b" }}>Puzzle Difficulty</span>
-              <span style={{ color: "#e2e8f0", fontWeight: "600" }}>{puzzle.rating}</span>
-            </div>
-            {!isMixedMode && (
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#64748b" }}>Pattern</span>
-                <span style={{ color: "#4ade80", fontWeight: "600" }}>{puzzle.theme.charAt(0) + puzzle.theme.slice(1).toLowerCase()}</span>
-              </div>
-            )}
-            {isMixedMode && (status === "solved" || status === "failed") && revealedPattern && (
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ color: "#64748b" }}>Pattern</span>
-                <span style={{ color: "#4ade80", fontWeight: "600" }}>{revealedPattern}</span>
+            {puzzleIndex !== undefined && totalPuzzles !== undefined && (
+              <div style={{ color: "#475569", fontSize: "0.75rem" }}>
+                Puzzle {puzzleIndex} of {totalPuzzles}
+                {!isMixedMode && (
+                  <span style={{ marginLeft: "0.5rem", color: "#334155" }}>
+                    · {puzzle.theme.charAt(0) + puzzle.theme.slice(1).toLowerCase()}
+                  </span>
+                )}
               </div>
             )}
           </div>
+
+          {/* Puzzle Rating */}
+          {isMixedMode ? (
+            <div style={{
+              backgroundColor: "#111827",
+              border: "1px solid #1e2a3a",
+              borderRadius: "10px",
+              padding: "0.75rem 1rem",
+            }}>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Your Puzzle Rating
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+                <span style={{ color: "#4ade80", fontSize: "1.75rem", fontWeight: "bold", lineHeight: 1 }}>
+                  {typeof window !== "undefined" ? getPuzzleRating().rating.toLocaleString() : "—"}
+                </span>
+                <span style={{ color: "#4ade80", fontSize: "1rem" }}>↑</span>
+              </div>
+            </div>
+          ) : headerRatingData.patternData ? (
+            <div style={{
+              backgroundColor: "#111827",
+              border: "1px solid #1e2a3a",
+              borderRadius: "10px",
+              padding: "0.75rem 1rem",
+            }}>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                Your {headerRatingData.patternName ?? "Pattern"} Rating
+              </div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem" }}>
+                <span style={{ color: "#4ade80", fontSize: "1.75rem", fontWeight: "bold", lineHeight: 1 }}>
+                  {headerRatingData.patternData.rating.toLocaleString()}
+                </span>
+                {headerRatingData.trendArrow && (
+                  <span style={{ color: headerRatingData.trendColor, fontSize: "1rem", fontWeight: "bold" }}>
+                    {headerRatingData.trendArrow}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Difficulty dots */}
+          <div style={{
+            backgroundColor: "#111827",
+            border: "1px solid #1e2a3a",
+            borderRadius: "10px",
+            padding: "0.75rem 1rem",
+          }}>
+            <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Puzzle Difficulty
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+              <div style={{ display: "flex", gap: "3px" }}>
+                {difficultyDots.map((filled, i) => (
+                  <span key={i} style={{
+                    width: "10px", height: "10px", borderRadius: "50%",
+                    backgroundColor: filled
+                      ? (puzzle.difficulty === "easy" ? "#4ade80" : puzzle.difficulty === "medium" ? "#f59e0b" : "#ef4444")
+                      : "#1e2a3a",
+                    display: "inline-block",
+                  }} />
+                ))}
+              </div>
+              <span style={{
+                color: puzzle.difficulty === "easy" ? "#4ade80" : puzzle.difficulty === "medium" ? "#f59e0b" : "#ef4444",
+                fontSize: "0.75rem",
+                fontWeight: "600",
+                textTransform: "capitalize",
+              }}>
+                {puzzle.difficulty} · {puzzle.rating}
+              </span>
+            </div>
+          </div>
+
+          {/* After solve: pattern revealed + result */}
+          {(status === "solved" || status === "failed") && (
+            <div style={{
+              backgroundColor: status === "solved" ? "rgba(22,101,52,0.2)" : "rgba(127,29,29,0.2)",
+              border: `1px solid ${status === "solved" ? "#15803d" : "#7f1d1d"}`,
+              borderRadius: "10px",
+              padding: "0.75rem 1rem",
+              animation: "slideUpIn 0.3s ease",
+            }}>
+              <div style={{
+                color: status === "solved" ? "#86efac" : "#fca5a5",
+                fontWeight: "bold",
+                fontSize: "0.95rem",
+                marginBottom: "0.35rem",
+              }}>
+                {status === "solved" ? "✓ Correct!" : "✗ Incorrect"}
+              </div>
+              {isMixedMode && revealedPattern && (
+                <div style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+                  Pattern: <span style={{ color: "#4ade80", fontWeight: "600" }}>{revealedPattern}</span>
+                </div>
+              )}
+              {!isMixedMode && (
+                <div style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+                  Pattern: <span style={{ color: "#4ade80", fontWeight: "600" }}>{puzzle.theme.charAt(0) + puzzle.theme.slice(1).toLowerCase()}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

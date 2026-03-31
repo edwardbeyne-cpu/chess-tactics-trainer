@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 interface HelpModalProps {
   title: string;
   children: React.ReactNode;
+  onClose?: () => void;
 }
 
 export function HelpModal({ title, children }: HelpModalProps) {
