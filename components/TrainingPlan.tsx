@@ -741,6 +741,85 @@ export default function TrainingPlan() {
               </div>
             </>
           )}
+
+          {/* ── Coach Analysis ──────────────────────────────────────────────── */}
+          <div style={{
+            marginTop: "1rem",
+            padding: "0.9rem 1rem",
+            backgroundColor: "#0a1520",
+            border: "1px solid #1e3a5c",
+            borderRadius: "10px",
+            fontSize: "0.82rem",
+            lineHeight: 1.65,
+          }}>
+            <div style={{ color: "#4ade80", fontWeight: "700", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem" }}>
+              Coach Analysis
+            </div>
+            {(() => {
+              const hasPatternData = patternStats.filter(s => s.totalAttempts >= 5).length >= 3;
+              if (!hasPatternData) {
+                // Pre-training: show tier-based recommendation from calibration rating
+                const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
+                const tierMessages: Record<string, { focus: string; strong: string; goal: string }> = {
+                  beginner: {
+                    focus: "Fork, Pin, Skewer, Back Rank Mate, and Discovered Attack — the 5 patterns that appear in almost every beginner game.",
+                    strong: "You're building the foundation. At your level, recognizing these patterns once is the goal.",
+                    goal: "Master these 5 Tier 1 patterns and you'll start winning material in almost every game.",
+                  },
+                  intermediate: {
+                    focus: "all 11 Tier 1 patterns plus high-impact Tier 2 tactics like Overloading and Deflection.",
+                    strong: "You already recognize basic tactics. Your Set 1 pushes your speed and accuracy under pressure.",
+                    goal: "At your rating, speed is the gap. Recognizing patterns instantly — not just eventually — is what improves your game rating.",
+                  },
+                  advanced: {
+                    focus: "Tier 2 and Tier 3 patterns including Interference, Clearance, and complex multi-move combinations.",
+                    strong: "Your tactical foundation is solid. Set 1 will expose the specific patterns where your recognition slows down.",
+                    goal: "At 1400+, the difference between you and 1800 players is pattern fluency — solving in 5 seconds what takes you 30.",
+                  },
+                  elite: {
+                    focus: "advanced Tier 3 patterns and speed optimization across all 24 patterns.",
+                    strong: "You have strong pattern recognition. Set 1 is about making your strongest patterns automatic and finding blind spots.",
+                    goal: "Elite players solve known patterns instantly. Your training focuses on reducing average solve time to under 10 seconds.",
+                  },
+                };
+                const msg = tierMessages[tier];
+                return (
+                  <>
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                      <span style={{ color: "#e2e8f0" }}>Your Set 1 focuses on</span> {msg.focus}
+                    </div>
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>{msg.strong}</div>
+                    <div style={{ color: "#64748b" }}>
+                      <span style={{ color: "#4ade80" }}>Goal:</span> {msg.goal}
+                    </div>
+                  </>
+                );
+              }
+              // Post-training: show actual weak/strong from pattern data
+              const sorted = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => a.solveRate - b.solveRate);
+              const weakest = sorted.slice(0, 2);
+              const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 2);
+              return (
+                <>
+                  {weakest.length > 0 && (
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                      <span style={{ color: "#e2e8f0" }}>Focus areas:</span>{" "}
+                      {weakest.map(w => w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()).join(" and ")} — your lowest accuracy patterns. Your Set 1 is weighted toward these.
+                    </div>
+                  )}
+                  {strongest.length > 0 && (
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                      <span style={{ color: "#e2e8f0" }}>Strengths:</span>{" "}
+                      {strongest.map(s => s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()).join(" and ")} — keep reinforcing these for speed.
+                    </div>
+                  )}
+                  <div style={{ color: "#64748b" }}>
+                    <span style={{ color: "#4ade80" }}>Goal:</span> Master all 100 puzzles in Set 1. Your weak patterns will appear most frequently until your accuracy improves.
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </div>
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
