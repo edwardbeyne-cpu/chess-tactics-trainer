@@ -657,6 +657,40 @@ export default function TrainingPlan() {
             >
               {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : "Continue Training →"}
             </button>
+
+            {/* 100-puzzle dot grid */}
+            <div style={{ marginTop: "1.25rem" }}>
+              <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                Set {masterySetNumber} — Puzzle Progress
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "0.75rem" }}>
+                {Array.from({ length: 100 }).map((_, i) => (
+                  <div key={i} style={{
+                    width: "8px", height: "8px", borderRadius: "2px",
+                    backgroundColor: i < masteredCount ? "#4ade80" : "#1e2a3a",
+                    transition: "background-color 0.2s",
+                  }} />
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "1.5rem", fontSize: "0.75rem", color: "#64748b" }}>
+                <span><span style={{ color: "#4ade80" }}>■</span> {masteredCount} mastered</span>
+                <span><span style={{ color: "#1e2a3a", border: "1px solid #2e3a5c", display: "inline-block", width: "10px", height: "10px", borderRadius: "2px", verticalAlign: "middle" }} /> </span>
+                <span>{100 - masteredCount} remaining</span>
+              </div>
+            </div>
+
+            {/* Set context */}
+            <div style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.6 }}>
+              <div style={{ marginBottom: "0.35rem" }}>
+                <span style={{ color: "#94a3b8" }}>🎯 Mastery rule:</span> Solve any puzzle correctly in under 10 seconds — 3 separate times — to master it. Spaced across sessions.
+              </div>
+              <div style={{ marginBottom: "0.35rem" }}>
+                <span style={{ color: "#94a3b8" }}>📊 Your set:</span> 100 puzzles weighted toward your weakest patterns at your calibration level.
+              </div>
+              <div>
+                <span style={{ color: "#94a3b8" }}>⏱ Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(100 / Math.max(1, dailyGoal)))} days.
+              </div>
+            </div>
           </div>
         )}
 
@@ -883,28 +917,6 @@ export default function TrainingPlan() {
               </div>
             </>
           )}
-        </div>
-
-        {/* ── Section 5: Next Milestone ─────────────────────────────────────── */}
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "16px",
-          padding: "1.5rem",
-          marginBottom: "0.5rem",
-        }}>
-          <div style={sectionHeaderStyle}>🏁 Next Milestone</div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-            <span style={{ fontSize: "1.5rem" }}>{milestone.emoji}</span>
-            <div>
-              <div style={{ color: "#e2e8f0", fontSize: "0.92rem" }}>{milestone.text}</div>
-              {milestone.text.includes("Tactical DNA") && (
-                <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.3rem" }}>
-                  Your Tactical DNA Profile maps your strengths and weaknesses across all 24 patterns — showing you exactly which tactics you&apos;re sharp on and which are costing you rating points.
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Connect modal */}
