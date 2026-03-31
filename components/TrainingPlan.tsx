@@ -12,6 +12,8 @@ import {
   getSM2DuePuzzleIds,
   getTodayKey,
   getPuzzlesSolvedAllTime,
+  getDailyTargetSettings,
+  getTodaySolvedCount,
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
@@ -429,6 +431,10 @@ export default function TrainingPlan() {
   const [goal, setGoal] = useState<string | null>(null);
   const [trainedToday, setTrainedToday] = useState(false);
 
+  // Daily goal progress
+  const [dailyGoal, setDailyGoal] = useState(10);
+  const [todaySolved, setTodaySolved] = useState(0);
+
   // Weekly plan tasks
   const [tasks, setTasks] = useState<TrainingTask[]>([]);
 
@@ -460,6 +466,8 @@ export default function TrainingPlan() {
     setTrainingDays(daysCount);
     setGoal(userGoal);
     setTrainedToday(hasTrainedToday());
+    setDailyGoal(getDailyTargetSettings().dailyGoal);
+    setTodaySolved(getTodaySolvedCount());
 
     // Build training tasks
     const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, dueIds.length, userGoal ?? "structured_plan");
@@ -636,6 +644,21 @@ export default function TrainingPlan() {
             flexDirection: "column",
             gap: "0.75rem",
           }}>
+            {/* Daily goal progress bar */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>Today&apos;s goal</span>
+                <span style={{
+                  color: todaySolved >= dailyGoal ? "#4ade80" : "#64748b",
+                  fontSize: "0.82rem",
+                  fontWeight: todaySolved >= dailyGoal ? "bold" : "normal",
+                }}>
+                  {todaySolved} / {dailyGoal} today
+                </span>
+              </div>
+              <ProgressBar value={todaySolved} max={dailyGoal} color="#3b82f6" />
+            </div>
+
             <div style={{ display: "flex", gap: "1.5rem" }}>
               <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
                 <span style={{ color: "#94a3b8" }}>Weekly goal:</span> {tasks.reduce((sum, t) => sum + t.target, 0)} puzzles

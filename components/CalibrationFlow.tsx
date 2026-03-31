@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Chess } from "chess.js";
 import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
 import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import { saveDailyTargetSettings } from "@/lib/storage";
 
 const ChessBoard = dynamic(() => import("@/components/ChessBoard"), { ssr: false });
 
@@ -191,11 +192,12 @@ function applyCalibStep(
   correct: boolean,
   skipped: boolean
 ): number {
-  if (skipped) return Math.max(100, current - 75);
-  if (!correct) return Math.max(100, current - 100);
-  if (elapsedSecs < 15) return current + 250;
-  if (elapsedSecs <= 60) return current + 150;
-  return current + 75;
+  const clamp = (n: number) => Math.min(2800, Math.max(400, n));
+  if (skipped) return clamp(current - 75);
+  if (!correct) return clamp(current - 100);
+  if (elapsedSecs < 15) return clamp(current + 250);
+  if (elapsedSecs <= 60) return clamp(current + 150);
+  return clamp(current + 75);
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -219,6 +221,14 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [skipVisible, setSkipVisible] = useState(false);
   const [finalElo, setFinalElo] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
+
+  // Reveal sub-step: rating → daily_goal → connect
+  const [revealStep, setRevealStep] = useState<"rating" | "daily_goal" | "connect">("rating");
+
+  // Daily goal step state
+  const [selectedGoal, setSelectedGoal] = useState<number | null>(null);
+  const [customGoalInput, setCustomGoalInput] = useState("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   // Connect step state (shown in reveal)
   const [platform, setPlatform] = useState<Platform>("chesscom");
@@ -458,61 +468,249 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         ? { label: "Intermediate", color: "#60a5fa" }
         : { label: "Beginner", color: "#94a3b8" };
 
+    // ── Sub-step: rating reveal ─────────────────────────────────────────────
+    if (revealStep === "rating") {
+      return (
+        <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+            <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>♟</div>
+            <p style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600", margin: "0 0 0.2rem" }}>
+              Your starting tactics rating:
+            </p>
+            <div style={{
+              fontSize: "5rem",
+              fontWeight: "900",
+              color: "#4ade80",
+              lineHeight: 1,
+              margin: "0.4rem 0 0.2rem",
+              textShadow: "0 0 48px rgba(74, 222, 128, 0.45)",
+              fontVariantNumeric: "tabular-nums",
+              letterSpacing: "-0.02em",
+            }}>
+              {revealCount.toLocaleString()}
+            </div>
+            <div style={{
+              display: "inline-block",
+              backgroundColor: "rgba(255,255,255,0.05)",
+              border: `1px solid ${tier.color}40`,
+              borderRadius: "20px",
+              padding: "0.2rem 0.75rem",
+              fontSize: "0.78rem",
+              color: tier.color,
+              fontWeight: "600",
+              marginBottom: "0.6rem",
+            }}>
+              {tier.label}
+            </div>
+            <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
+              Based on your solve speed and accuracy across 10 puzzles
+            </p>
+          </div>
+
+          <button
+            onClick={() => setRevealStep("daily_goal")}
+            style={{
+              backgroundColor: "#4ade80",
+              color: "#0f1a0a",
+              border: "none",
+              borderRadius: "10px",
+              padding: "1rem",
+              fontSize: "0.95rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              width: "100%",
+            }}
+          >
+            Continue →
+          </button>
+        </div>
+      );
+    }
+
+    // ── Sub-step: daily goal commitment ────────────────────────────────────
+    if (revealStep === "daily_goal") {
+      const PRESET_GOALS = [5, 10, 20];
+
+      function commitGoal(goal: number) {
+        setSelectedGoal(goal);
+        saveDailyTargetSettings({ dailyGoal: goal });
+        setRevealStep("connect");
+      }
+
+      function handleCustomCommit() {
+        const val = parseInt(customGoalInput, 10);
+        if (!isNaN(val) && val >= 1 && val <= 100) {
+          commitGoal(val);
+        }
+      }
+
+      return (
+        <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+            <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "700", margin: "0 0 0.6rem" }}>
+              How many puzzles can you commit to daily?
+            </p>
+            <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
+              Players who set a daily goal complete 3x more puzzles
+            </p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginBottom: "1rem" }}>
+            {PRESET_GOALS.map((g) => (
+              <button
+                key={g}
+                onClick={() => commitGoal(g)}
+                style={{
+                  backgroundColor: selectedGoal === g ? "#0d2a1a" : "#0d1621",
+                  border: `1px solid ${selectedGoal === g ? "#4ade80" : "#2e3a5c"}`,
+                  borderRadius: "12px",
+                  color: selectedGoal === g ? "#4ade80" : "#e2e8f0",
+                  fontSize: "1rem",
+                  fontWeight: "bold",
+                  padding: "0.9rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                  textAlign: "center",
+                }}
+              >
+                {g} puzzles / day
+              </button>
+            ))}
+
+            {/* Custom option */}
+            {!showCustomInput ? (
+              <button
+                onClick={() => setShowCustomInput(true)}
+                style={{
+                  backgroundColor: "#0d1621",
+                  border: "1px solid #2e3a5c",
+                  borderRadius: "12px",
+                  color: "#94a3b8",
+                  fontSize: "1rem",
+                  fontWeight: "bold",
+                  padding: "0.9rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                Custom
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder="e.g. 15"
+                  value={customGoalInput}
+                  onChange={(e) => setCustomGoalInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleCustomCommit(); }}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#0d1621",
+                    border: "1px solid #4ade80",
+                    borderRadius: "10px",
+                    color: "#e2e8f0",
+                    fontSize: "1rem",
+                    padding: "0.75rem 1rem",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={handleCustomCommit}
+                  disabled={!customGoalInput || isNaN(parseInt(customGoalInput, 10))}
+                  style={{
+                    backgroundColor: customGoalInput ? "#4ade80" : "#1a2535",
+                    color: customGoalInput ? "#0f1a0a" : "#4a6a8a",
+                    border: "none",
+                    borderRadius: "10px",
+                    padding: "0.75rem 1.1rem",
+                    fontWeight: "bold",
+                    cursor: customGoalInput ? "pointer" : "not-allowed",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  Set
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ textAlign: "center" }}>
+            <button
+              onClick={() => { saveDailyTargetSettings({ dailyGoal: 10 }); setRevealStep("connect"); }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#475569",
+                fontSize: "0.78rem",
+                cursor: "pointer",
+                padding: "0.25rem",
+              }}
+            >
+              Skip — use default (10/day)
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Sub-step: connect Chess.com / Lichess ──────────────────────────────
     return (
       <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
-        {/* Rating reveal */}
-        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>♟</div>
-          <p style={{
-            color: "#94a3b8",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            margin: "0 0 0.2rem",
-          }}>
-            Your starting tactics rating:
+        {/* Outcome-first headline */}
+        <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
+          <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "700", margin: "0 0 0.5rem" }}>
+            Train smarter, not harder
           </p>
-          <div style={{
-            fontSize: "5rem",
-            fontWeight: "900",
-            color: "#4ade80",
-            lineHeight: 1,
-            margin: "0.4rem 0 0.2rem",
-            textShadow: "0 0 48px rgba(74, 222, 128, 0.45)",
-            fontVariantNumeric: "tabular-nums",
-            letterSpacing: "-0.02em",
-          }}>
-            {revealCount.toLocaleString()}
-          </div>
-          <div style={{
-            display: "inline-block",
-            backgroundColor: "rgba(255,255,255,0.05)",
-            border: `1px solid ${tier.color}40`,
-            borderRadius: "20px",
-            padding: "0.2rem 0.75rem",
-            fontSize: "0.78rem",
-            color: tier.color,
-            fontWeight: "600",
-            marginBottom: "0.6rem",
-          }}>
-            {tier.label}
-          </div>
-          <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
-            Based on your solve speed and accuracy across 10 puzzles
+          <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: "0 0 1rem" }}>
+            Players who connect their Chess.com account improve 2x faster — because your training targets your actual weaknesses, not just general patterns.
           </p>
-        </div>
 
-        {/* Divider */}
-        <div style={{ borderTop: "1px solid #1e3a5c", marginBottom: "1.25rem" }} />
+          {/* Static ELO line chart preview */}
+          <div style={{
+            backgroundColor: "#0a1520",
+            border: "1px solid #1e3a5c",
+            borderRadius: "12px",
+            padding: "0.75rem 1rem",
+            marginBottom: "1rem",
+          }}>
+            <div style={{ color: "#475569", fontSize: "0.68rem", textAlign: "left", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Rating over time
+            </div>
+            <svg viewBox="0 0 240 60" width="100%" height="60" style={{ display: "block" }}>
+              {/* Grid lines */}
+              <line x1="0" y1="50" x2="240" y2="50" stroke="#1e3a5c" strokeWidth="1" />
+              <line x1="0" y1="30" x2="240" y2="30" stroke="#1e3a5c" strokeWidth="0.5" strokeDasharray="4,4" />
+              <line x1="0" y1="10" x2="240" y2="10" stroke="#1e3a5c" strokeWidth="0.5" strokeDasharray="4,4" />
+              {/* Rising ELO line */}
+              <polyline
+                points="0,48 30,44 60,42 90,36 120,30 150,22 180,14 210,10 240,6"
+                fill="none"
+                stroke="#4ade80"
+                strokeWidth="2.5"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+              {/* Area fill */}
+              <polyline
+                points="0,48 30,44 60,42 90,36 120,30 150,22 180,14 210,10 240,6 240,50 0,50"
+                fill="rgba(74,222,128,0.08)"
+                stroke="none"
+              />
+              {/* End dot */}
+              <circle cx="240" cy="6" r="3.5" fill="#4ade80" />
+            </svg>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "0.2rem" }}>
+              <span style={{ color: "#334155", fontSize: "0.65rem" }}>Week 1</span>
+              <span style={{ color: "#4ade80", fontSize: "0.72rem", fontWeight: "bold" }}>+180 rating</span>
+            </div>
+          </div>
+        </div>
 
         {/* Connect step */}
         <div style={{ marginBottom: "1.25rem" }}>
-          <p style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600", margin: "0 0 0.75rem", textAlign: "center" }}>
-            Connect your Chess.com or Lichess account
-          </p>
-          <p style={{ color: "#475569", fontSize: "0.78rem", textAlign: "center", margin: "0 0 1rem", lineHeight: 1.5 }}>
-            We&apos;ll analyze your games and build training around your actual weaknesses.
-          </p>
-
           {connected ? (
             <div style={{
               backgroundColor: "#0d2a1a",
@@ -634,7 +832,11 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                   transition: "background-color 0.15s",
                 }}
               >
-                {connecting ? "Connecting…" : "Connect & Analyze →"}
+                {connecting
+                  ? "Connecting…"
+                  : platform === "chesscom"
+                  ? "Connect Chess.com →"
+                  : "Connect Lichess →"}
               </button>
             </>
           )}
@@ -671,7 +873,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                 padding: "0.25rem",
               }}
             >
-              Skip — train without connecting
+              Skip for now
             </button>
           </div>
         )}

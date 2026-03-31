@@ -123,6 +123,7 @@ function getPatternElo(themeKey: string): number {
     if (ratings[themeKey]?.rating) return ratings[themeKey].rating;
     // Feature 2: for uncalibrated users, default calibration = 800 → pattern start = 650
     const calibRating = parseInt(localStorage.getItem("ctt_calibration_rating") ?? "0") || 800;
+    // First puzzle intentionally starts slightly below calibration for confidence building
     return Math.max(600, calibRating - 150);
   } catch {
     return 650;
