@@ -17,6 +17,7 @@ interface ChessBoardProps {
   draggable?: boolean;
   boardWidth?: number;
   orientation?: "white" | "black";
+  disableAnimation?: boolean;
 }
 
 function getMovable(fen: string, draggable: boolean) {
@@ -76,6 +77,7 @@ export default function ChessBoard({
   draggable = true,
   boardWidth = 480,
   orientation = "white",
+  disableAnimation = false,
 }: ChessBoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cgRef = useRef<Api | null>(null);
@@ -279,8 +281,9 @@ export default function ChessBoard({
         dests: movable.dests,
       },
       lastMove: lastMove as [Key, Key] | undefined,
+      animation: { enabled: !disableAnimation, duration: 250 },
     });
-  }, [fen, draggable, lastMove, orientation]);
+  }, [fen, draggable, lastMove, orientation, disableAnimation]);
 
   return (
     <div
