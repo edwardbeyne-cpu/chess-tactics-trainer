@@ -405,15 +405,18 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       if (!isCorrect) {
         setMadeError(true);
         madeErrorRef.current = true;
-        // Apply the wrong move to board so player sees it land, then transition after brief pause
+        // Block any further moves immediately
+        phaseRef.current = "between";
+        // Apply the wrong move visually so player sees it land
         try {
           const wrongChess = new Chess(currentFen);
           wrongChess.move({ from, to });
           setCurrentFen(wrongChess.fen());
           setLastMove([from, to]);
         } catch { /* ignore if illegal */ }
+        // Short pause so player sees their wrong move, then transition
         setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 700);
-        return true; // return true so ChessBoard accepts the move visually
+        return true;
       }
 
       const chess = new Chess(currentFen);
