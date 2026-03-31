@@ -96,6 +96,7 @@ function getRandomLegalMove(fen: string, excludeUcis: string[]): string | null {
 interface BlunderData {
   fen: string;
   choices: string[];
+  choiceSquares?: string[];  // destination squares for visual board selection
   correctChoiceIndex: number;
   blunderExplanation: string;
   patternTag: string;
@@ -158,9 +159,9 @@ function buildBlunderData(raw: LichessCachedPuzzle): BlunderData | null {
   if (!neutralSan) return null;
 
   const rawChoices = shuffleArray([
-    { san: safeSan, isSafe: true },
-    { san: blunderSan, isSafe: false },
-    { san: neutralSan, isSafe: false },
+    { san: safeSan, isSafe: true, toSquare: safeMove.slice(2, 4) },
+    { san: blunderSan, isSafe: false, toSquare: blunderMove.slice(2, 4) },
+    { san: neutralSan, isSafe: false, toSquare: neutralMove.slice(2, 4) },
   ]);
 
   const NOISE_TAGS = new Set(["short", "long", "middlegame", "endgame", "opening", "master",
@@ -170,6 +171,7 @@ function buildBlunderData(raw: LichessCachedPuzzle): BlunderData | null {
   return {
     fen: afterOppFen,
     choices: rawChoices.map((c) => c.san),
+    choiceSquares: rawChoices.map((c) => c.toSquare),
     correctChoiceIndex: rawChoices.findIndex((c) => c.isSafe),
     blunderExplanation: getBlunderExplanation(raw.themes),
     patternTag: raw.themes.find((t) => !NOISE_TAGS.has(t)) ?? "tactics",
@@ -549,95 +551,57 @@ function BlunderBoard({ puzzleData, onResult }: BlunderBoardProps) {
   const choiceLabels = ["A", "B", "C"];
   const isCorrect = selectedChoice === puzzleData.correctChoiceIndex;
 
+  // Build highlight squares: blue dots for choices, green/red after reveal
+  const highlightSquares: Record<string, { background: string; borderRadius: string }> = {};
+  const squares = puzzleData.choiceSquares ?? [];
+  squares.forEach((sq, idx) => {
+    if (!sq) return;
+    const isThis = selectedChoice === idx;
+    const thisCorrect = idx === puzzleData.correctChoiceIndex;
+    if (revealed) {
+      if (thisCorrect) {
+        highlightSquares[sq] = { background: "rgba(74,222,128,0.6)", borderRadius: "50%" };
+      } else if (isThis) {
+        highlightSquares[sq] = { background: "rgba(239,68,68,0.6)", borderRadius: "50%" };
+      } else {
+        highlightSquares[sq] = { background: "rgba(148,163,184,0.25)", borderRadius: "50%" };
+      }
+    } else {
+      highlightSquares[sq] = { background: "rgba(96,165,250,0.55)", borderRadius: "50%" };
+    }
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Prompt */}
-      <div style={{
-        backgroundColor: "#0d0606", border: "1px solid #3a1a1a", borderRadius: "10px",
-        padding: "0.75rem 1rem", textAlign: "center",
-      }}>
-        <div style={{ color: "#ef4444", fontWeight: "bold", fontSize: "0.88rem", marginBottom: "0.2rem" }}>
-          Blunder Alert — find the safe move
+      <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+        <div style={{ color: "#ef4444", fontWeight: "700", fontSize: "0.88rem", marginBottom: "0.15rem" }}>
+          Blunder alert
         </div>
-        <div style={{ color: "#94a3b8", fontSize: "0.78rem" }}>
-          One of these moves is a blunder. Choose the correct / safe move.
+        <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
+          {revealed
+            ? isCorrect ? "✓ Safe move — you avoided the blunder" : `✗ That's the blunder — ${puzzleData.blunderExplanation}`
+            : "Tap the square you would play to — one of these moves loses material"}
         </div>
       </div>
 
-      {/* Board — orient to side that needs to find the safe move (active side in FEN) */}
+      {/* Board with highlighted destination squares — user clicks a square */}
       <div style={{ display: "flex", justifyContent: "center" }}>
         <ChessBoard
           fen={puzzleData.fen}
           draggable={false}
           boardWidth={boardWidth}
           orientation={puzzleData.fen.includes(" b ") ? "black" : "white"}
+          highlightSquares={highlightSquares}
+          onMove={(from, to) => {
+            if (revealed) return false;
+            const idx = squares.indexOf(to);
+            if (idx === -1) return false;
+            handleChoice(idx);
+            return false; // don't apply the move visually
+          }}
         />
       </div>
-
-      {/* Choices */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        {puzzleData.choices.map((choice, idx) => {
-          const isThis = selectedChoice === idx;
-          const thisCorrect = idx === puzzleData.correctChoiceIndex;
-          let bg = "#1a1a2e", border = "#2e3a5c", color = "#e2e8f0";
-          if (revealed) {
-            if (thisCorrect) { bg = "#0a1f12"; border = "#4ade80"; color = "#4ade80"; }
-            else if (isThis && !thisCorrect) { bg = "#1f0a0a"; border = "#ef4444"; color = "#ef4444"; }
-            else { color = "#475569"; border = "#1e2a3c"; }
-          } else if (isThis) {
-            bg = "#1e3a5c"; border = "#2e75b6";
-          }
-          return (
-            <button
-              key={idx}
-              onClick={() => handleChoice(idx)}
-              disabled={revealed}
-              style={{
-                width: "100%", backgroundColor: bg, border: `2px solid ${border}`,
-                borderRadius: "10px", padding: "0.75rem 1rem", color,
-                fontSize: "0.9rem", fontWeight: "bold", cursor: revealed ? "default" : "pointer",
-                textAlign: "left", display: "flex", alignItems: "center", gap: "0.75rem",
-              }}
-            >
-              <span style={{
-                backgroundColor: revealed && thisCorrect ? "#4ade80" : revealed && isThis && !thisCorrect ? "#ef4444" : "#2e3a5c",
-                color: revealed && (thisCorrect || (isThis && !thisCorrect)) ? "#0f0f1a" : "#94a3b8",
-                borderRadius: "6px", width: "26px", height: "26px",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "0.78rem", fontWeight: "bold", flexShrink: 0,
-              }}>
-                {choiceLabels[idx]}
-              </span>
-              <span>{choice}</span>
-              {revealed && thisCorrect && <span style={{ marginLeft: "auto" }}>✓</span>}
-              {revealed && isThis && !thisCorrect && <span style={{ marginLeft: "auto" }}>✗</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Feedback */}
-      {revealed && (
-        <div style={{
-          padding: "1rem", backgroundColor: isCorrect ? "#0a1f12" : "#1f0a0a",
-          border: `1px solid ${isCorrect ? "#4ade80" : "#ef4444"}40`, borderRadius: "10px",
-        }}>
-          {isCorrect ? (
-            <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}>
-              Safe move found!
-            </div>
-          ) : (
-            <>
-              <div style={{ color: "#ef4444", fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem" }}>
-                That&apos;s the blunder
-              </div>
-              <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                {puzzleData.blunderExplanation}
-              </div>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
