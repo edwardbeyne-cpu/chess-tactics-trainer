@@ -221,8 +221,8 @@ interface CalibrationFlowProps {
 
 export default function CalibrationFlow({ startingElo, onComplete }: CalibrationFlowProps) {
   // Puzzle-solving state
-  const [phase, setPhase] = useState<"solving" | "transitioning" | "reveal">("solving");
-  
+  const [phase, setPhase] = useState<"solving" | "between" | "reveal">("solving");
+
   const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [calibElo, setCalibElo] = useState(startingElo);
   const [currentPuzzle, setCurrentPuzzle] = useState<LichessCachedPuzzle | null>(null);
@@ -234,8 +234,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [skipVisible, setSkipVisible] = useState(false);
   const [finalElo, setFinalElo] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
-  const [resultFlash, setResultFlash] = useState<"correct" | "wrong" | null>(null);
-  const [coverBoard, setCoverBoard] = useState(false);
+  const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(null);
+  const [newElo, setNewElo] = useState(0);
+  const [eloChange, setEloChange] = useState(0);
 
   // Reveal sub-step: rating → daily_goal → connect
   const [revealStep, setRevealStep] = useState<"rating" | "daily_goal" | "connect">("rating");
@@ -359,39 +360,25 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
 
-    // Show result flash and cover board immediately
-    if (!skipped) {
-      setResultFlash(correct ? "correct" : "wrong");
-      setCoverBoard(true);
-    }
-
-    const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
+    const calculatedElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
     const nextIdx = puzzleIndexRef.current + 1;
 
-    // At 400ms: load new puzzle while board is covered
-    setTimeout(() => {
-      if (nextIdx >= TOTAL_PUZZLES) {
-        setFinalElo(newElo);
-        setCalibElo(newElo);
-        calibEloRef.current = newElo;
-        try { localStorage.setItem("ctt_calibration_rating", String(newElo)); } catch { /* ignore */ }
-        setPhase("reveal");
-      } else {
-        setCalibElo(newElo);
-        calibEloRef.current = newElo;
-        setPuzzleIndex(nextIdx);
-        puzzleIndexRef.current = nextIdx;
-        const preloaded = nextPuzzleRef.current;
-        nextPuzzleRef.current = null;
-        loadPuzzle(newElo, usedIds.current, preloaded);
-      }
-    }, 400);
+    if (nextIdx >= TOTAL_PUZZLES) {
+      setFinalElo(calculatedElo);
+      setCalibElo(calculatedElo);
+      calibEloRef.current = calculatedElo;
+      try { localStorage.setItem("ctt_calibration_rating", String(calculatedElo)); } catch { /* ignore */ }
+      setPhase("reveal");
+      return;
+    }
 
-    // At 700ms: hide flash and uncover board — new puzzle already loaded underneath
-    setTimeout(() => {
-      setResultFlash(null);
-      setCoverBoard(false);
-    }, 700);
+    const change = calculatedElo - calibEloRef.current;
+    setLastResult(skipped ? "wrong" : correct ? "correct" : "wrong");
+    setNewElo(calculatedElo);
+    setEloChange(change);
+    // Preload next puzzle in background
+    nextPuzzleRef.current = selectPuzzle(calculatedElo, usedIds.current);
+    setPhase("between");
   }
 
   const handleMove = useCallback(
@@ -951,6 +938,102 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     );
   }
 
+  // ── Between-puzzle transition screen ──────────────────────────────────────
+  if (phase === "between") {
+    return (
+      <div style={{
+        minHeight: "70vh",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem 1rem",
+      }}>
+        {/* Top section */}
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{
+            fontSize: "5rem",
+            lineHeight: 1,
+            color: lastResult === "correct" ? "#22c55e" : "#ef4444",
+            marginBottom: "0.5rem",
+          }}>
+            {lastResult === "correct" ? "✓" : "✗"}
+          </div>
+          <div style={{ fontSize: "1.4rem", fontWeight: "bold", color: "#e2e8f0", marginBottom: "0.4rem" }}>
+            {lastResult === "correct" ? "Correct!" : "Missed"}
+          </div>
+          <div style={{ fontSize: "0.9rem", color: "#94a3b8" }}>
+            {lastResult === "correct"
+              ? "Nice find. The next puzzle will be a bit harder."
+              : "No worries. The next puzzle will be at a similar level."}
+          </div>
+        </div>
+
+        {/* Middle section — adaptive rating */}
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ fontSize: "0.78rem", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+            Your calibration rating
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem" }}>
+            <div style={{
+              fontSize: "3rem",
+              fontWeight: "bold",
+              color: "#4ade80",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1,
+            }}>
+              {newElo}
+            </div>
+            <div style={{
+              fontSize: "1rem",
+              fontWeight: "bold",
+              color: eloChange >= 0 ? "#22c55e" : "#ef4444",
+              backgroundColor: eloChange >= 0 ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+              border: `1px solid ${eloChange >= 0 ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+              borderRadius: "8px",
+              padding: "0.2rem 0.5rem",
+            }}>
+              {eloChange > 0 ? `+${eloChange}` : eloChange}
+            </div>
+          </div>
+          <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.5rem" }}>
+            Puzzle {puzzleIndex + 1} of {TOTAL_PUZZLES} complete
+          </div>
+        </div>
+
+        {/* Bottom section — next puzzle button */}
+        <div style={{ width: "100%", maxWidth: "360px" }}>
+          <button
+            onClick={() => {
+              const preloaded = nextPuzzleRef.current;
+              nextPuzzleRef.current = null;
+              loadPuzzle(newElo, usedIds.current, preloaded);
+              setCalibElo(newElo);
+              calibEloRef.current = newElo;
+              setPuzzleIndex(puzzleIndex + 1);
+              puzzleIndexRef.current = puzzleIndex + 1;
+              setPhase("solving");
+              setLastResult(null);
+            }}
+            style={{
+              backgroundColor: "#4ade80",
+              color: "#0f1a0a",
+              border: "none",
+              borderRadius: "10px",
+              padding: "1rem",
+              fontSize: "1rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              width: "100%",
+            }}
+          >
+            Next Puzzle →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Loading / transition state ─────────────────────────────────────────────
   // Use last known puzzle during fade transition so board never goes blank
   const displayPuzzle = currentPuzzle ?? lastPuzzleRef.current;
@@ -998,7 +1081,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             width: `${(puzzleIndex / TOTAL_PUZZLES) * 100}%`,
             backgroundColor: "#4ade80",
             borderRadius: "2px",
-            transition: coverBoard ? "none" : "width 0.35s ease",
+            transition: "width 0.35s ease",
           }} />
         </div>
       </div>
@@ -1014,31 +1097,6 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             orientation={orientation}
             disableAnimation={true}
           />
-          {/* Board cover — hides Chessground redraw during puzzle transition */}
-          {coverBoard && (
-            <div style={{
-              position: "absolute", inset: 0,
-              backgroundColor: "#0d1117",
-              zIndex: 8,
-              borderRadius: "4px",
-              pointerEvents: "none",
-            }} />
-          )}
-          {/* Result flash overlay — shown on top of cover */}
-          {resultFlash && (
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              borderRadius: "4px", pointerEvents: "none",
-              fontSize: "3rem", fontWeight: "900",
-              color: resultFlash === "correct" ? "#22c55e" : "#ef4444",
-              textShadow: "0 2px 12px rgba(0,0,0,0.8)",
-              zIndex: 10,
-            }}>
-              {resultFlash === "correct" ? "✓" : "✗"}
-            </div>
-          )}
-
         </div>
       </div>
       <p style={{
