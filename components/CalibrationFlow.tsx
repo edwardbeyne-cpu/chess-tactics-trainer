@@ -1004,7 +1004,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
       {/* Chess board */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
-        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0, opacity: boardOpacity, transition: "opacity 0.2s ease" }}>
+        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0 }}>
           <ChessBoard
             fen={currentFen}
             onMove={handleMove}
@@ -1023,9 +1023,22 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
               fontSize: "2.5rem", fontWeight: "900",
               color: resultFlash === "correct" ? "#22c55e" : "#ef4444",
               textShadow: "0 2px 8px rgba(0,0,0,0.5)",
+              zIndex: 10,
             }}>
               {resultFlash === "correct" ? "✓" : "✗"}
             </div>
+          )}
+          {/* Dark cover overlay — covers board during puzzle transition */}
+          {boardOpacity < 1 && (
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundColor: "#0f0f1a",
+              opacity: 1 - boardOpacity,
+              transition: "opacity 0.2s ease",
+              pointerEvents: "none",
+              zIndex: 9,
+              borderRadius: "4px",
+            }} />
           )}
         </div>
       </div>
