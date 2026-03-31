@@ -270,11 +270,10 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     function handleResize() {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Use 60% of viewport height as the cap (board shouldn't dominate the screen)
-      const maxFromHeight = Math.floor(vh * 0.60);
-      // On mobile: nearly full width. On desktop: content area is typically ~700-900px wide
-      const fromWidth = vw < 640 ? vw - 96 : Math.min(Math.floor(vw * 0.45), 600);
-      setBoardWidth(Math.min(fromWidth, maxFromHeight));
+      const maxH = Math.floor(vh * 0.55);
+      // Content column is max ~800px on desktop; board should be ~80% of that
+      const maxW = vw < 480 ? vw - 64 : vw < 768 ? 360 : vw < 1200 ? 440 : 520;
+      setBoardWidth(Math.min(maxW, maxH));
     }
     handleResize();
     window.addEventListener("resize", handleResize);
