@@ -981,7 +981,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           Let&apos;s find your level
         </p>
         <p style={{ color: "#94a3b8", fontSize: "0.88rem", fontWeight: "600", margin: 0 }}>
-          Puzzle {puzzleIndex + 1} of {TOTAL_PUZZLES}
+          Puzzle {Math.min(puzzleIndex + 1, TOTAL_PUZZLES)} of {TOTAL_PUZZLES}
         </p>
 
         {/* Progress bar */}
@@ -998,7 +998,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             width: `${(puzzleIndex / TOTAL_PUZZLES) * 100}%`,
             backgroundColor: "#4ade80",
             borderRadius: "2px",
-            transition: "width 0.35s ease",
+            transition: coverBoard ? "none" : "width 0.35s ease",
           }} />
         </div>
       </div>
