@@ -264,20 +264,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const boardContainerRef = useRef<HTMLDivElement>(null);
 
   // Board width — use same logic as Puzzle.tsx useResponsiveBoardWidth
-  const [boardWidth, setBoardWidth] = useState<number>(() => {
-    if (typeof window === "undefined") return 360;
-    const vw = window.innerWidth;
-    if (vw < 640) return Math.min(vw - 48, 380);
-    if (vw <= 1024) return Math.min(Math.floor(vw * 0.5), 480);
-    return 480;
-  });
+  const [boardWidth, setBoardWidth] = useState<number>(360);
 
   useEffect(() => {
     function handleResize() {
+      // Use the same hook logic as Puzzle.tsx — measure available height and width
       const vw = window.innerWidth;
-      if (vw < 640) setBoardWidth(Math.min(vw - 48, 380));
-      else if (vw <= 1024) setBoardWidth(Math.min(Math.floor(vw * 0.5), 480));
-      else setBoardWidth(480);
+      const availH = window.innerHeight - 56 - 60 - 48 - 48; // nav + header + padding + controls
+      const maxFromH = Math.min(availH, 520);
+      if (vw < 640) setBoardWidth(Math.min(vw - 48, maxFromH, 360));
+      else if (vw <= 1024) setBoardWidth(Math.min(maxFromH, Math.floor(vw * 0.45)));
+      else setBoardWidth(Math.min(maxFromH, 460));
     }
     handleResize();
     window.addEventListener("resize", handleResize);
