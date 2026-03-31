@@ -976,15 +976,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       </div>
 
       {/* Chess board */}
-      <div ref={boardContainerRef} style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem", width: "100%" }}>
-        <ChessBoard
-          key={`board-${bw}`}
-          fen={currentFen}
-          onMove={handleMove}
-          lastMove={lastMove}
-          boardWidth={bw}
-          orientation={orientation}
-        />
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
+        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0 }}>
+          <ChessBoard
+            key={`board-${bw}`}
+            fen={currentFen}
+            onMove={handleMove}
+            lastMove={lastMove}
+            boardWidth={bw}
+            orientation={orientation}
+          />
+        </div>
       </div>
       <p style={{
         fontSize: "0.85rem",
