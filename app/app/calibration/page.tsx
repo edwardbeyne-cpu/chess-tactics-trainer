@@ -48,7 +48,7 @@ export default function CalibrationPage() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "9rem", marginBottom: "1rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
+          <div style={{ fontSize: "clamp(6rem, 12vw, 10rem)", marginBottom: "1rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
           <h1
             style={{
               color: "#e2e8f0",

@@ -518,21 +518,21 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     // ── Sub-step: rating reveal ─────────────────────────────────────────────
     if (revealStep === "rating") {
       return (
-        <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
-          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>♟</div>
+        <div style={{ minHeight: "70vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem 1rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "2rem", maxWidth: "480px", width: "100%" }}>
+            <div style={{ fontSize: "7rem", marginBottom: "0.5rem", lineHeight: 1 }}>♔</div>
             <p style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600", margin: "0 0 0.2rem" }}>
               Your starting tactics rating:
             </p>
             <div style={{
-              fontSize: "5rem",
+              fontSize: "7rem",
               fontWeight: "900",
               color: "#4ade80",
               lineHeight: 1,
-              margin: "0.4rem 0 0.2rem",
-              textShadow: "0 0 48px rgba(74, 222, 128, 0.45)",
+              margin: "0.5rem 0 0.5rem",
+              textShadow: "0 0 60px rgba(74, 222, 128, 0.5)",
               fontVariantNumeric: "tabular-nums",
-              letterSpacing: "-0.02em",
+              letterSpacing: "-0.03em",
             }}>
               {revealCount.toLocaleString()}
             </div>
@@ -541,15 +541,15 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
               backgroundColor: "rgba(255,255,255,0.05)",
               border: `1px solid ${tier.color}40`,
               borderRadius: "20px",
-              padding: "0.2rem 0.75rem",
-              fontSize: "0.78rem",
+              padding: "0.3rem 1rem",
+              fontSize: "0.9rem",
               color: tier.color,
-              fontWeight: "600",
-              marginBottom: "0.6rem",
+              fontWeight: "700",
+              marginBottom: "1rem",
             }}>
               {tier.label}
             </div>
-            <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
+            <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.6, margin: 0 }}>
               Based on your solve speed and accuracy across 10 puzzles
             </p>
           </div>
