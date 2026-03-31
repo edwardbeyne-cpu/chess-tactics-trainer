@@ -392,8 +392,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       if (!isCorrect) {
         setMadeError(true);
         madeErrorRef.current = true;
-        // Auto-advance after 1.5 seconds on wrong move — don't leave user stuck
-        setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 1500);
+        // Short delay on wrong move so player sees the piece snap back, then transition screen
+        setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 600);
         return false;
       }
 
@@ -411,7 +411,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         setCurrentFen(afterPlayer);
         setLastMove([from, to]);
         const secs = elapsedRef.current;
-        setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 300);
+        // No delay — transition screen handles timing, no need to show board after last move
+        advancePuzzle(!madeErrorRef.current, false, secs);
         return true;
       }
 
