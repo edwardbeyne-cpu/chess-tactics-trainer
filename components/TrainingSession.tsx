@@ -120,9 +120,12 @@ function applyFirstMove(fen: string, moves: string[]): { fen: string; solution: 
 function getPatternElo(themeKey: string): number {
   try {
     const ratings = getPatternRatings();
-    return ratings[themeKey]?.rating ?? 1000;
+    if (ratings[themeKey]?.rating) return ratings[themeKey].rating;
+    // Feature 2: for uncalibrated users, default calibration = 800 → pattern start = 650
+    const calibRating = parseInt(localStorage.getItem("ctt_calibration_rating") ?? "0") || 800;
+    return Math.max(600, calibRating - 150);
   } catch {
-    return 1000;
+    return 650;
   }
 }
 
