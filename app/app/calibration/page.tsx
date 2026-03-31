@@ -47,7 +47,7 @@ export default function CalibrationPage() {
     return (
       <div
         style={{
-          minHeight: "100vh",
+          minHeight: "calc(100vh - 56px)",
           backgroundColor: "#0a0f1a",
           display: "flex",
           flexDirection: "column",
@@ -63,7 +63,7 @@ export default function CalibrationPage() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "clamp(6rem, 12vw, 10rem)", marginBottom: "1rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
+          <div style={{ fontSize: "clamp(7rem, 15vw, 12rem)", marginBottom: "1.5rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
           <h1
             style={{
               color: "#e2e8f0",
