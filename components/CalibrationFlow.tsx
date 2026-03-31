@@ -268,9 +268,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
   useEffect(() => {
     function handleResize() {
-      // Account for: 2rem padding each side (64px) + scrollbar (17px) = 81px total
-      const available = window.innerWidth - 81;
-      setBoardWidth(Math.min(available, 480));
+      const vw = window.innerWidth;
+      // 2rem padding each side = 64px, plus safe buffer = 96px total
+      setBoardWidth(Math.min(vw - 96, 360));
     }
     handleResize();
     window.addEventListener("resize", handleResize);
