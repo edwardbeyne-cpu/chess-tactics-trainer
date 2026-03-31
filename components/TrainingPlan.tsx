@@ -697,6 +697,41 @@ export default function TrainingPlan() {
           </div>
         )}
 
+        {/* ── Sprint 37: Calculation Gym Recommendation ──────────────────────── */}
+        {tacticsRating > 1400 && (
+          <div style={{
+            backgroundColor: "#13132b",
+            border: "1px solid #2e3a5c",
+            borderRadius: "16px",
+            padding: "1.25rem 1.5rem",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+              <div>
+                <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginBottom: "0.25rem" }}>
+                  Ready for the next level
+                </div>
+                <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
+                  Train Calculation
+                </div>
+                <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                  The Calculation Gym trains visualization without moving pieces — the skill that separates 1400 from 1800 players.
+                </div>
+              </div>
+              <a
+                href="/app/calculation"
+                style={{
+                  backgroundColor: "transparent", border: "1px solid #2e3a5c",
+                  borderRadius: "8px", padding: "0.5rem 1rem",
+                  color: "#60a5fa", fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap",
+                  textDecoration: "none",
+                }}
+              >
+                Open Calculation Gym →
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* ── Section 1: This Week's Plan ───────────────────────────────────── */}
         <div style={{
           backgroundColor: "#13132b",
