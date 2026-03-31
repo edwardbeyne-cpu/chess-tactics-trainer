@@ -904,17 +904,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                 onClick={handleConnect}
                 disabled={!username.trim() || connecting}
                 style={{
-                  backgroundColor: username.trim() && !connecting ? "#4ade80" : "#1a2535",
-                  color: username.trim() && !connecting ? "#0f1a0a" : "#4a6a8a",
-                  border: "none",
+                  backgroundColor: "transparent",
+                  color: username.trim() && !connecting ? "#4ade80" : "#334155",
+                  border: `1px solid ${username.trim() && !connecting ? "#4ade80" : "#2e3a5c"}`,
                   borderRadius: "8px",
                   padding: "0.7rem",
                   fontSize: "0.88rem",
-                  fontWeight: "bold",
+                  fontWeight: "600",
                   cursor: username.trim() && !connecting ? "pointer" : "not-allowed",
                   width: "100%",
                   marginBottom: "0.5rem",
-                  transition: "background-color 0.15s",
+                  transition: "all 0.15s",
                 }}
               >
                 {connecting
