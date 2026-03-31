@@ -32,13 +32,13 @@ export default function CalibrationPage() {
     return (
       <div
         style={{
-          minHeight: "80vh",
+          minHeight: "100vh",
           backgroundColor: "#0a0f1a",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "2rem 1rem",
+          padding: "1rem 1rem",
         }}
       >
         <div
@@ -48,7 +48,7 @@ export default function CalibrationPage() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "5rem", marginBottom: "1.5rem", color: "#4ade80" }}>♔</div>
+          <div style={{ fontSize: "9rem", marginBottom: "1rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
           <h1
             style={{
               color: "#e2e8f0",
