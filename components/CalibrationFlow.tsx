@@ -983,7 +983,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
         <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0 }}>
           <ChessBoard
-            key={`board-${bw}`}
+            key={currentPuzzle?.id ?? "board"}
             fen={currentFen}
             onMove={handleMove}
             lastMove={lastMove}
