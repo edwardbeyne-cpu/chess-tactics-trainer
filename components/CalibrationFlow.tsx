@@ -271,7 +271,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
   useEffect(() => {
     boardSize.current =
-      typeof window !== "undefined" ? Math.min(440, window.innerWidth - 64) : 400;
+      typeof window !== "undefined" ? Math.min(480, window.innerWidth - 16) : 400;
   }, []);
 
   const loadPuzzle = useCallback((elo: number, used: Set<string>) => {
@@ -929,33 +929,51 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           Puzzle {puzzleIndex + 1} of {TOTAL_PUZZLES}
         </p>
 
-        {/* Per-puzzle progress dots */}
-        <div style={{ display: "flex", justifyContent: "center", gap: "0.35rem", marginTop: "0.55rem" }}>
-          {Array.from({ length: TOTAL_PUZZLES }).map((_, i) => (
-            <div
-              key={i}
-              style={{
-                width: "7px",
-                height: "7px",
-                borderRadius: "50%",
-                backgroundColor:
-                  i < puzzleIndex ? "#22863a" : i === puzzleIndex ? "#60a5fa" : "#1e3a5c",
-                transition: "background-color 0.3s",
-              }}
-            />
-          ))}
+        {/* Progress bar */}
+        <div style={{
+          margin: "0.55rem auto 0",
+          maxWidth: "300px",
+          height: "4px",
+          borderRadius: "2px",
+          backgroundColor: "#1e3a5c",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            height: "100%",
+            width: `${(puzzleIndex / TOTAL_PUZZLES) * 100}%`,
+            backgroundColor: "#4ade80",
+            borderRadius: "2px",
+            transition: "width 0.35s ease",
+          }} />
         </div>
       </div>
 
-      {/* Chess board */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.6rem" }}>
-        <ChessBoard
-          fen={currentFen}
-          onMove={handleMove}
-          lastMove={lastMove}
-          boardWidth={bw}
-          orientation={orientation}
-        />
+      {/* Chess board card */}
+      <div style={{
+        backgroundColor: "#13132b",
+        border: "1px solid #1e2a3a",
+        borderRadius: "12px",
+        padding: "1rem",
+        marginBottom: "0.4rem",
+      }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <ChessBoard
+            fen={currentFen}
+            onMove={handleMove}
+            lastMove={lastMove}
+            boardWidth={bw}
+            orientation={orientation}
+          />
+        </div>
+        <p style={{
+          fontSize: "0.85rem",
+          color: "#94a3b8",
+          textAlign: "center",
+          marginTop: "0.5rem",
+          marginBottom: 0,
+        }}>
+          Find the best move for {orientation === "white" ? "White ♔" : "Black ♚"}
+        </p>
       </div>
 
       {/* Animated timer bar — green→yellow→red over 90 seconds */}
@@ -964,7 +982,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         backgroundColor: "#0d1621",
         borderRadius: "2px",
         overflow: "hidden",
-        marginBottom: "0.4rem",
+        marginTop: "0.75rem",
+        marginBottom: "0.25rem",
       }}>
         <div style={{
           height: "100%",
