@@ -590,6 +590,159 @@ export default function TrainingPlan() {
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
+        {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
+        <div style={{
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "1.5rem",
+        }}>
+          <div style={sectionHeaderStyle}>📍 Where You Are</div>
+
+          {username && platformRatings ? (
+            <>
+              {/* Profile row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
+                {chesscomAvatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={chesscomAvatar}
+                    alt="Chess.com avatar"
+                    style={{ width: "52px", height: "52px", borderRadius: "50%", border: "2px solid #4ade80", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div style={{
+                    width: "52px", height: "52px", borderRadius: "50%",
+                    backgroundColor: "#0d2a1a", border: "2px solid #4ade80",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: "#4ade80", fontSize: "1.4rem",
+                  }}>
+                    ♟
+                  </div>
+                )}
+                <div>
+                  <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem" }}>{username}</div>
+                  <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
+                    {platform === "chesscom" ? "Chess.com" : "Lichess"}
+                    {trainingStartDate && ` · Training since ${formatDate(trainingStartDate)}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Ratings grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
+                {(["bullet", "blitz", "rapid"] as TimeControl[]).map((tc) => {
+                  const rating = platformRatings[tc];
+                  const isMain = platformRatings.main === tc;
+                  return (
+                    <div key={tc} style={{
+                      backgroundColor: isMain ? "#0d2a1a" : "#0d1621",
+                      border: `1px solid ${isMain ? "#4ade80" : "#1e3a5c"}`,
+                      borderRadius: "10px",
+                      padding: "0.75rem",
+                      textAlign: "center",
+                      position: "relative",
+                    }}>
+                      {isMain && (
+                        <div style={{
+                          position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)",
+                          backgroundColor: "#4ade80", color: "#0f1a0a", fontSize: "0.6rem",
+                          fontWeight: "bold", padding: "1px 6px", borderRadius: "999px",
+                        }}>
+                          MAIN
+                        </div>
+                      )}
+                      <div style={{ color: "#64748b", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+                        {tc === "bullet" ? "⚡" : tc === "blitz" ? "⏱" : "🕐"} {tc}
+                      </div>
+                      <div style={{ color: rating ? "#e2e8f0" : "#334155", fontSize: "1.4rem", fontWeight: "bold" }}>
+                        {rating ?? "—"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Tactics rating row */}
+              <div style={{
+                backgroundColor: "#0a1520",
+                border: "1px solid #1e3a5c",
+                borderRadius: "10px",
+                padding: "0.75rem 1rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
+                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
+                </div>
+                {ratingDelta !== 0 && (
+                  <div style={{
+                    color: ratingDelta > 0 ? "#4ade80" : "#ef4444",
+                    fontSize: "0.9rem",
+                    fontWeight: "bold",
+                  }}>
+                    {ratingDelta > 0 ? "+" : ""}{ratingDelta} all-time
+                  </div>
+                )}
+              </div>
+              {/* Sprint 31: Pattern Mastery Tier breakdown */}
+              <PatternMasteryTierDisplay />
+            </>
+          ) : (
+            <>
+              {/* No Chess.com connected */}
+              <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.25rem" }}>
+                <div style={{
+                  width: "52px", height: "52px", borderRadius: "50%", flexShrink: 0,
+                  backgroundColor: "#0d1621", border: "2px dashed #2e3a5c",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#334155", fontSize: "1.4rem",
+                }}>
+                  ♟
+                </div>
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.92rem", marginBottom: "0.5rem" }}>
+                    Connect Chess.com to see your full profile with Bullet, Blitz, and Rapid ratings.
+                  </div>
+                  <button
+                    onClick={() => setShowConnectModal(true)}
+                    style={{
+                      backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
+                      borderRadius: "8px", color: "#4ade80", fontSize: "0.85rem",
+                      fontWeight: "bold", padding: "0.5rem 1rem", cursor: "pointer",
+                    }}
+                  >
+                    Connect Chess.com →
+                  </button>
+                </div>
+              </div>
+
+              {/* Still show tactics rating */}
+              <div style={{
+                backgroundColor: "#0a1520",
+                border: "1px solid #1e3a5c",
+                borderRadius: "10px",
+                padding: "0.75rem 1rem",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
+                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
+                </div>
+                {trainingStartDate && (
+                  <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "right" }}>
+                    Training since<br />{formatDate(trainingStartDate)}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         {masterySetNumber !== null && (
           <div style={{
@@ -774,159 +927,6 @@ export default function TrainingPlan() {
             </div>
           </div>
         )}
-
-        {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "16px",
-          padding: "1.5rem",
-        }}>
-          <div style={sectionHeaderStyle}>📍 Where You Are</div>
-
-          {username && platformRatings ? (
-            <>
-              {/* Profile row */}
-              <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1.25rem" }}>
-                {chesscomAvatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={chesscomAvatar}
-                    alt="Chess.com avatar"
-                    style={{ width: "52px", height: "52px", borderRadius: "50%", border: "2px solid #4ade80", objectFit: "cover" }}
-                  />
-                ) : (
-                  <div style={{
-                    width: "52px", height: "52px", borderRadius: "50%",
-                    backgroundColor: "#0d2a1a", border: "2px solid #4ade80",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#4ade80", fontSize: "1.4rem",
-                  }}>
-                    ♟
-                  </div>
-                )}
-                <div>
-                  <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem" }}>{username}</div>
-                  <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
-                    {platform === "chesscom" ? "Chess.com" : "Lichess"}
-                    {trainingStartDate && ` · Training since ${formatDate(trainingStartDate)}`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Ratings grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
-                {(["bullet", "blitz", "rapid"] as TimeControl[]).map((tc) => {
-                  const rating = platformRatings[tc];
-                  const isMain = platformRatings.main === tc;
-                  return (
-                    <div key={tc} style={{
-                      backgroundColor: isMain ? "#0d2a1a" : "#0d1621",
-                      border: `1px solid ${isMain ? "#4ade80" : "#1e3a5c"}`,
-                      borderRadius: "10px",
-                      padding: "0.75rem",
-                      textAlign: "center",
-                      position: "relative",
-                    }}>
-                      {isMain && (
-                        <div style={{
-                          position: "absolute", top: "-8px", left: "50%", transform: "translateX(-50%)",
-                          backgroundColor: "#4ade80", color: "#0f1a0a", fontSize: "0.6rem",
-                          fontWeight: "bold", padding: "1px 6px", borderRadius: "999px",
-                        }}>
-                          MAIN
-                        </div>
-                      )}
-                      <div style={{ color: "#64748b", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-                        {tc === "bullet" ? "⚡" : tc === "blitz" ? "⏱" : "🕐"} {tc}
-                      </div>
-                      <div style={{ color: rating ? "#e2e8f0" : "#334155", fontSize: "1.4rem", fontWeight: "bold" }}>
-                        {rating ?? "—"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Tactics rating row */}
-              <div style={{
-                backgroundColor: "#0a1520",
-                border: "1px solid #1e3a5c",
-                borderRadius: "10px",
-                padding: "0.75rem 1rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
-                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
-                </div>
-                {ratingDelta !== 0 && (
-                  <div style={{
-                    color: ratingDelta > 0 ? "#4ade80" : "#ef4444",
-                    fontSize: "0.9rem",
-                    fontWeight: "bold",
-                  }}>
-                    {ratingDelta > 0 ? "+" : ""}{ratingDelta} all-time
-                  </div>
-                )}
-              </div>
-              {/* Sprint 31: Pattern Mastery Tier breakdown */}
-              <PatternMasteryTierDisplay />
-            </>
-          ) : (
-            <>
-              {/* No Chess.com connected */}
-              <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-                <div style={{
-                  width: "52px", height: "52px", borderRadius: "50%", flexShrink: 0,
-                  backgroundColor: "#0d1621", border: "2px dashed #2e3a5c",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: "#334155", fontSize: "1.4rem",
-                }}>
-                  ♟
-                </div>
-                <div>
-                  <div style={{ color: "#94a3b8", fontSize: "0.92rem", marginBottom: "0.5rem" }}>
-                    Connect Chess.com to see your full profile with Bullet, Blitz, and Rapid ratings.
-                  </div>
-                  <button
-                    onClick={() => setShowConnectModal(true)}
-                    style={{
-                      backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
-                      borderRadius: "8px", color: "#4ade80", fontSize: "0.85rem",
-                      fontWeight: "bold", padding: "0.5rem 1rem", cursor: "pointer",
-                    }}
-                  >
-                    Connect Chess.com →
-                  </button>
-                </div>
-              </div>
-
-              {/* Still show tactics rating */}
-              <div style={{
-                backgroundColor: "#0a1520",
-                border: "1px solid #1e3a5c",
-                borderRadius: "10px",
-                padding: "0.75rem 1rem",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
-                  <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
-                </div>
-                {trainingStartDate && (
-                  <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "right" }}>
-                    Training since<br />{formatDate(trainingStartDate)}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
 
         {/* Connect modal */}
         {showConnectModal && (
