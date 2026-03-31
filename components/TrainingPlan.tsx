@@ -52,6 +52,9 @@ function getPatternMasteryTiers(): PatternMasteryTiers {
 // ── Sprint 31: Pattern Mastery Tier Display Component ─────────────────────
 function PatternMasteryTierDisplay() {
   const tiers = getPatternMasteryTiers();
+  // Hide if no pattern mastery data yet
+  const totalMastered = tiers.beginner + tiers.intermediate + tiers.advanced + tiers.elite;
+  if (totalMastered === 0) return null;
   const tierItems = [
     { label: "Beginner", count: tiers.beginner, color: "#94a3b8", dot: "#94a3b8" },
     { label: "Intermediate", count: tiers.intermediate, color: "#60a5fa", dot: "#60a5fa" },
@@ -597,7 +600,7 @@ export default function TrainingPlan() {
           borderRadius: "16px",
           padding: "1.5rem",
         }}>
-          <div style={sectionHeaderStyle}>📍 Where You Are</div>
+          <div style={sectionHeaderStyle}>Where You Are</div>
 
           {username && platformRatings ? (
             <>
