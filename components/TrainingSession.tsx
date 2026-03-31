@@ -869,10 +869,19 @@ export default function TrainingSession() {
   const [streak, setStreak] = useState(0);
 
   // Session stats (reset each session)
-  const [sessionCorrect, setSessionCorrect] = useState(0);
-  const [sessionTotal, setSessionTotal] = useState(0);
-  const [sessionUnder10s, setSessionUnder10s] = useState(0);
-  const [sessionNewMastered, setSessionNewMastered] = useState(0);
+  // Session stats — read from localStorage so they survive navigation within same day
+  const [sessionCorrect, setSessionCorrect] = useState(() => {
+    try { const d = localStorage.getItem("ctt_session_stats"); return d ? JSON.parse(d).correct ?? 0 : 0; } catch { return 0; }
+  });
+  const [sessionTotal, setSessionTotal] = useState(() => {
+    try { const d = localStorage.getItem("ctt_session_stats"); return d ? JSON.parse(d).total ?? 0 : 0; } catch { return 0; }
+  });
+  const [sessionUnder10s, setSessionUnder10s] = useState(() => {
+    try { const d = localStorage.getItem("ctt_session_stats"); return d ? JSON.parse(d).under10s ?? 0 : 0; } catch { return 0; }
+  });
+  const [sessionNewMastered, setSessionNewMastered] = useState(() => {
+    try { const d = localStorage.getItem("ctt_session_stats"); return d ? JSON.parse(d).mastered ?? 0 : 0; } catch { return 0; }
+  });
   const [dailyCompleted, setDailyCompleted] = useState(0);
 
   const [keepGoing, setKeepGoing] = useState(false); // bypass daily goal after "Keep going anyway"
@@ -896,6 +905,18 @@ export default function TrainingSession() {
     setDailyGoal(settings.dailyGoal);
     setStreak(getStreakData().currentStreak ?? 0);
     setDailyCompleted(getDailySessionCompleted());
+
+    // Reset session stats if it's a new day
+    try {
+      const saved = localStorage.getItem("ctt_session_stats");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.date !== new Date().toISOString().slice(0, 10)) {
+          localStorage.removeItem("ctt_session_stats");
+          setSessionCorrect(0); setSessionTotal(0); setSessionUnder10s(0); setSessionNewMastered(0);
+        }
+      }
+    } catch { /* ignore */ }
 
     let progress = getMasteryProgress();
     let set = getCurrentMasterySet();
@@ -965,12 +986,25 @@ export default function TrainingSession() {
     setCurrentSet(freshSet);
     setMasteryProgress(freshProgress);
 
-    // Update session stats
-    setSessionTotal((t) => t + 1);
-    if (correct) {
-      setSessionCorrect((c) => c + 1);
-      if (solveTimeMs < MASTERY_TIME_LIMIT_MS) setSessionUnder10s((u) => u + 1);
-    } else {
+    // Update session stats and persist to localStorage
+    setSessionTotal((t: number) => {
+      const newT = t + 1;
+      setSessionCorrect((c: number) => {
+        const newC = correct ? c + 1 : c;
+        setSessionUnder10s((u: number) => {
+          const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
+          setSessionNewMastered((m: number) => {
+            const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
+            try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
+            return newM;
+          });
+          return newU;
+        });
+        return newC;
+      });
+      return newT;
+    });
+    if (!correct) {
       // Track missed puzzles for end-of-session review
       if (puzzle.type === "tactic" && puzzle.puzzleData) {
         const pd = puzzle.puzzleData as { fen: string; solution: string[] };
@@ -980,10 +1014,6 @@ export default function TrainingSession() {
         });
       }
     }
-    if (masteryAwarded && masteryHits === 3) {
-      setSessionNewMastered((m) => m + 1);
-    }
-
     // Increment daily count
     const newDailyCount = incrementDailySession();
     setDailyCompleted(newDailyCount);
