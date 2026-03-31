@@ -463,8 +463,11 @@ export default function TrainingPlan() {
     setUsername(uname);
     setPlatform(plat);
     setPlatformRatings(ratings);
-    setTacticsRating(tacticsData.tacticsRating);
-    setTacticsRatingStart(tacticsData.tacticsRatingStart);
+    // Use calibration rating as tactics rating baseline if no training puzzles done yet
+    const calibRating = (() => { try { const v = localStorage.getItem("ctt_calibration_rating"); return v ? parseInt(v, 10) : 0; } catch { return 0; } })();
+    const displayRating = tacticsData.tacticsRating > 800 ? tacticsData.tacticsRating : (calibRating || tacticsData.tacticsRating);
+    setTacticsRating(displayRating);
+    setTacticsRatingStart(calibRating || tacticsData.tacticsRatingStart);
     setPatternStats(allPatternStats);
     setFailureStats(failureModeStats);
     setStreakDays(streakData.currentStreak ?? 0);
@@ -663,32 +666,38 @@ export default function TrainingPlan() {
               <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
                 Set {masterySetNumber} — Puzzle Progress
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "3px", marginBottom: "0.75rem" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "0.75rem" }}>
                 {Array.from({ length: 100 }).map((_, i) => (
                   <div key={i} style={{
-                    width: "8px", height: "8px", borderRadius: "2px",
+                    width: "10px", height: "10px", borderRadius: "2px",
                     backgroundColor: i < masteredCount ? "#4ade80" : "#1e2a3a",
+                    border: i < masteredCount ? "none" : "1px solid #2e3a5c",
                     transition: "background-color 0.2s",
                   }} />
                 ))}
               </div>
               <div style={{ display: "flex", gap: "1.5rem", fontSize: "0.75rem", color: "#64748b" }}>
-                <span><span style={{ color: "#4ade80" }}>■</span> {masteredCount} mastered</span>
-                <span><span style={{ color: "#1e2a3a", border: "1px solid #2e3a5c", display: "inline-block", width: "10px", height: "10px", borderRadius: "2px", verticalAlign: "middle" }} /> </span>
-                <span>{100 - masteredCount} remaining</span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#4ade80", flexShrink: 0 }} />
+                  {masteredCount} mastered
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#1e2a3a", border: "1px solid #2e3a5c", flexShrink: 0 }} />
+                  {100 - masteredCount} remaining
+                </span>
               </div>
             </div>
 
             {/* Set context */}
             <div style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.6 }}>
               <div style={{ marginBottom: "0.35rem" }}>
-                <span style={{ color: "#94a3b8" }}>🎯 Mastery rule:</span> Solve any puzzle correctly in under 10 seconds — 3 separate times — to master it. Spaced across sessions.
+                <span style={{ color: "#94a3b8" }}>Mastery rule:</span> Solve any puzzle correctly in under 10 seconds — 3 separate times — to master it. Spaced across sessions.
               </div>
               <div style={{ marginBottom: "0.35rem" }}>
-                <span style={{ color: "#94a3b8" }}>📊 Your set:</span> 100 puzzles weighted toward your weakest patterns at your calibration level.
+                <span style={{ color: "#94a3b8" }}>Your set:</span> 100 puzzles weighted toward your weakest patterns at your calibration level.
               </div>
               <div>
-                <span style={{ color: "#94a3b8" }}>⏱ Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(100 / Math.max(1, dailyGoal)))} days.
+                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(100 / Math.max(1, dailyGoal)))} days.
               </div>
             </div>
           </div>
