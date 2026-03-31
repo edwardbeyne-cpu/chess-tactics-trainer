@@ -889,6 +889,7 @@ export default function TrainingSession() {
   const [sessionNewMastered, setSessionNewMastered] = useState(0);
   const [dailyCompleted, setDailyCompleted] = useState(0);
 
+  const [keepGoing, setKeepGoing] = useState(false); // bypass daily goal after "Keep going anyway"
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1005,8 +1006,8 @@ export default function TrainingSession() {
         return;
       }
 
-      // Check daily session complete
-      if (newDailyCount >= settings.dailyGoal) {
+      // Check daily session complete — skip if user chose "Keep going anyway"
+      if (newDailyCount >= settings.dailyGoal && !keepGoing) {
         setPhase("session_complete");
         return;
       }
@@ -1029,6 +1030,7 @@ export default function TrainingSession() {
   // ── Handle "keep going" after session complete ─────────────────────────────
   function handleContinue() {
     if (!currentSet || !masteryProgress) return;
+    setKeepGoing(true); // bypass daily goal for rest of session
     const freshSet = getCurrentMasterySet() ?? currentSet;
     const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current);
     if (nextIdx === -1) {
