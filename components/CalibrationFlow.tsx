@@ -366,7 +366,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
     const nextIdx = puzzleIndexRef.current + 1;
 
-    // Load next puzzle after flash — no opacity changes, board stays visible
+    // Load next puzzle after flash completes
     setTimeout(() => {
       if (nextIdx >= TOTAL_PUZZLES) {
         setFinalElo(newElo);
@@ -383,7 +383,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         nextPuzzleRef.current = null;
         loadPuzzle(newElo, usedIds.current, preloaded);
       }
-    }, 600);
+    }, 650);
   }
 
   const handleMove = useCallback(
@@ -416,7 +416,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         setCurrentFen(afterPlayer);
         setLastMove([from, to]);
         const secs = elapsedRef.current;
-        setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 500);
+        setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 300);
         return true;
       }
 
