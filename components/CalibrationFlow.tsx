@@ -392,9 +392,15 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       if (!isCorrect) {
         setMadeError(true);
         madeErrorRef.current = true;
-        // Short delay on wrong move so player sees the piece snap back, then transition screen
-        setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 600);
-        return false;
+        // Apply the wrong move to board so player sees it land, then transition after brief pause
+        try {
+          const wrongChess = new Chess(currentFen);
+          wrongChess.move({ from, to });
+          setCurrentFen(wrongChess.fen());
+          setLastMove([from, to]);
+        } catch { /* ignore if illegal */ }
+        setTimeout(() => advancePuzzle(false, false, elapsedRef.current), 700);
+        return true; // return true so ChessBoard accepts the move visually
       }
 
       const chess = new Chess(currentFen);
