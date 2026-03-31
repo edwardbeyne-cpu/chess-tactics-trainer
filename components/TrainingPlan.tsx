@@ -778,21 +778,33 @@ export default function TrainingPlan() {
 
               // BEST: Chess.com game analysis available
               if (gameAnalysis) {
-                const patternNames = gameAnalysis.topPatterns.map(([p]) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+                const weakPatterns = gameAnalysis.topPatterns.map(([p]) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+                // Infer strengths as the opposite — patterns NOT in the missed list
+                const allCommon = ["Fork", "Pin", "Skewer", "Back Rank Mate", "Discovered Attack", "Double Check"];
+                const strengthPatterns = allCommon.filter(p => !weakPatterns.some(w => w.toLowerCase() === p.toLowerCase())).slice(0, 3);
                 return (
                   <>
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      <span style={{ color: "#e2e8f0" }}>Based on your {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} games</span> — we found {gameAnalysis.total} positions where you missed a tactical opportunity.
+                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
+                      Based on your {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} game analysis
                     </div>
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      <span style={{ color: "#e2e8f0" }}>Most missed in your games:</span>{" "}
-                      {patternNames.slice(0, 2).join(" and ")}{patternNames[2] ? `, and ${patternNames[2]}` : ""}. Your Set 1 is weighted heavily toward these patterns.
-                    </div>
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      This is not random puzzle practice — these are the exact tactical patterns costing you rating points in your actual games.
-                    </div>
-                    <div style={{ color: "#64748b" }}>
-                      <span style={{ color: "#4ade80" }}>Goal:</span> Master these patterns so you never miss them in a real game again. Speed is the signal — under 10 seconds means it&apos;s automatic.
+                    {strengthPatterns.length > 0 && (
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Your Strengths</div>
+                        {strengthPatterns.map(p => (
+                          <div key={p} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p}</div>
+                        ))}
+                      </div>
+                    )}
+                    {weakPatterns.length > 0 && (
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Your Weaknesses</div>
+                        {weakPatterns.map(p => (
+                          <div key={p} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p}</div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
+                      The 100 puzzles below are designed around your weaknesses. Master them and you will improve at chess.
                     </div>
                   </>
                 );
@@ -801,24 +813,28 @@ export default function TrainingPlan() {
               // GOOD: Has pattern data from training
               if (hasPatternData) {
                 const sorted = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => a.solveRate - b.solveRate);
-                const weakest = sorted.slice(0, 2);
-                const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 2);
+                const weakest = sorted.slice(0, 3);
+                const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 3);
                 return (
                   <>
-                    {weakest.length > 0 && (
-                      <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                        <span style={{ color: "#e2e8f0" }}>Focus areas:</span>{" "}
-                        {weakest.map(w => w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()).join(" and ")} — your lowest accuracy patterns. Your Set 1 is weighted toward these.
-                      </div>
-                    )}
                     {strongest.length > 0 && (
-                      <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                        <span style={{ color: "#e2e8f0" }}>Strengths:</span>{" "}
-                        {strongest.map(s => s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()).join(" and ")} — keep reinforcing for speed.
+                      <div style={{ marginBottom: "0.6rem" }}>
+                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Your Strengths</div>
+                        {strongest.map(s => (
+                          <div key={s.theme} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()}</div>
+                        ))}
                       </div>
                     )}
-                    <div style={{ color: "#64748b" }}>
-                      <span style={{ color: "#4ade80" }}>Goal:</span> Master all 100 puzzles. Weak patterns appear most frequently until accuracy improves.
+                    {weakest.length > 0 && (
+                      <div style={{ marginBottom: "0.75rem" }}>
+                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Your Weaknesses</div>
+                        {weakest.map(w => (
+                          <div key={w.theme} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()}</div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
+                      The 100 puzzles below are designed around your weaknesses. Master them and you will improve at chess.
                     </div>
                   </>
                 );
