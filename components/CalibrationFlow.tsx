@@ -1011,7 +1011,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             lastMove={lastMove}
             boardWidth={bw}
             orientation={orientation}
-            disableAnimation={boardOpacity < 1}
+            disableAnimation={true}
           />
           {/* Result flash overlay */}
           {resultFlash && (
