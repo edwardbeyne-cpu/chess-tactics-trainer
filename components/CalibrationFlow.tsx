@@ -264,6 +264,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const startTimeRef = useRef(Date.now());
   const timerActiveRef = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const nextPuzzleRef = useRef<LichessCachedPuzzle | null>(null);
 
   // Board width — use same logic as Puzzle.tsx useResponsiveBoardWidth
   const [boardWidth, setBoardWidth] = useState<number>(360);
@@ -290,10 +291,15 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
 
 
-  const loadPuzzle = useCallback((elo: number, used: Set<string>) => {
-    const puzzle = selectPuzzle(elo, used);
+  const loadPuzzle = useCallback((elo: number, used: Set<string>, preloaded?: LichessCachedPuzzle | null) => {
+    const puzzle = preloaded ?? selectPuzzle(elo, used);
     if (!puzzle) return;
     used.add(puzzle.id);
+
+    // Preload next puzzle in background immediately
+    setTimeout(() => {
+      nextPuzzleRef.current = selectPuzzle(elo, used);
+    }, 0);
 
     // Apply the opponent's first move so the player sees the position they need to solve
     // In Lichess puzzles, moves[0] is the opponent's move that creates the tactic
@@ -376,7 +382,10 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         calibEloRef.current = newElo;
         setPuzzleIndex(nextIdx);
         puzzleIndexRef.current = nextIdx;
-        loadPuzzle(newElo, usedIds.current);
+        // Use preloaded puzzle if available — avoids blocking search on transition
+        const preloaded = nextPuzzleRef.current;
+        nextPuzzleRef.current = null;
+        loadPuzzle(newElo, usedIds.current, preloaded);
         setTimeout(() => setBoardOpacity(1), 50);
       }
     }, 600);
