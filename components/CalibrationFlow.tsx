@@ -551,8 +551,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     // ── Sub-step: rating reveal ─────────────────────────────────────────────
     if (revealStep === "rating") {
       return (
-        <div style={{ minHeight: "70vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem 1rem" }}>
-          <div style={{ textAlign: "center", marginBottom: "2rem", maxWidth: "480px", width: "100%" }}>
+        <div style={{ minHeight: "60vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "1.5rem 1rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.5rem", maxWidth: "480px", width: "100%" }}>
             <div style={{ fontSize: "7rem", marginBottom: "0.5rem", lineHeight: 1 }}>♔</div>
             <p style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600", margin: "0 0 0.2rem" }}>
               Your starting tactics rating:
@@ -861,6 +861,11 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
               {/* Username input */}
               <div style={{ marginBottom: connectError ? "0.4rem" : "0.75rem" }}>
+                <label style={{ display: "block", fontSize: "0.75rem", color: "#94a3b8", marginBottom: "0.35rem" }}>
+                  {platform === "chesscom" ? "Chess.com" : "Lichess"} username
+                  <span style={{ color: "#ef4444", marginLeft: "0.2rem" }}>*</span>
+                  <span style={{ color: "#475569", marginLeft: "0.4rem", fontWeight: "normal" }}>(optional — skip if you prefer)</span>
+                </label>
                 <input
                   type="text"
                   placeholder={platform === "chesscom" ? "Chess.com username" : "Lichess username"}
