@@ -235,6 +235,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [finalElo, setFinalElo] = useState(0);
   const [revealCount, setRevealCount] = useState(0);
   const [resultFlash, setResultFlash] = useState<"correct" | "wrong" | null>(null);
+  const [coverBoard, setCoverBoard] = useState(false);
 
   // Reveal sub-step: rating → daily_goal → connect
   const [revealStep, setRevealStep] = useState<"rating" | "daily_goal" | "connect">("rating");
@@ -358,16 +359,16 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
 
-    // Show result flash briefly
+    // Show result flash and cover board immediately
     if (!skipped) {
       setResultFlash(correct ? "correct" : "wrong");
-      setTimeout(() => setResultFlash(null), 600);
+      setCoverBoard(true);
     }
 
     const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
     const nextIdx = puzzleIndexRef.current + 1;
 
-    // Load next puzzle after flash completes
+    // At 400ms: load new puzzle while board is covered
     setTimeout(() => {
       if (nextIdx >= TOTAL_PUZZLES) {
         setFinalElo(newElo);
@@ -384,7 +385,13 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         nextPuzzleRef.current = null;
         loadPuzzle(newElo, usedIds.current, preloaded);
       }
-    }, 650);
+    }, 400);
+
+    // At 700ms: hide flash and uncover board — new puzzle already loaded underneath
+    setTimeout(() => {
+      setResultFlash(null);
+      setCoverBoard(false);
+    }, 700);
   }
 
   const handleMove = useCallback(
@@ -1007,16 +1014,25 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             orientation={orientation}
             disableAnimation={true}
           />
-          {/* Result flash overlay */}
+          {/* Board cover — hides Chessground redraw during puzzle transition */}
+          {coverBoard && (
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundColor: "#0d1117",
+              zIndex: 8,
+              borderRadius: "4px",
+              pointerEvents: "none",
+            }} />
+          )}
+          {/* Result flash overlay — shown on top of cover */}
           {resultFlash && (
             <div style={{
               position: "absolute", inset: 0,
-              backgroundColor: resultFlash === "correct" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)",
               display: "flex", alignItems: "center", justifyContent: "center",
               borderRadius: "4px", pointerEvents: "none",
-              fontSize: "2.5rem", fontWeight: "900",
+              fontSize: "3rem", fontWeight: "900",
               color: resultFlash === "correct" ? "#22c55e" : "#ef4444",
-              textShadow: "0 2px 8px rgba(0,0,0,0.5)",
+              textShadow: "0 2px 12px rgba(0,0,0,0.8)",
               zIndex: 10,
             }}>
               {resultFlash === "correct" ? "✓" : "✗"}
