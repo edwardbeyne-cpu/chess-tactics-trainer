@@ -222,7 +222,7 @@ interface CalibrationFlowProps {
 export default function CalibrationFlow({ startingElo, onComplete }: CalibrationFlowProps) {
   // Puzzle-solving state
   const [phase, setPhase] = useState<"solving" | "transitioning" | "reveal">("solving");
-  const [boardOpacity, setBoardOpacity] = useState(1);
+  
   const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [calibElo, setCalibElo] = useState(startingElo);
   const [currentPuzzle, setCurrentPuzzle] = useState<LichessCachedPuzzle | null>(null);
@@ -357,21 +357,16 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
 
-    // Show result flash, then fade board, then load next puzzle
+    // Show result flash briefly
     if (!skipped) {
       setResultFlash(correct ? "correct" : "wrong");
+      setTimeout(() => setResultFlash(null), 600);
     }
 
     const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
     const nextIdx = puzzleIndexRef.current + 1;
 
-    // After 400ms: clear flash and fade board to black
-    setTimeout(() => {
-      setResultFlash(null);
-      setBoardOpacity(0);
-    }, 400);
-
-    // After 600ms: load new puzzle then fade board back in
+    // Load next puzzle after flash — no opacity changes, board stays visible
     setTimeout(() => {
       if (nextIdx >= TOTAL_PUZZLES) {
         setFinalElo(newElo);
@@ -384,11 +379,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         calibEloRef.current = newElo;
         setPuzzleIndex(nextIdx);
         puzzleIndexRef.current = nextIdx;
-        // Use preloaded puzzle if available — avoids blocking search on transition
         const preloaded = nextPuzzleRef.current;
         nextPuzzleRef.current = null;
         loadPuzzle(newElo, usedIds.current, preloaded);
-        setTimeout(() => setBoardOpacity(1), 50);
       }
     }, 600);
   }
@@ -1028,18 +1021,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
               {resultFlash === "correct" ? "✓" : "✗"}
             </div>
           )}
-          {/* Dark cover overlay — covers board during puzzle transition */}
-          {boardOpacity < 1 && (
-            <div style={{
-              position: "absolute", inset: 0,
-              backgroundColor: "#0f0f1a",
-              opacity: 1 - boardOpacity,
-              transition: "opacity 0.2s ease",
-              pointerEvents: "none",
-              zIndex: 9,
-              borderRadius: "4px",
-            }} />
-          )}
+
         </div>
       </div>
       <p style={{
