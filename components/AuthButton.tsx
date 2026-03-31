@@ -81,6 +81,8 @@ export default function AuthButton() {
   };
 
   if (!profile) {
+    // Hide sign-in button if Google OAuth not configured
+    if (!GOOGLE_CLIENT_ID) return null;
     return (
       <>
         <button

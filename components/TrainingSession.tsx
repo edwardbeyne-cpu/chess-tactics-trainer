@@ -389,7 +389,8 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
   const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
-  const [message, setMessage] = useState("Find the winning move!");
+  const sideToMove = puzzleData.fen.includes(" b ") ? "Black" : "White";
+  const [message, setMessage] = useState(`${sideToMove} to move — find the tactic`);
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
