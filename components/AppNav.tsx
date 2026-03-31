@@ -5,12 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import AuthButton from "./AuthButton";
 
-const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
-  { href: "/app/dashboard", label: "Dashboard" },
-  { href: "/app/patterns", label: "Drill Tactics" },
-  { href: "/app/puzzles", label: "Puzzles" },
-  { href: "/app/review", label: "Review" },
-  { href: "/app/custom-puzzles", label: "Imports", pro: true },
+const mainNavItems: Array<{ href: string; label: string; subtitle: string; pro?: boolean }> = [
+  { href: "/app/training-plan", label: "Training Plan", subtitle: "Your roadmap" },
+  { href: "/app/training", label: "Training", subtitle: "Today's session" },
+  { href: "/app/patterns", label: "Drill Tactics", subtitle: "By pattern" },
+  { href: "/app/puzzles", label: "Puzzles", subtitle: "Mixed mode" },
+  { href: "/app/review", label: "Review", subtitle: "Missed puzzles" },
+  { href: "/app/custom-puzzles", label: "Custom Puzzles", subtitle: "Your games", pro: true },
 ];
 
 export default function AppNav() {
@@ -83,52 +84,58 @@ export default function AppNav() {
                 backgroundColor: "transparent",
                 borderBottom: isActive ? "2px solid #4ade80" : "2px solid transparent",
                 color: isActive ? "#e2e8f0" : "#64748b",
-                padding: "0.9rem 0.75rem",
+                padding: "0.6rem 0.75rem",
                 fontWeight: isActive ? "bold" : "normal",
                 fontSize: "0.85rem",
                 textDecoration: "none",
                 display: "inline-flex",
+                flexDirection: "column",
                 alignItems: "center",
-                gap: "0.35rem",
+                gap: "0.1rem",
                 transition: "color 0.15s",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
               }}
             >
-              {item.label}
-              {isReview && reviewCount > 0 && (
-                <span
-                  style={{
-                    backgroundColor: "#ef4444",
-                    color: "white",
-                    borderRadius: "999px",
-                    fontSize: "0.6rem",
-                    fontWeight: "bold",
-                    padding: "0.1rem 0.35rem",
-                    lineHeight: 1.4,
-                    minWidth: "16px",
-                    textAlign: "center",
-                  }}
-                >
-                  {reviewCount}
-                </span>
-              )}
-              {isPro && (
-                <span
-                  style={{
-                    backgroundColor: "#a78bfa",
-                    color: "#1a0a2e",
-                    borderRadius: "999px",
-                    fontSize: "0.5rem",
-                    fontWeight: "bold",
-                    padding: "0.1rem 0.35rem",
-                    lineHeight: 1.4,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  PRO
-                </span>
-              )}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+                {item.label}
+                {isReview && reviewCount > 0 && (
+                  <span
+                    style={{
+                      backgroundColor: "#ef4444",
+                      color: "white",
+                      borderRadius: "999px",
+                      fontSize: "0.6rem",
+                      fontWeight: "bold",
+                      padding: "0.1rem 0.35rem",
+                      lineHeight: 1.4,
+                      minWidth: "16px",
+                      textAlign: "center",
+                    }}
+                  >
+                    {reviewCount}
+                  </span>
+                )}
+                {isPro && (
+                  <span
+                    style={{
+                      backgroundColor: "#a78bfa",
+                      color: "#1a0a2e",
+                      borderRadius: "999px",
+                      fontSize: "0.5rem",
+                      fontWeight: "bold",
+                      padding: "0.1rem 0.35rem",
+                      lineHeight: 1.4,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    PRO
+                  </span>
+                )}
+              </span>
+              <span style={{ fontSize: "0.65rem", color: isActive ? "#4ade80" : "#475569", fontWeight: "normal" }}>
+                {item.subtitle}
+              </span>
             </Link>
           );
         })}
