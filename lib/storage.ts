@@ -3072,3 +3072,176 @@ export function getPatternStartingELO(): number {
   } catch { /* ignore */ }
   return 800;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 36 — Mastery Set Training System
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MASTERY_PROGRESS_KEY = "ctt_mastery_progress";
+
+export interface MasteryPuzzle {
+  id: string;                   // "tactic_[lichessId]" or "blunder_[id]"
+  type: "tactic" | "blunder";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  puzzleData: any;              // tactic: {fen,solution,rating,theme} | blunder: {fen,choices,correctChoiceIndex,blunderExplanation,patternTag}
+  masteryHits: number;          // 0–3; 3 = mastered
+  lastSolvedAt: number[];       // timestamps of each mastery hit
+  lastMasteryHitCounter: number;// sessionPuzzleCounter value when last mastery hit was awarded
+  attempts: number;
+  correctAttempts: number;
+  avgSolveTime: number;         // avg ms across correct solves
+  lastAttemptAt: number;
+}
+
+export interface MasterySet {
+  setNumber: number;
+  createdAt: number;
+  completedAt: number | null;
+  targetELO: number;
+  puzzles: MasteryPuzzle[];     // always 100
+  blunderRatio: number;
+}
+
+export interface MasteryProgress {
+  currentSetNumber: number;
+  sets: MasterySet[];
+  totalMastered: number;        // all-time mastered count
+  currentStreak: number;
+  sessionPuzzleCounter: number; // monotonically increasing; used for non-consecutive mastery rule
+  dailySessionCompleted: number;// puzzles completed in current daily session
+  dailySessionDate: string;     // ISO date of active session (YYYY-MM-DD)
+}
+
+function defaultMasteryProgress(): MasteryProgress {
+  return {
+    currentSetNumber: 1,
+    sets: [],
+    totalMastered: 0,
+    currentStreak: 0,
+    sessionPuzzleCounter: 0,
+    dailySessionCompleted: 0,
+    dailySessionDate: "",
+  };
+}
+
+export function getMasteryProgress(): MasteryProgress {
+  if (typeof window === "undefined") return defaultMasteryProgress();
+  try {
+    return JSON.parse(localStorage.getItem(MASTERY_PROGRESS_KEY) || "null") ?? defaultMasteryProgress();
+  } catch {
+    return defaultMasteryProgress();
+  }
+}
+
+export function saveMasteryProgress(p: MasteryProgress): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(MASTERY_PROGRESS_KEY, JSON.stringify(p));
+}
+
+export function getCurrentMasterySet(): MasterySet | null {
+  const progress = getMasteryProgress();
+  if (progress.sets.length === 0) return null;
+  return progress.sets[progress.sets.length - 1];
+}
+
+export function getMasteredCount(): number {
+  const set = getCurrentMasterySet();
+  if (!set) return 0;
+  return set.puzzles.filter((p) => p.masteryHits >= 3).length;
+}
+
+export function isSetComplete(): boolean {
+  const set = getCurrentMasterySet();
+  if (!set || set.puzzles.length < 100) return false;
+  return set.puzzles.every((p) => p.masteryHits >= 3);
+}
+
+/**
+ * Record a puzzle attempt and update mastery hits.
+ *
+ * Non-consecutive rule: a mastery hit is only awarded if sessionPuzzleCounter
+ * is at least 2 greater than lastMasteryHitCounter (i.e. at least one other
+ * puzzle was shown between this hit and the previous one).
+ */
+export function recordMasteryAttempt(
+  puzzleId: string,
+  correct: boolean,
+  solveTimeMs: number
+): { masteryHits: number; masteryAwarded: boolean } {
+  if (typeof window === "undefined") return { masteryHits: 0, masteryAwarded: false };
+  const progress = getMasteryProgress();
+  if (progress.sets.length === 0) return { masteryHits: 0, masteryAwarded: false };
+  const set = progress.sets[progress.sets.length - 1];
+  const puzzle = set.puzzles.find((p) => p.id === puzzleId);
+  if (!puzzle) return { masteryHits: 0, masteryAwarded: false };
+
+  // Increment global puzzle counter
+  progress.sessionPuzzleCounter += 1;
+  const currentCounter = progress.sessionPuzzleCounter;
+
+  // Update base stats
+  puzzle.attempts += 1;
+  puzzle.lastAttemptAt = Date.now();
+
+  let masteryAwarded = false;
+
+  if (correct) {
+    puzzle.correctAttempts += 1;
+    // Update running average solve time
+    if (puzzle.avgSolveTime === 0) {
+      puzzle.avgSolveTime = solveTimeMs;
+    } else {
+      puzzle.avgSolveTime = Math.round(
+        (puzzle.avgSolveTime * (puzzle.correctAttempts - 1) + solveTimeMs) / puzzle.correctAttempts
+      );
+    }
+
+    if (solveTimeMs < 10000 && puzzle.masteryHits < 3) {
+      // Non-consecutive rule: counter must be > lastMasteryHitCounter + 1
+      const isNonConsecutive = currentCounter > puzzle.lastMasteryHitCounter + 1;
+      if (isNonConsecutive) {
+        puzzle.masteryHits = Math.min(3, puzzle.masteryHits + 1);
+        puzzle.lastSolvedAt.push(Date.now());
+        puzzle.lastMasteryHitCounter = currentCounter;
+        masteryAwarded = true;
+        if (puzzle.masteryHits === 3) {
+          progress.totalMastered += 1;
+        }
+      }
+    }
+  } else {
+    // Wrong answer: reset mastery
+    puzzle.masteryHits = 0;
+    puzzle.lastSolvedAt = [];
+    puzzle.lastMasteryHitCounter = 0;
+  }
+
+  saveMasteryProgress(progress);
+  return { masteryHits: puzzle.masteryHits, masteryAwarded };
+}
+
+/**
+ * Increment the daily session counter. Resets to 0 if it's a new day.
+ * Returns the updated count.
+ */
+export function incrementDailySession(): number {
+  if (typeof window === "undefined") return 0;
+  const progress = getMasteryProgress();
+  const today = new Date().toISOString().slice(0, 10);
+  if (progress.dailySessionDate !== today) {
+    progress.dailySessionCompleted = 0;
+    progress.dailySessionDate = today;
+  }
+  progress.dailySessionCompleted += 1;
+  saveMasteryProgress(progress);
+  return progress.dailySessionCompleted;
+}
+
+/** Read today's completed count without incrementing. */
+export function getDailySessionCompleted(): number {
+  if (typeof window === "undefined") return 0;
+  const progress = getMasteryProgress();
+  const today = new Date().toISOString().slice(0, 10);
+  if (progress.dailySessionDate !== today) return 0;
+  return progress.dailySessionCompleted;
+}

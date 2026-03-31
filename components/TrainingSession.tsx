@@ -1,330 +1,403 @@
 "use client";
 
 /**
- * Sprint 32 — Training Session Component
- * Serves the user's weak patterns in order, 30 puzzles per pattern at their ELO level.
- * Clean, focused mode: NO thinking framework, NO verbalization, NO confidence overlay, NO fatigue detection.
+ * Sprint 36 — Mastery Set Training System
+ * 100-puzzle sets; each puzzle needs 3 correct solves under 10s (non-consecutive) to master.
+ * Mix of tactic puzzles (~80%) and blunder-resistance positions (~20%).
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Chess } from "chess.js";
 import ChessBoard from "@/components/ChessBoard";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import {
   getAllPatternStats,
-  getPatternRatings,
-  updatePatternRating,
-  updateTacticsRating,
-  recordSM2Attempt,
+  getMasteryProgress,
+  saveMasteryProgress,
+  getCurrentMasterySet,
+  getMasteredCount,
+  isSetComplete,
+  recordMasteryAttempt,
+  incrementDailySession,
+  getDailySessionCompleted,
   recordActivityToday,
-  getActivityLog,
-  getTacticsRatingData,
-  type PatternStat,
+  getStreakData,
+  getDailyTargetSettings,
+  type MasteryPuzzle,
+  type MasterySet,
+  type MasteryProgress,
 } from "@/lib/storage";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const TRAINING_SESSION_KEY = "ctt_training_session";
-const CUSTOM_ANALYSIS_KEY = "ctt_custom_analysis";
-
-const THEME_KEY_TO_LABEL: Record<string, string> = {
-  fork: "Fork",
-  pin: "Pin",
-  skewer: "Skewer",
-  discoveredAttack: "Discovered Attack",
-  backRankMate: "Back Rank Mate",
-  smotheredMate: "Smothered Mate",
-  doubleCheck: "Double Check",
-  overloading: "Overloading",
-  deflection: "Deflection",
-  interference: "Interference",
-  zugzwang: "Zugzwang",
-  attraction: "Attraction",
-  clearance: "Clearance",
-  trappedPiece: "Trapped Piece",
-  discoveredCheck: "Discovered Check",
-  kingsideAttack: "Kingside Attack",
-  queensideAttack: "Queenside Attack",
-};
-
-// Map UPPERCASE theme names to theme keys
-const THEME_NAME_TO_KEY: Record<string, string> = {
-  "FORK": "fork",
-  "PIN": "pin",
-  "SKEWER": "skewer",
-  "DISCOVERED ATTACK": "discoveredAttack",
-  "BACK RANK MATE": "backRankMate",
-  "BACK RANK": "backRankMate",
-  "SMOTHERED MATE": "smotheredMate",
-  "DOUBLE CHECK": "doubleCheck",
-  "OVERLOADING": "overloading",
-  "DEFLECTION": "deflection",
-  "INTERFERENCE": "interference",
-  "ZUGZWANG": "zugzwang",
-  "ATTRACTION": "attraction",
-  "CLEARANCE": "clearance",
-  "TRAPPED PIECE": "trappedPiece",
-  "DISCOVERED CHECK": "discoveredCheck",
-  "KINGSIDE ATTACK": "kingsideAttack",
-  "QUEENSIDE ATTACK": "queensideAttack",
-};
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface TrainingPattern {
-  theme: string;     // lowercase theme key e.g. "fork"
-  label: string;     // display name e.g. "Fork"
-  target: number;    // number of puzzles for this pattern
-  completed: number;
-  correct: number;
-  startRating: number; // ELO at session start (for improvement display)
-}
-
-interface TrainingSessionData {
-  sessionDate: string;
-  patterns: TrainingPattern[];
-  startedAt: string;
-  completedAt: string | null;
-}
-
-interface TrainingPuzzle {
-  id: string;
-  fen: string;          // after first opponent move applied
-  solution: string[];   // remaining moves to play
-  rating: number;
-  theme: string;        // theme key
-}
+const MASTERY_TIME_LIMIT_MS = 10000; // 10 seconds
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function getTodayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function applyFirstMove(fen: string, moves: string[]): { fen: string; solution: string[] } {
   if (!moves || moves.length < 2) return { fen, solution: moves };
   try {
     const chess = new Chess(fen);
-    const opponentMove = moves[0];
-    const from = opponentMove.slice(0, 2);
-    const to = opponentMove.slice(2, 4);
-    const promotion = opponentMove.length === 5 ? opponentMove[4] : undefined;
-    chess.move({ from, to, promotion });
+    const opp = moves[0];
+    chess.move({ from: opp.slice(0, 2), to: opp.slice(2, 4), promotion: opp[4] || undefined });
     return { fen: chess.fen(), solution: moves.slice(1) };
   } catch {
     return { fen, solution: moves };
   }
 }
 
-function getPatternElo(themeKey: string): number {
+function uciToSan(fen: string, uci: string): string | null {
   try {
-    const ratings = getPatternRatings();
-    if (ratings[themeKey]?.rating) return ratings[themeKey].rating;
-    // Feature 2: for uncalibrated users, default calibration = 800 → pattern start = 650
-    const calibRating = parseInt(localStorage.getItem("ctt_calibration_rating") ?? "0") || 800;
-    // First puzzle intentionally starts slightly below calibration for confidence building
-    return Math.max(600, calibRating - 150);
-  } catch {
-    return 650;
-  }
-}
-
-function loadSessionFromStorage(): TrainingSessionData | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(TRAINING_SESSION_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw) as TrainingSessionData;
-    // Reset if it's a different day
-    if (session.sessionDate !== getTodayKey()) return null;
-    return session;
+    const chess = new Chess(fen);
+    const move = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    return move?.san ?? null;
   } catch {
     return null;
   }
 }
 
-function saveSessionToStorage(session: TrainingSessionData): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(TRAINING_SESSION_KEY, JSON.stringify(session));
-}
-
-function getWeakPatterns(count = 3): Array<{ theme: string; label: string; elo: number }> {
-  // Check custom analysis (Chess.com game analysis) first
+function applyUci(fen: string, uci: string): string | null {
   try {
-    const customAnalysis = localStorage.getItem(CUSTOM_ANALYSIS_KEY);
-    if (customAnalysis) {
-      const analysis = JSON.parse(customAnalysis) as { weakPatterns?: string[] };
-      if (analysis.weakPatterns && analysis.weakPatterns.length > 0) {
-        return analysis.weakPatterns.slice(0, count).map((theme) => {
-          const key = THEME_NAME_TO_KEY[theme.toUpperCase()] ?? theme.toLowerCase();
-          return {
-            theme: key,
-            label: THEME_KEY_TO_LABEL[key] ?? theme,
-            elo: getPatternElo(key),
-          };
-        });
-      }
-    }
+    const chess = new Chess(fen);
+    chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+    return chess.fen();
   } catch {
-    // ignore
+    return null;
   }
-
-  // Fall back to patterns with lowest ELO from ctt_pattern_ratings
-  const ratings = getPatternRatings();
-  const allThemeKeys = Object.keys(cachedPuzzlesByTheme);
-
-  const ratingEntries = allThemeKeys.map((key) => ({
-    theme: key,
-    label: THEME_KEY_TO_LABEL[key] ?? key,
-    elo: ratings[key]?.rating ?? 1000,
-  }));
-
-  // Also check ctt_sm2_attempts patterns with lowest accuracy
-  const patternStats: PatternStat[] = getAllPatternStats();
-  const statsWithData = patternStats.filter((s) => s.totalAttempts >= 3);
-
-  if (statsWithData.length >= count) {
-    // Sort by solve rate ascending (weakest first)
-    const sorted = [...statsWithData].sort((a, b) => a.solveRate - b.solveRate);
-    return sorted.slice(0, count).map((s) => {
-      const key = THEME_NAME_TO_KEY[s.theme.toUpperCase()] ?? s.theme.toLowerCase();
-      return {
-        theme: key,
-        label: THEME_KEY_TO_LABEL[key] ?? s.theme,
-        elo: getPatternElo(key),
-      };
-    });
-  }
-
-  // Not enough data — use lowest ELO patterns
-  return ratingEntries
-    .sort((a, b) => a.elo - b.elo)
-    .slice(0, count);
 }
 
-function buildNewSession(): TrainingSessionData {
-  const weakPatterns = getWeakPatterns(3);
-  const patterns: TrainingPattern[] = weakPatterns.map((p, i) => ({
-    theme: p.theme,
-    label: p.label,
-    target: i === 0 ? 30 : 15,
-    completed: 0,
-    correct: 0,
-    startRating: p.elo,
-  }));
+function getRandomLegalMove(fen: string, excludeUcis: string[]): string | null {
+  try {
+    const chess = new Chess(fen);
+    const moves = chess.moves({ verbose: true });
+    const candidates = moves.filter((m) => {
+      const uci = `${m.from}${m.to}${m.promotion ?? ""}`;
+      return !excludeUcis.includes(uci) && !excludeUcis.includes(`${m.from}${m.to}`);
+    });
+    if (candidates.length === 0) return null;
+    const pick = candidates[Math.floor(Math.random() * candidates.length)];
+    return `${pick.from}${pick.to}${pick.promotion ?? ""}`;
+  } catch {
+    return null;
+  }
+}
+
+// ── Blunder Position Builder ────────────────────────────────────────────────
+
+interface BlunderData {
+  fen: string;
+  choices: string[];
+  correctChoiceIndex: number;
+  blunderExplanation: string;
+  patternTag: string;
+}
+
+const BLUNDER_EXPLANATIONS: Record<string, string[]> = {
+  fork: ["Taking that piece walks into a knight fork — you'd lose material", "Capturing there allows a fork on the next move"],
+  pin: ["That move abandons the pinned piece — the opponent takes for free", "Moving that way walks into an absolute pin"],
+  skewer: ["That move allows a skewer — your king runs, opponent takes the piece behind", "Retreating there sets up a skewer"],
+  backRankMate: ["That greedy capture removes the back rank defender — checkmate follows", "Moving that piece exposes a back rank mate"],
+  deflection: ["That move deflects your defender — leaving a key square unprotected"],
+  overloading: ["That move overloads your piece — it can't defend two targets at once"],
+  default: [
+    "That greedy capture walks into a tactic — always check your opponent's responses",
+    "Taking the material is tempting but creates a losing position",
+    "The greedy capture ignores your opponent's tactical threat",
+  ],
+};
+
+function getBlunderExplanation(themes: string[]): string {
+  for (const t of themes) {
+    const arr = BLUNDER_EXPLANATIONS[t];
+    if (arr?.length) return arr[Math.floor(Math.random() * arr.length)];
+  }
+  const d = BLUNDER_EXPLANATIONS.default;
+  return d[Math.floor(Math.random() * d.length)];
+}
+
+function buildBlunderData(raw: LichessCachedPuzzle): BlunderData | null {
+  if (raw.moves.length < 2) return null;
+  const afterOppFen = applyUci(raw.fen, raw.moves[0]);
+  if (!afterOppFen) return null;
+
+  const safeMove = raw.moves[1];
+  const safeSan = uciToSan(afterOppFen, safeMove);
+  if (!safeSan) return null;
+
+  // Find a greedy blunder (capture != safe move)
+  let blunderMove: string | null = null;
+  try {
+    const chess = new Chess(afterOppFen);
+    const allMoves = chess.moves({ verbose: true });
+    const captures = allMoves.filter((m) => {
+      const uci = `${m.from}${m.to}`;
+      return m.captured && uci !== safeMove.slice(0, 4);
+    });
+    if (captures.length > 0) {
+      const pick = captures[Math.floor(Math.random() * captures.length)];
+      blunderMove = `${pick.from}${pick.to}${pick.promotion ?? ""}`;
+    }
+  } catch { /* skip */ }
+  if (!blunderMove) return null;
+
+  const blunderSan = uciToSan(afterOppFen, blunderMove);
+  if (!blunderSan) return null;
+
+  const neutralMove = getRandomLegalMove(afterOppFen, [safeMove, blunderMove]);
+  if (!neutralMove) return null;
+  const neutralSan = uciToSan(afterOppFen, neutralMove);
+  if (!neutralSan) return null;
+
+  const rawChoices = shuffleArray([
+    { san: safeSan, isSafe: true },
+    { san: blunderSan, isSafe: false },
+    { san: neutralSan, isSafe: false },
+  ]);
+
+  const NOISE_TAGS = new Set(["short", "long", "middlegame", "endgame", "opening", "master",
+    "masterVsMaster", "advantage", "crushing", "equality", "mate", "mateIn1", "mateIn2",
+    "mateIn3", "mateIn4", "mateIn5", "sacrifice"]);
 
   return {
-    sessionDate: getTodayKey(),
-    patterns,
-    startedAt: new Date().toISOString(),
-    completedAt: null,
+    fen: afterOppFen,
+    choices: rawChoices.map((c) => c.san),
+    correctChoiceIndex: rawChoices.findIndex((c) => c.isSafe),
+    blunderExplanation: getBlunderExplanation(raw.themes),
+    patternTag: raw.themes.find((t) => !NOISE_TAGS.has(t)) ?? "tactics",
   };
 }
 
-function getSessionTotalTarget(session: TrainingSessionData): number {
-  return session.patterns.reduce((sum, p) => sum + p.target, 0);
-}
+// ── Set Generation ─────────────────────────────────────────────────────────
 
-function getSessionTotalCompleted(session: TrainingSessionData): number {
-  return session.patterns.reduce((sum, p) => sum + p.completed, 0);
-}
-
-function loadPuzzleForPattern(
-  themeKey: string,
-  userElo: number,
-  excludeIds?: Set<string>,
-): TrainingPuzzle | null {
-  const pool = cachedPuzzlesByTheme[themeKey];
-  if (!pool || pool.length === 0) return null;
-
-  // Exclude already-used puzzles; fall back to full pool only when exhausted
-  const available =
-    excludeIds && excludeIds.size > 0
-      ? pool.filter((p) => !excludeIds.has(p.id))
-      : pool;
-  const workingPool = available.length > 0 ? available : pool;
-
-  // ELO-range-constrained selection: ±150, expanding to ±300, then ±500
-  const narrow = workingPool.filter((p) => Math.abs(p.rating - userElo) <= 150);
-  const mid    = workingPool.filter((p) => Math.abs(p.rating - userElo) <= 300);
-  const wide   = workingPool.filter((p) => Math.abs(p.rating - userElo) <= 500);
-  const selected =
-    narrow.length >= 3 ? narrow :
-    mid.length >= 1    ? mid    :
-    wide.length >= 1   ? wide   : workingPool;
-  const raw = selected[Math.floor(Math.random() * selected.length)];
-
-  const { fen, solution } = applyFirstMove(raw.fen, raw.moves);
-  return { id: raw.id, fen, solution, rating: raw.rating, theme: themeKey };
-}
-
-function hasSufficientData(): boolean {
-  if (typeof window === "undefined") return false;
+function computeBlunderRatio(): number {
   try {
-    const sm2 = JSON.parse(localStorage.getItem("ctt_sm2_attempts") || "[]") as unknown[];
-    return sm2.length >= 20;
-  } catch {
-    return false;
+    // Check calibration rating — high-rated players get fewer blunders
+    const calibRaw = localStorage.getItem("ctt_calibration_rating");
+    if (calibRaw) {
+      const calib = parseInt(calibRaw, 10);
+      if (!isNaN(calib) && calib >= 2000) return 0.1;
+    }
+    // Check custom blunder rate from Chess.com analysis
+    const customRaw = localStorage.getItem("ctt_custom_analysis");
+    if (customRaw) {
+      const custom = JSON.parse(customRaw) as { blunderRate?: number };
+      if (typeof custom.blunderRate === "number" && custom.blunderRate > 30) return 0.3;
+    }
+  } catch { /* ignore */ }
+  return 0.2;
+}
+
+function generateMasterySet(setNumber: number): MasterySet {
+  const calibRaw = localStorage.getItem("ctt_calibration_rating");
+  const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
+  const targetELO = calibrationRating + (setNumber - 1) * 100;
+  const blunderRatio = computeBlunderRatio();
+  const blunderCount = Math.round(100 * blunderRatio);
+  const tacticCount = 100 - blunderCount;
+
+  const usedIds = new Set<string>();
+  const puzzles: MasteryPuzzle[] = [];
+
+  // ── Tactic puzzles ──────────────────────────────────────────────────────
+  const allThemes = Object.keys(cachedPuzzlesByTheme);
+
+  // Identify weak patterns (lowest solve-rate with enough data)
+  const patternStats = getAllPatternStats();
+  const weakestThemes = patternStats
+    .filter((s) => s.totalAttempts >= 3)
+    .sort((a, b) => a.solveRate - b.solveRate)
+    .slice(0, 3)
+    .map((s) => s.theme.toLowerCase());
+
+  const weakTacticTarget = Math.round(tacticCount * 0.5);
+  const spreadTacticTarget = tacticCount - weakTacticTarget;
+
+  // Select from weak patterns (50% of tactic slots)
+  if (weakestThemes.length > 0) {
+    const perWeak = Math.ceil(weakTacticTarget / weakestThemes.length);
+    for (const theme of weakestThemes) {
+      const pool = cachedPuzzlesByTheme[theme] ?? [];
+      const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
+      const source = shuffleArray(eligible.length > 0 ? eligible : pool.filter((p) => !usedIds.has(p.id)));
+      for (let i = 0; i < Math.min(perWeak, source.length) && puzzles.filter(p => p.type === "tactic").length < weakTacticTarget; i++) {
+        const raw = source[i];
+        if (usedIds.has(raw.id)) continue;
+        const { fen, solution } = applyFirstMove(raw.fen, raw.moves);
+        puzzles.push({
+          id: `tactic_${raw.id}`,
+          type: "tactic",
+          puzzleData: { fen, solution, rating: raw.rating, theme },
+          masteryHits: 0,
+          lastSolvedAt: [],
+          lastMasteryHitCounter: 0,
+          attempts: 0,
+          correctAttempts: 0,
+          avgSolveTime: 0,
+          lastAttemptAt: 0,
+        });
+        usedIds.add(raw.id);
+      }
+    }
   }
+
+  // Fill remaining tactic slots from other patterns (spread)
+  const otherThemes = shuffleArray(allThemes.filter((t) => !weakestThemes.includes(t)));
+  let otherIdx = 0;
+  while (puzzles.filter((p) => p.type === "tactic").length < tacticCount && otherIdx < otherThemes.length * 5) {
+    const theme = otherThemes[otherIdx % otherThemes.length];
+    otherIdx++;
+    const pool = cachedPuzzlesByTheme[theme] ?? [];
+    const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
+    const source = eligible.length > 0 ? eligible : pool.filter((p) => !usedIds.has(p.id));
+    if (source.length === 0) continue;
+    const raw = source[Math.floor(Math.random() * source.length)];
+    if (usedIds.has(raw.id)) continue;
+    const { fen, solution } = applyFirstMove(raw.fen, raw.moves);
+    puzzles.push({
+      id: `tactic_${raw.id}`,
+      type: "tactic",
+      puzzleData: { fen, solution, rating: raw.rating, theme },
+      masteryHits: 0,
+      lastSolvedAt: [],
+      lastMasteryHitCounter: 0,
+      attempts: 0,
+      correctAttempts: 0,
+      avgSolveTime: 0,
+      lastAttemptAt: 0,
+    });
+    usedIds.add(raw.id);
+  }
+
+  // ── Blunder positions ─────────────────────────────────────────────────
+  const allThemesShuffled = shuffleArray(allThemes);
+  let blunderAdded = 0;
+  for (const theme of allThemesShuffled) {
+    if (blunderAdded >= blunderCount) break;
+    const pool = cachedPuzzlesByTheme[theme] ?? [];
+    const eligible = shuffleArray(pool.filter((p) => p.moves.length >= 2 && !usedIds.has(p.id)));
+    for (const raw of eligible) {
+      if (blunderAdded >= blunderCount) break;
+      if (usedIds.has(raw.id)) continue;
+      const blunderData = buildBlunderData(raw);
+      if (!blunderData) continue;
+      puzzles.push({
+        id: `blunder_${raw.id}`,
+        type: "blunder",
+        puzzleData: blunderData,
+        masteryHits: 0,
+        lastSolvedAt: [],
+        lastMasteryHitCounter: 0,
+        attempts: 0,
+        correctAttempts: 0,
+        avgSolveTime: 0,
+        lastAttemptAt: 0,
+      });
+      usedIds.add(raw.id);
+      blunderAdded++;
+    }
+  }
+
+  return {
+    setNumber,
+    createdAt: Date.now(),
+    completedAt: null,
+    targetELO,
+    puzzles: shuffleArray(puzzles).slice(0, 100),
+    blunderRatio,
+  };
 }
 
-function hasChessComConnected(): boolean {
-  if (typeof window === "undefined") return false;
-  return !!localStorage.getItem("ctt_custom_username");
+// ── Puzzle Selection ────────────────────────────────────────────────────────
+
+/**
+ * Pick the next puzzle to show from the set.
+ * - Skip mastered puzzles (masteryHits === 3)
+ * - Prefer lowest masteryHits (0 → 1 → 2)
+ * - Avoid the puzzle that was just shown
+ * Returns the index into set.puzzles, or -1 if all mastered.
+ */
+function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null): number {
+  const candidates = set.puzzles
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => p.masteryHits < 3 && p.id !== lastShownId);
+
+  if (candidates.length === 0) {
+    // All (other) puzzles mastered — check if last puzzle is also mastered
+    const allMastered = set.puzzles.every((p) => p.masteryHits >= 3);
+    if (allMastered) return -1;
+    // Only one unmastered puzzle left — show it even if it was just shown
+    const last = set.puzzles.findIndex((p) => p.masteryHits < 3);
+    return last;
+  }
+
+  // Group by masteryHits, pick from lowest group
+  const minHits = Math.min(...candidates.map(({ p }) => p.masteryHits));
+  const group = candidates.filter(({ p }) => p.masteryHits === minHits);
+  return group[Math.floor(Math.random() * group.length)].i;
 }
 
-// ── Progress Bar ───────────────────────────────────────────────────────────
+// ── Progress Bar ────────────────────────────────────────────────────────────
 
 function ProgressBar({ value, max, color = "#4ade80" }: { value: number; max: number; color?: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
-    <div style={{
-      backgroundColor: "#0f0f1a",
-      borderRadius: "999px",
-      height: "8px",
-      overflow: "hidden",
-      border: "1px solid #1e2a3a",
-      flex: 1,
-    }}>
-      <div style={{
-        height: "100%",
-        backgroundColor: color,
-        borderRadius: "999px",
-        width: `${pct}%`,
-        transition: "width 0.4s ease",
-      }} />
+    <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", overflow: "hidden", border: "1px solid #1e2a3a", flex: 1 }}>
+      <div style={{ height: "100%", backgroundColor: color, borderRadius: "999px", width: `${pct}%`, transition: "width 0.4s ease" }} />
     </div>
   );
 }
 
-// ── Inline Puzzle Board ────────────────────────────────────────────────────
+// ── Mastery Dots ────────────────────────────────────────────────────────────
 
-interface TrainingPuzzleBoardProps {
-  puzzle: TrainingPuzzle;
-  onResult: (correct: boolean) => void;
-  patternLabel?: string;
+function MasteryDots({ hits, size = 14 }: { hits: number; size?: number }) {
+  return (
+    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          style={{
+            width: size,
+            height: size,
+            borderRadius: "50%",
+            backgroundColor: i < hits ? "#4ade80" : "transparent",
+            border: `2px solid ${i < hits ? "#4ade80" : "#334155"}`,
+            transition: "all 0.3s ease",
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
-function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleBoardProps & { patternLabel?: string }) {
-  const [fen, setFen] = useState(puzzle.fen);
+// ── Tactic Board ────────────────────────────────────────────────────────────
+
+interface TacticBoardProps {
+  puzzleData: { fen: string; solution: string[]; rating: number; theme: string };
+  onResult: (correct: boolean) => void;
+}
+
+function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
+  const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
-  const contextMsg = patternLabel
-    ? `Training: ${patternLabel} — find the ${patternLabel.toLowerCase()} tactic`
-    : "Find the winning move!";
-  const [message, setMessage] = useState(contextMsg);
+  const [message, setMessage] = useState("Find the winning move!");
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
-  const [firstTry, setFirstTry] = useState(true);
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
 
-  // Board sizing — Sprint 33: use more horizontal space
   const [boardWidth, setBoardWidth] = useState(520);
   useEffect(() => {
     function getWidth() {
-      if (typeof window === "undefined") return 520;
-      const vw = window.innerWidth;
+      const vw = typeof window !== "undefined" ? window.innerWidth : 520;
       if (vw < 640) return Math.min(vw - 16, 480);
       if (vw <= 1024) return Math.min(640, Math.floor(vw * 0.92));
       return Math.min(660, Math.floor(vw * 0.62));
@@ -335,38 +408,20 @@ function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleB
     return () => window.removeEventListener("resize", handler);
   }, []);
 
-  // Reset when puzzle changes
-  useEffect(() => {
-    setFen(puzzle.fen);
-    setMoveIndex(0);
-    setStatus("solve");
-    setMessage(patternLabel
-      ? `Training: ${patternLabel} — find the ${patternLabel.toLowerCase()} tactic`
-      : "Find the winning move!");
-    setLastMove(undefined);
-    setFirstTry(true);
-    resultCalledRef.current = false;
-    hasScoredRef.current = false;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [puzzle.id]);
-
-  const orientation = puzzle.fen.includes(" b ") ? "black" : "white";
+  const orientation = puzzleData.fen.includes(" b ") ? "black" : "white";
 
   function handleMove(from: string, to: string): boolean {
     if (status !== "solve") return false;
 
-    const expectedUci = puzzle.solution[moveIndex];
+    const expectedUci = puzzleData.solution[moveIndex];
     const expFrom = expectedUci.slice(0, 2);
     const expTo = expectedUci.slice(2, 4);
-
     const isCorrect = from === expFrom && to === expTo;
 
     if (!isCorrect) {
-      setMessage("❌ Wrong move — try again!");
-      setFirstTry(false);
+      setMessage("Wrong move — try again!");
       if (!hasScoredRef.current) {
         hasScoredRef.current = true;
-        // Score as failed immediately on first wrong move
         setTimeout(() => {
           if (!resultCalledRef.current) {
             resultCalledRef.current = true;
@@ -377,7 +432,6 @@ function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleB
       return false;
     }
 
-    // Apply the player's move
     try {
       const chess = new Chess(fen);
       const promotion = expectedUci.length === 5 ? expectedUci[4] : undefined;
@@ -387,40 +441,32 @@ function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleB
       setLastMove([from, to]);
 
       const nextIndex = moveIndex + 1;
-
-      // Check if there are more solution moves (opponent response + our next move)
-      if (nextIndex >= puzzle.solution.length) {
-        // Puzzle complete!
+      if (nextIndex >= puzzleData.solution.length) {
         setStatus("solved");
-        setMessage("✅ Correct! Well done.");
+        setMessage("Correct!");
         if (!resultCalledRef.current) {
           resultCalledRef.current = true;
-          onResult(firstTry);
+          onResult(true);
         }
         return true;
       }
 
-      // Apply opponent's response move
-      const opponentUci = puzzle.solution[nextIndex];
-      const opFrom = opponentUci.slice(0, 2);
-      const opTo = opponentUci.slice(2, 4);
-      const opPromotion = opponentUci.length === 5 ? opponentUci[4] : undefined;
-
+      // Apply opponent response
+      const oppUci = puzzleData.solution[nextIndex];
       setTimeout(() => {
         try {
           const chess2 = new Chess(newFen);
-          chess2.move({ from: opFrom, to: opTo, promotion: opPromotion });
+          chess2.move({ from: oppUci.slice(0, 2), to: oppUci.slice(2, 4), promotion: oppUci[4] || undefined });
           setFen(chess2.fen());
-          setLastMove([opFrom, opTo]);
+          setLastMove([oppUci.slice(0, 2), oppUci.slice(2, 4)]);
           setMoveIndex(nextIndex + 1);
           setMessage("Keep going — find the next move!");
         } catch {
-          // If opponent move fails, consider puzzle solved
           setStatus("solved");
-          setMessage("✅ Correct! Well done.");
+          setMessage("Correct!");
           if (!resultCalledRef.current) {
             resultCalledRef.current = true;
-            onResult(firstTry);
+            onResult(true);
           }
         }
       }, 400);
@@ -432,26 +478,19 @@ function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleB
     }
   }
 
+  const msgColor = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#e2e8f0";
+  const msgBorder = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c";
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
-      {/* Status message */}
       <div style={{
-        fontSize: "0.9rem",
-        fontWeight: "500",
-        color: status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#e2e8f0",
-        padding: "0.5rem 1rem",
-        backgroundColor: "#0d1621",
-        borderRadius: "8px",
-        border: `1px solid ${status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c"}`,
-        textAlign: "center",
-        width: "100%",
-        maxWidth: `${boardWidth}px`,
-        boxSizing: "border-box",
+        fontSize: "0.9rem", fontWeight: 500, color: msgColor,
+        padding: "0.5rem 1rem", backgroundColor: "#0d1621", borderRadius: "8px",
+        border: `1px solid ${msgBorder}`, textAlign: "center",
+        width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
       }}>
         {message}
       </div>
-
-      {/* Board */}
       <ChessBoard
         fen={fen}
         onMove={handleMove}
@@ -460,604 +499,705 @@ function TrainingPuzzleBoard({ puzzle, onResult, patternLabel }: TrainingPuzzleB
         boardWidth={boardWidth}
         orientation={orientation as "white" | "black"}
       />
-
-      {/* Rating badge */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.75rem",
-        fontSize: "0.78rem",
-        color: "#475569",
-      }}>
-        <span>Puzzle rating: <span style={{ color: "#94a3b8" }}>{puzzle.rating}</span></span>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
+        <span>Puzzle rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
         <span>•</span>
-        <span>{orientation === "white" ? "⬜ White to move" : "⬛ Black to move"}</span>
+        <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
       </div>
     </div>
   );
 }
 
-// ── Main TrainingSession Component ─────────────────────────────────────────
+// ── Blunder Board ───────────────────────────────────────────────────────────
+
+interface BlunderBoardProps {
+  puzzleData: BlunderData;
+  onResult: (correct: boolean) => void;
+}
+
+function BlunderBoard({ puzzleData, onResult }: BlunderBoardProps) {
+  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const resultCalledRef = useRef(false);
+
+  const [boardWidth, setBoardWidth] = useState(320);
+  useEffect(() => {
+    function getWidth() {
+      const vw = typeof window !== "undefined" ? window.innerWidth : 320;
+      if (vw < 640) return Math.min(vw - 16, 320);
+      return 340;
+    }
+    setBoardWidth(getWidth());
+    const handler = () => setBoardWidth(getWidth());
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  function handleChoice(idx: number) {
+    if (revealed) return;
+    setSelectedChoice(idx);
+    setRevealed(true);
+    const correct = idx === puzzleData.correctChoiceIndex;
+    if (!resultCalledRef.current) {
+      resultCalledRef.current = true;
+      // Give them 800ms to see the result before onResult triggers next puzzle
+      setTimeout(() => onResult(correct), 800);
+    }
+  }
+
+  const choiceLabels = ["A", "B", "C"];
+  const isCorrect = selectedChoice === puzzleData.correctChoiceIndex;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {/* Prompt */}
+      <div style={{
+        backgroundColor: "#0d0606", border: "1px solid #3a1a1a", borderRadius: "10px",
+        padding: "0.75rem 1rem", textAlign: "center",
+      }}>
+        <div style={{ color: "#ef4444", fontWeight: "bold", fontSize: "0.88rem", marginBottom: "0.2rem" }}>
+          Blunder Alert — find the safe move
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: "0.78rem" }}>
+          One of these moves is a blunder. Choose the correct / safe move.
+        </div>
+      </div>
+
+      {/* Board */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <ChessBoard fen={puzzleData.fen} draggable={false} boardWidth={boardWidth} />
+      </div>
+
+      {/* Choices */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {puzzleData.choices.map((choice, idx) => {
+          const isThis = selectedChoice === idx;
+          const thisCorrect = idx === puzzleData.correctChoiceIndex;
+          let bg = "#1a1a2e", border = "#2e3a5c", color = "#e2e8f0";
+          if (revealed) {
+            if (thisCorrect) { bg = "#0a1f12"; border = "#4ade80"; color = "#4ade80"; }
+            else if (isThis && !thisCorrect) { bg = "#1f0a0a"; border = "#ef4444"; color = "#ef4444"; }
+            else { color = "#475569"; border = "#1e2a3c"; }
+          } else if (isThis) {
+            bg = "#1e3a5c"; border = "#2e75b6";
+          }
+          return (
+            <button
+              key={idx}
+              onClick={() => handleChoice(idx)}
+              disabled={revealed}
+              style={{
+                width: "100%", backgroundColor: bg, border: `2px solid ${border}`,
+                borderRadius: "10px", padding: "0.75rem 1rem", color,
+                fontSize: "0.9rem", fontWeight: "bold", cursor: revealed ? "default" : "pointer",
+                textAlign: "left", display: "flex", alignItems: "center", gap: "0.75rem",
+              }}
+            >
+              <span style={{
+                backgroundColor: revealed && thisCorrect ? "#4ade80" : revealed && isThis && !thisCorrect ? "#ef4444" : "#2e3a5c",
+                color: revealed && (thisCorrect || (isThis && !thisCorrect)) ? "#0f0f1a" : "#94a3b8",
+                borderRadius: "6px", width: "26px", height: "26px",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "0.78rem", fontWeight: "bold", flexShrink: 0,
+              }}>
+                {choiceLabels[idx]}
+              </span>
+              <span>{choice}</span>
+              {revealed && thisCorrect && <span style={{ marginLeft: "auto" }}>✓</span>}
+              {revealed && isThis && !thisCorrect && <span style={{ marginLeft: "auto" }}>✗</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Feedback */}
+      {revealed && (
+        <div style={{
+          padding: "1rem", backgroundColor: isCorrect ? "#0a1f12" : "#1f0a0a",
+          border: `1px solid ${isCorrect ? "#4ade80" : "#ef4444"}40`, borderRadius: "10px",
+        }}>
+          {isCorrect ? (
+            <div style={{ color: "#4ade80", fontWeight: "bold", fontSize: "0.9rem" }}>
+              Safe move found!
+            </div>
+          ) : (
+            <>
+              <div style={{ color: "#ef4444", fontWeight: "bold", fontSize: "0.9rem", marginBottom: "0.25rem" }}>
+                That&apos;s the blunder
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                {puzzleData.blunderExplanation}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Feedback Overlay ────────────────────────────────────────────────────────
+
+interface FeedbackOverlayProps {
+  correct: boolean;
+  masteryAwarded: boolean;
+  overTimeLimit: boolean;
+  newMasteryHits: number;
+}
+
+function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHits }: FeedbackOverlayProps) {
+  let bgColor = "#0a1520";
+  let borderColor = "#1e3a5c";
+  let mainText = "";
+  let subText = "";
+
+  if (!correct) {
+    bgColor = "#1a0808"; borderColor = "#5c1e1e";
+    mainText = "Mastery reset";
+    subText = "A wrong answer resets this puzzle's mastery hits";
+  } else if (masteryAwarded) {
+    bgColor = "#0a1f12"; borderColor = "#4ade80";
+    mainText = "Mastery point!";
+    subText = `${newMasteryHits}/3 mastery hits`;
+  } else if (overTimeLimit) {
+    bgColor = "#0a1228"; borderColor = "#3b82f6";
+    mainText = "Correct — solve faster for mastery";
+    subText = "Under 10 seconds earns a mastery point";
+  } else {
+    // correct, under limit, but non-consecutive rule blocked
+    bgColor = "#0a1228"; borderColor = "#3b82f6";
+    mainText = "Correct!";
+    subText = "Solve other puzzles first for non-consecutive mastery";
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
+      zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div style={{
+        backgroundColor: bgColor, border: `2px solid ${borderColor}`,
+        borderRadius: "16px", padding: "2rem", textAlign: "center", maxWidth: "320px", width: "90%",
+      }}>
+        <div style={{
+          fontSize: "1.5rem", fontWeight: "bold",
+          color: !correct ? "#ef4444" : masteryAwarded ? "#4ade80" : "#60a5fa",
+          marginBottom: "0.5rem",
+        }}>
+          {mainText}
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "1rem" }}>
+          {subText}
+        </div>
+        {correct && (
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <MasteryDots hits={newMasteryHits} size={16} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Session Complete Screen ─────────────────────────────────────────────────
+
+interface SessionCompleteProps {
+  dailyGoal: number;
+  dailyCompleted: number;
+  masteredCount: number;
+  sessionCorrect: number;
+  sessionTotal: number;
+  sessionUnder10s: number;
+  sessionNewMastered: number;
+  onContinue: () => void;
+}
+
+function SessionCompleteScreen({
+  dailyGoal,
+  dailyCompleted,
+  masteredCount,
+  sessionCorrect,
+  sessionTotal,
+  sessionUnder10s,
+  sessionNewMastered,
+  onContinue,
+}: SessionCompleteProps) {
+  const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
+  return (
+    <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div style={{
+        backgroundColor: "#13132b", border: "1px solid #4ade80",
+        borderRadius: "16px", padding: "2rem", textAlign: "center",
+      }}>
+        <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>✓</div>
+        <h2 style={{ color: "#4ade80", fontSize: "1.3rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
+          Session complete!
+        </h2>
+        <p style={{ color: "#94a3b8", fontSize: "0.9rem", margin: 0 }}>
+          {dailyCompleted}/{dailyGoal} puzzles today
+        </p>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "16px", padding: "1.5rem" }}>
+        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
+          Session Stats
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem" }}>
+          {[
+            { label: "Mastered today", value: `+${sessionNewMastered}`, color: "#4ade80" },
+            { label: "Accuracy", value: `${accuracy}%`, color: accuracy >= 70 ? "#4ade80" : accuracy >= 50 ? "#f59e0b" : "#ef4444" },
+            { label: "Under 10s", value: `${sessionUnder10s}/${sessionTotal}`, color: "#60a5fa" },
+            { label: "Set progress", value: `${masteredCount}/100`, color: "#e2e8f0" },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{
+              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
+              borderRadius: "10px", padding: "0.75rem", textAlign: "center",
+            }}>
+              <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.3rem" }}>{label}</div>
+              <div style={{ color, fontSize: "1.3rem", fontWeight: "bold" }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div style={{
+          backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
+          borderRadius: "10px", padding: "0.85rem", textAlign: "center",
+          color: "#64748b", fontSize: "0.88rem",
+        }}>
+          Come back tomorrow to keep your streak!
+        </div>
+        <button
+          onClick={onContinue}
+          style={{
+            backgroundColor: "transparent", border: "1px solid #2e3a5c",
+            borderRadius: "10px", padding: "0.75rem",
+            color: "#64748b", fontSize: "0.88rem", cursor: "pointer",
+          }}
+        >
+          Keep going anyway →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Set Complete Screen ─────────────────────────────────────────────────────
+
+interface SetCompleteProps {
+  set: MasterySet;
+  onStartNext: () => void;
+}
+
+function SetCompleteScreen({ set, onStartNext }: SetCompleteProps) {
+  const daysToComplete = set.completedAt
+    ? Math.max(1, Math.round((set.completedAt - set.createdAt) / 86400000))
+    : 0;
+  const totalAttempts = set.puzzles.reduce((s, p) => s + p.attempts, 0);
+  const totalCorrect = set.puzzles.reduce((s, p) => s + p.correctAttempts, 0);
+  const overallAccuracy = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
+  const avgTime = Math.round(set.puzzles
+    .filter((p) => p.avgSolveTime > 0)
+    .reduce((s, p, _, arr) => s + p.avgSolveTime / arr.length, 0) / 1000);
+
+  return (
+    <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div style={{
+        backgroundColor: "#13132b", border: "1px solid #f59e0b",
+        borderRadius: "16px", padding: "2.5rem", textAlign: "center",
+      }}>
+        <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>🎉</div>
+        <h2 style={{ color: "#f59e0b", fontSize: "1.4rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
+          Set {set.setNumber} Complete!
+        </h2>
+        <p style={{ color: "#94a3b8", fontSize: "0.9rem", margin: 0, lineHeight: 1.6 }}>
+          You&apos;ve mastered 100 tactical patterns. Time to level up.
+        </p>
+      </div>
+
+      <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "16px", padding: "1.5rem" }}>
+        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
+          Set Stats
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
+          {[
+            { label: "Days", value: daysToComplete, color: "#e2e8f0" },
+            { label: "Accuracy", value: `${overallAccuracy}%`, color: overallAccuracy >= 70 ? "#4ade80" : "#f59e0b" },
+            { label: "Avg time", value: `${avgTime}s`, color: "#e2e8f0" },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{
+              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
+              borderRadius: "10px", padding: "0.75rem", textAlign: "center",
+            }}>
+              <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.3rem" }}>{label}</div>
+              <div style={{ color, fontSize: "1.3rem", fontWeight: "bold" }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button
+        onClick={onStartNext}
+        style={{
+          backgroundColor: "#f59e0b", color: "#0f0f00",
+          border: "none", borderRadius: "10px", padding: "1rem",
+          fontSize: "1rem", fontWeight: "bold", cursor: "pointer",
+          width: "100%",
+        }}
+      >
+        Start Set {set.setNumber + 1} →
+      </button>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
+
+type Phase = "loading" | "solving" | "feedback" | "session_complete" | "set_complete";
+
+interface FeedbackState {
+  correct: boolean;
+  masteryAwarded: boolean;
+  overTimeLimit: boolean;
+  newMasteryHits: number;
+}
 
 export default function TrainingSession() {
-  const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [session, setSession] = useState<TrainingSessionData | null>(null);
-  const [sessionStarted, setSessionStarted] = useState(false);
-  const [currentPatternIdx, setCurrentPatternIdx] = useState(0);
-  const [currentPuzzle, setCurrentPuzzle] = useState<TrainingPuzzle | null>(null);
-  const [loadingPuzzle, setLoadingPuzzle] = useState(false);
-  const [transition, setTransition] = useState<string | null>(null); // e.g. "✅ Fork complete!"
-  const [sessionComplete, setSessionComplete] = useState(false);
-  const [ratingImprovements, setRatingImprovements] = useState<Array<{ label: string; start: number; end: number }>>([]);
-  const sessionStartTimeRef = useRef<number>(Date.now());
-  // Duplicate-prevention: track puzzle IDs already shown this session
-  const usedPuzzleIdsRef = useRef<Set<string>>(new Set());
-  // Monotonic key — guarantees TrainingPuzzleBoard remounts on every advance
-  const puzzleKeyRef = useRef<number>(0);
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [masteryProgress, setMasteryProgress] = useState<MasteryProgress | null>(null);
+  const [currentSet, setCurrentSet] = useState<MasterySet | null>(null);
+  const [currentPuzzleIdx, setCurrentPuzzleIdx] = useState(-1);
+  const [puzzleKey, setPuzzleKey] = useState(0); // force remount
+  const [puzzleStartTime, setPuzzleStartTime] = useState(0);
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
+  const [dailyGoal, setDailyGoal] = useState(10);
+  const [streak, setStreak] = useState(0);
 
-  // ── Mount ────────────────────────────────────────────────────────────────
+  // Session stats (reset each session)
+  const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [sessionUnder10s, setSessionUnder10s] = useState(0);
+  const [sessionNewMastered, setSessionNewMastered] = useState(0);
+  const [dailyCompleted, setDailyCompleted] = useState(0);
+
+  const lastShownIdRef = useRef<string | null>(null);
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // ── Check if session already started today ────────────────────────────────
   useEffect(() => {
     if (!mounted) return;
-    const existing = loadSessionFromStorage();
-    if (existing) {
-      // If session completed today, go straight to complete screen
-      if (existing.completedAt) {
-        setSession(existing);
-        setSessionComplete(true);
-        return;
-      }
-      // Resume in-progress session
-      setSession(existing);
-      setSessionStarted(true);
-      // Find which pattern we're currently on
-      const idx = existing.patterns.findIndex((p) => p.completed < p.target);
-      setCurrentPatternIdx(idx >= 0 ? idx : 0);
-      if (idx >= 0) {
-        loadNextPuzzle(existing, idx);
-      }
+
+    const settings = getDailyTargetSettings();
+    setDailyGoal(settings.dailyGoal);
+    setStreak(getStreakData().currentStreak ?? 0);
+    setDailyCompleted(getDailySessionCompleted());
+
+    let progress = getMasteryProgress();
+    let set = getCurrentMasterySet();
+
+    // Generate first set if none exists
+    if (!set || set.puzzles.length < 100) {
+      set = generateMasterySet(progress.currentSetNumber);
+      progress = { ...progress, sets: [...progress.sets, set] };
+      saveMasteryProgress(progress);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted]);
 
-  // ── Load a puzzle for the given pattern ──────────────────────────────────
-  function loadNextPuzzle(sess: TrainingSessionData, patIdx: number): void {
-    const pattern = sess.patterns[patIdx];
-    if (!pattern) return;
-    setLoadingPuzzle(true);
-    puzzleKeyRef.current += 1;          // always bump — forces remount even if same id
-    const elo = getPatternElo(pattern.theme);
-    const puzzle = loadPuzzleForPattern(pattern.theme, elo, usedPuzzleIdsRef.current);
-    if (puzzle) usedPuzzleIdsRef.current.add(puzzle.id);
-    setCurrentPuzzle(puzzle);
-    setLoadingPuzzle(false);
-  }
+    setMasteryProgress(progress);
+    setCurrentSet(set);
 
-  // ── Start session ─────────────────────────────────────────────────────────
-  function handleStart(): void {
-    usedPuzzleIdsRef.current = new Set();   // fresh dedup set for new session
-    puzzleKeyRef.current = 0;
-    const newSession = buildNewSession();
-    saveSessionToStorage(newSession);
-    setSession(newSession);
-    setSessionStarted(true);
-    setCurrentPatternIdx(0);
-    sessionStartTimeRef.current = Date.now();
-    loadNextPuzzle(newSession, 0);
-  }
-
-  // ── Handle puzzle result ──────────────────────────────────────────────────
-  const handlePuzzleResult = useCallback((correct: boolean): void => {
-    if (!session) return;
-
-    const updatedSession = { ...session, patterns: session.patterns.map((p, i) => ({ ...p })) };
-    const pattern = updatedSession.patterns[currentPatternIdx];
-    if (!pattern) return;
-
-    pattern.completed += 1;
-    if (correct) pattern.correct += 1;
-
-    // Update pattern ELO (same as Drill Tactics)
-    const puzzleRating = currentPuzzle?.rating ?? 1000;
-    updatePatternRating(pattern.theme, puzzleRating, correct, currentPuzzle?.id ?? "unknown");
-    updateTacticsRating(puzzleRating, correct);
-
-    // Record SM2 attempt for streak/review tracking
-    recordSM2Attempt({
-      puzzleId: currentPuzzle?.id ?? "unknown",
-      outcome: correct ? "solved-first-try" : "failed",
-      timestamp: new Date().toISOString(),
-      theme: pattern.theme.toUpperCase(),
-      rating: puzzleRating,
-    });
-
-    recordActivityToday();
-    saveSessionToStorage(updatedSession);
-    setSession(updatedSession);
-
-    // Check if this pattern is complete
-    if (pattern.completed >= pattern.target) {
-      // Check if all patterns are complete
-      const allComplete = updatedSession.patterns.every((p) => p.completed >= p.target);
-
-      if (allComplete) {
-        // Session complete!
-        setTimeout(() => handleSessionComplete(updatedSession), 500);
-        return;
-      }
-
-      // Transition to next pattern
-      const nextIdx = currentPatternIdx + 1;
-      if (nextIdx < updatedSession.patterns.length) {
-        const nextPattern = updatedSession.patterns[nextIdx];
-        const transitionMsg = `✅ ${pattern.label} complete! ${pattern.target}/${pattern.target} puzzles`;
-        setTransition(transitionMsg);
-        setTimeout(() => {
-          setTransition(null);
-          setCurrentPatternIdx(nextIdx);
-          loadNextPuzzle(updatedSession, nextIdx);
-        }, 2000);
-      }
+    // Check if the set was already completed
+    if (set.completedAt || isSetComplete()) {
+      setPhase("set_complete");
       return;
     }
 
-    // Load next puzzle in same pattern — 1.5s delay so user sees ✅ Correct!
-    setTimeout(() => {
-      loadNextPuzzle(updatedSession, currentPatternIdx);
-    }, 1500);
+    // Check if daily session already done
+    const today = new Date().toISOString().slice(0, 10);
+    const todayCompleted = progress.dailySessionDate === today ? progress.dailySessionCompleted : 0;
+    if (todayCompleted >= settings.dailyGoal) {
+      setPhase("session_complete");
+      return;
+    }
+
+    // Pick first puzzle
+    const idx = pickNextPuzzleIdx(set, null);
+    if (idx === -1) {
+      // All mastered — mark set complete
+      markSetComplete(progress, set);
+      return;
+    }
+    setCurrentPuzzleIdx(idx);
+    lastShownIdRef.current = set.puzzles[idx].id;
+    setPuzzleStartTime(Date.now());
+    setPhase("solving");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, currentPatternIdx, currentPuzzle]);
+  }, [mounted]);
 
-  // ── Session complete handler ───────────────────────────────────────────────
-  function handleSessionComplete(completedSession: TrainingSessionData): void {
-    const now = new Date().toISOString();
-    completedSession.completedAt = now;
-    saveSessionToStorage(completedSession);
+  function markSetComplete(progress: MasteryProgress, set: MasterySet) {
+    const updatedSet = { ...set, completedAt: Date.now() };
+    const updatedSets = progress.sets.map((s) => (s.setNumber === set.setNumber ? updatedSet : s));
+    const updatedProgress = { ...progress, sets: updatedSets };
+    saveMasteryProgress(updatedProgress);
+    setCurrentSet(updatedSet);
+    setMasteryProgress(updatedProgress);
+    setPhase("set_complete");
+  }
 
-    // Mark in activity log
+  // ── Handle puzzle result ───────────────────────────────────────────────────
+  const handleResult = useCallback((correct: boolean) => {
+    if (!currentSet || currentPuzzleIdx < 0) return;
+
+    const solveTimeMs = Date.now() - puzzleStartTime;
+    const puzzle = currentSet.puzzles[currentPuzzleIdx];
+
+    // Record attempt and get updated mastery
+    const { masteryHits, masteryAwarded } = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
+    const overTimeLimit = correct && solveTimeMs >= MASTERY_TIME_LIMIT_MS;
+
+    // Update local set state from storage
+    const freshProgress = getMasteryProgress();
+    const freshSet = freshProgress.sets.find((s) => s.setNumber === currentSet.setNumber) ?? currentSet;
+    setCurrentSet(freshSet);
+    setMasteryProgress(freshProgress);
+
+    // Update session stats
+    setSessionTotal((t) => t + 1);
+    if (correct) {
+      setSessionCorrect((c) => c + 1);
+      if (solveTimeMs < MASTERY_TIME_LIMIT_MS) setSessionUnder10s((u) => u + 1);
+    }
+    if (masteryAwarded && masteryHits === 3) {
+      setSessionNewMastered((m) => m + 1);
+    }
+
+    // Increment daily count
+    const newDailyCount = incrementDailySession();
+    setDailyCompleted(newDailyCount);
     recordActivityToday();
 
-    // Compute rating improvements
-    const improvements = completedSession.patterns.map((p) => {
-      const endRating = getPatternElo(p.theme);
-      return { label: p.label, start: p.startRating, end: endRating };
-    });
-    setRatingImprovements(improvements);
-    setSession(completedSession);
-    setSessionComplete(true);
+    // Show feedback
+    setFeedback({ correct, masteryAwarded, overTimeLimit, newMasteryHits: masteryHits });
+    setPhase("feedback");
+
+    // After 1.5s, advance
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = setTimeout(() => {
+      setFeedback(null);
+
+      const settings = getDailyTargetSettings();
+
+      // Check set complete
+      if (freshSet.puzzles.every((p) => p.masteryHits >= 3)) {
+        markSetComplete(freshProgress, freshSet);
+        return;
+      }
+
+      // Check daily session complete
+      if (newDailyCount >= settings.dailyGoal) {
+        setPhase("session_complete");
+        return;
+      }
+
+      // Load next puzzle
+      const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current);
+      if (nextIdx === -1) {
+        markSetComplete(freshProgress, freshSet);
+        return;
+      }
+      lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
+      setCurrentPuzzleIdx(nextIdx);
+      setPuzzleKey((k) => k + 1);
+      setPuzzleStartTime(Date.now());
+      setPhase("solving");
+    }, 1500);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSet, currentPuzzleIdx, puzzleStartTime]);
+
+  // ── Handle "keep going" after session complete ─────────────────────────────
+  function handleContinue() {
+    if (!currentSet || !masteryProgress) return;
+    const freshSet = getCurrentMasterySet() ?? currentSet;
+    const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current);
+    if (nextIdx === -1) {
+      markSetComplete(masteryProgress, freshSet);
+      return;
+    }
+    lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
+    setCurrentPuzzleIdx(nextIdx);
+    setPuzzleKey((k) => k + 1);
+    setPuzzleStartTime(Date.now());
+    setPhase("solving");
   }
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-  if (!mounted) return null;
+  // ── Handle start next set ─────────────────────────────────────────────────
+  function handleStartNextSet() {
+    if (!masteryProgress) return;
+    const nextSetNumber = (currentSet?.setNumber ?? 0) + 1;
+    const newSet = generateMasterySet(nextSetNumber);
+    const updatedProgress: MasteryProgress = {
+      ...masteryProgress,
+      currentSetNumber: nextSetNumber,
+      sets: [...masteryProgress.sets, newSet],
+      dailySessionCompleted: 0,
+      dailySessionDate: new Date().toISOString().slice(0, 10),
+    };
+    saveMasteryProgress(updatedProgress);
+    setMasteryProgress(updatedProgress);
+    setCurrentSet(newSet);
+    setSessionCorrect(0);
+    setSessionTotal(0);
+    setSessionUnder10s(0);
+    setSessionNewMastered(0);
+    setDailyCompleted(0);
 
-  const insufficient = !hasSufficientData() && !hasChessComConnected();
-  const totalTarget = session ? getSessionTotalTarget(session) : 0;
-  const totalCompleted = session ? getSessionTotalCompleted(session) : 0;
+    const idx = pickNextPuzzleIdx(newSet, null);
+    if (idx === -1) return;
+    setCurrentPuzzleIdx(idx);
+    lastShownIdRef.current = newSet.puzzles[idx].id;
+    setPuzzleKey((k) => k + 1);
+    setPuzzleStartTime(Date.now());
+    setPhase("solving");
+  }
 
-  // ── State A: Not enough data ──────────────────────────────────────────────
-  if (!session && insufficient) {
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (!mounted || phase === "loading") {
     return (
-      <div style={{ maxWidth: "600px", margin: "0 auto" }}>
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "16px",
-          padding: "2.5rem",
-          textAlign: "center",
-        }}>
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📋</div>
-          <h2 style={{ color: "#e2e8f0", fontSize: "1.3rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
-            Complete your setup first
-          </h2>
-          <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.6, marginBottom: "1.5rem" }}>
-            Connect Chess.com or solve 20 puzzles to generate your training plan.
-          </p>
-          <button
-            onClick={() => router.push("/app/training-plan")}
-            style={{
-              backgroundColor: "#4ade80",
-              color: "#0f1a0a",
-              border: "none",
-              borderRadius: "10px",
-              padding: "0.85rem 1.75rem",
-              fontSize: "0.95rem",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
-          >
-            Go to Training Plan →
-          </button>
-        </div>
+      <div style={{ maxWidth: "600px", margin: "0 auto", padding: "3rem", textAlign: "center", color: "#64748b" }}>
+        Loading your training set...
       </div>
     );
   }
 
-  // ── State D: Session complete ─────────────────────────────────────────────
-  if (sessionComplete && session) {
-    const totalCorrect = session.patterns.reduce((sum, p) => sum + p.correct, 0);
-    const accuracy = totalCompleted > 0 ? Math.round((totalCorrect / totalCompleted) * 100) : 0;
-    const elapsedMs = session.completedAt
-      ? new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()
-      : 0;
-    const elapsedMin = Math.round(elapsedMs / 60000);
+  const masteredCount = getMasteredCount();
 
+  if (phase === "set_complete" && currentSet) {
+    return <SetCompleteScreen set={currentSet} onStartNext={handleStartNextSet} />;
+  }
+
+  if (phase === "session_complete") {
     return (
-      <div style={{ maxWidth: "600px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #4ade80",
-          borderRadius: "16px",
-          padding: "2rem",
-          textAlign: "center",
-        }}>
-          <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>🎉</div>
-          <h2 style={{ color: "#4ade80", fontSize: "1.4rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
-            Training session complete!
-          </h2>
-          <p style={{ color: "#94a3b8", fontSize: "0.88rem", margin: 0 }}>
-            Great work today. Your pattern ratings have been updated.
-          </p>
-        </div>
+      <SessionCompleteScreen
+        dailyGoal={dailyGoal}
+        dailyCompleted={dailyCompleted}
+        masteredCount={masteredCount}
+        sessionCorrect={sessionCorrect}
+        sessionTotal={sessionTotal}
+        sessionUnder10s={sessionUnder10s}
+        sessionNewMastered={sessionNewMastered}
+        onContinue={handleContinue}
+      />
+    );
+  }
 
-        {/* Stats */}
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "16px",
-          padding: "1.5rem",
-        }}>
-          <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-            Session Stats
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem" }}>
-            {[
-              { label: "Puzzles", value: totalCompleted, color: "#e2e8f0" },
-              { label: "Accuracy", value: `${accuracy}%`, color: accuracy >= 70 ? "#4ade80" : accuracy >= 50 ? "#f59e0b" : "#ef4444" },
-              { label: "Time", value: `${elapsedMin}m`, color: "#e2e8f0" },
-            ].map(({ label, value, color }) => (
-              <div key={label} style={{
-                backgroundColor: "#0d1621",
-                border: "1px solid #1e3a5c",
-                borderRadius: "10px",
-                padding: "0.75rem",
-                textAlign: "center",
-              }}>
-                <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.3rem" }}>{label}</div>
-                <div style={{ color, fontSize: "1.4rem", fontWeight: "bold" }}>{value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Rating improvements */}
-        {ratingImprovements.some((r) => r.end !== r.start) && (
-          <div style={{
-            backgroundColor: "#13132b",
-            border: "1px solid #2e3a5c",
-            borderRadius: "16px",
-            padding: "1.5rem",
-          }}>
-            <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-              Rating Changes
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-              {ratingImprovements.map((r) => {
-                const delta = r.end - r.start;
-                return (
-                  <div key={r.label} style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    backgroundColor: "#0d1621",
-                    border: "1px solid #1e3a5c",
-                    borderRadius: "8px",
-                    padding: "0.6rem 1rem",
-                  }}>
-                    <span style={{ color: "#94a3b8", fontSize: "0.88rem" }}>{r.label}</span>
-                    <span style={{ color: "#94a3b8", fontSize: "0.88rem" }}>
-                      {r.start} → {r.end}
-                      {delta !== 0 && (
-                        <span style={{
-                          color: delta > 0 ? "#4ade80" : "#ef4444",
-                          marginLeft: "0.5rem",
-                          fontWeight: "bold",
-                          fontSize: "0.85rem",
-                        }}>
-                          ({delta > 0 ? "+" : ""}{delta})
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <button
-          onClick={() => router.push("/app/training-plan")}
-          style={{
-            backgroundColor: "#4ade80",
-            color: "#0f1a0a",
-            border: "none",
-            borderRadius: "10px",
-            padding: "0.9rem",
-            fontSize: "0.95rem",
-            fontWeight: "bold",
-            cursor: "pointer",
-            width: "100%",
-          }}
-        >
-          View your updated Training Plan →
-        </button>
+  const puzzle = currentSet?.puzzles[currentPuzzleIdx];
+  if (!puzzle || !currentSet) {
+    return (
+      <div style={{ maxWidth: "600px", margin: "0 auto", padding: "3rem", textAlign: "center", color: "#64748b" }}>
+        Loading puzzle...
       </div>
     );
   }
 
-  // ── State B: Plan ready, session not started ──────────────────────────────
-  if (!sessionStarted) {
-    const previewSession = buildNewSession();
-    const total = previewSession.patterns.reduce((sum, p) => sum + p.target, 0);
-    const estimatedMin = Math.round(total * 0.75);
-
-    return (
-      <div style={{ maxWidth: "600px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "16px",
-          padding: "1.5rem",
-        }}>
-          <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-            Today&apos;s Training Session
-          </div>
-
-          <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginBottom: "1rem" }}>
-            📋 Your weak patterns, in order:
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.25rem" }}>
-            {previewSession.patterns.map((p, i) => (
-              <div key={p.theme} style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                backgroundColor: "#0d1621",
-                border: "1px solid #1e3a5c",
-                borderRadius: "10px",
-                padding: "0.85rem 1rem",
-              }}>
-                <span style={{
-                  backgroundColor: "#1e3a5c",
-                  color: "#4ade80",
-                  borderRadius: "50%",
-                  width: "24px",
-                  height: "24px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.72rem",
-                  fontWeight: "bold",
-                  flexShrink: 0,
-                }}>
-                  {i + 1}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: "#e2e8f0", fontSize: "0.92rem", fontWeight: 600 }}>{p.label}</div>
-                  <div style={{ color: "#475569", fontSize: "0.75rem" }}>
-                    {p.target} puzzles at ~{p.startRating} rating
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{
-            borderTop: "1px solid #1e2a3a",
-            paddingTop: "1rem",
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: "1.25rem",
-            fontSize: "0.82rem",
-            color: "#64748b",
-          }}>
-            <span>Total: <strong style={{ color: "#94a3b8" }}>{total} puzzles</strong></span>
-            <span>Est. <strong style={{ color: "#94a3b8" }}>{estimatedMin} min</strong></span>
-          </div>
-
-          <button
-            onClick={handleStart}
-            style={{
-              backgroundColor: "#4ade80",
-              color: "#0f1a0a",
-              border: "none",
-              borderRadius: "10px",
-              padding: "0.9rem",
-              fontSize: "0.95rem",
-              fontWeight: "bold",
-              cursor: "pointer",
-              width: "100%",
-            }}
-          >
-            Start Training Session →
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── State C: Session in progress ──────────────────────────────────────────
-  const currentPattern = session?.patterns[currentPatternIdx];
+  const setNumber = currentSet.setNumber;
+  const totalPuzzles = currentSet.puzzles.length;
 
   return (
     <div style={{ maxWidth: "700px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Pattern transition overlay */}
-      {transition && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          backgroundColor: "rgba(0,0,0,0.75)",
-          zIndex: 9999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}>
-          <div style={{
-            backgroundColor: "#13132b",
-            border: "1px solid #4ade80",
-            borderRadius: "16px",
-            padding: "2.5rem",
-            textAlign: "center",
-            maxWidth: "360px",
-          }}>
-            <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
-              {transition}
-            </div>
-            {session && currentPatternIdx + 1 < session.patterns.length && (
-              <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
-                Moving to {session.patterns[currentPatternIdx + 1]?.label} training...
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Feedback overlay */}
+      {phase === "feedback" && feedback && (
+        <FeedbackOverlay
+          correct={feedback.correct}
+          masteryAwarded={feedback.masteryAwarded}
+          overTimeLimit={feedback.overTimeLimit}
+          newMasteryHits={feedback.newMasteryHits}
+        />
       )}
 
-      {/* Header: current pattern + progress */}
-      {currentPattern && session && (
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "12px",
-          padding: "1rem 1.25rem",
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: "#13132b", border: "1px solid #2e3a5c",
+        borderRadius: "10px", padding: "0.65rem 1rem",
+        display: "flex", alignItems: "center", gap: "0.5rem",
+        flexWrap: "wrap", fontSize: "0.82rem",
+      }}>
+        {/* Set badge */}
+        <span style={{
+          backgroundColor: "#1e3a5c", color: "#60a5fa",
+          borderRadius: "6px", padding: "0.2rem 0.55rem",
+          fontSize: "0.78rem", fontWeight: "bold", whiteSpace: "nowrap",
         }}>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "0.75rem",
-          }}>
-            <div>
-              <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.2rem" }}>
-                Training
-              </div>
-              <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem" }}>
-                {currentPattern.label} — Puzzle {currentPattern.completed + 1}/{currentPattern.target}
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: "#475569", fontSize: "0.68rem", textTransform: "uppercase", marginBottom: "0.2rem" }}>
-                Overall
-              </div>
-              <div style={{ color: "#4ade80", fontSize: "0.88rem", fontWeight: "bold" }}>
-                {totalCompleted}/{totalTarget}
-              </div>
-            </div>
-          </div>
+          Set {setNumber}
+        </span>
 
-          {/* Overall session progress bar */}
-          <ProgressBar value={totalCompleted} max={totalTarget} color="#4ade80" />
+        {/* Mastered count */}
+        <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>
+          <span style={{ color: "#4ade80", fontWeight: "bold" }}>{masteredCount}</span>
+          <span style={{ color: "#475569" }}>/{totalPuzzles} mastered</span>
+        </span>
 
-          {/* Pattern steps — Sprint 33: Next → indicator + Locked tooltip */}
-          <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem" }}>
-            {session.patterns.map((p, i) => {
-              const done = p.completed >= p.target;
-              const active = i === currentPatternIdx;
-              const isNext = i === currentPatternIdx + 1;
-              const isLocked = i > currentPatternIdx + 1;
-              // Get the pattern before this one (what unlocks it)
-              const prevPattern = i > 0 ? session.patterns[i - 1] : null;
-              return (
-                <div
-                  key={p.theme}
-                  title={isLocked && prevPattern ? `Unlocks after ${prevPattern.label}` : undefined}
-                  style={{
-                    flex: 1,
-                    backgroundColor: done ? "#0d2a1a" : active ? "#1e3a5c" : "#0d1621",
-                    border: `1px solid ${done ? "#4ade80" : active ? "#60a5fa" : isNext ? "#3a5a7a" : "#1e2a3a"}`,
-                    borderRadius: "6px",
-                    padding: "0.3rem 0.4rem",
-                    textAlign: "center",
-                    cursor: isLocked ? "not-allowed" : "default",
-                    opacity: isLocked ? 0.6 : 1,
-                  }}
-                >
-                  <div style={{ color: done ? "#4ade80" : active ? "#60a5fa" : isNext ? "#60a5fa" : "#334155", fontSize: "0.65rem", fontWeight: "bold" }}>
-                    {done ? "✓" : active ? "▶" : isNext ? "Next →" : "○"} {p.label}
-                  </div>
-                  <div style={{ color: "#475569", fontSize: "0.6rem" }}>
-                    {p.completed}/{p.target}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        <span style={{ color: "#2e3a5c" }}>·</span>
 
-          {/* Sprint 33: Progress encouragement line */}
-          {(() => {
-            const pct = totalTarget > 0 ? Math.round((totalCompleted / totalTarget) * 100) : 0;
-            let encouragement: string | null = null;
-            if (pct >= 100) {
-              const nextPat = session.patterns[currentPatternIdx + 1];
-              encouragement = nextPat
-                ? `${currentPattern?.label} complete! Moving to ${nextPat.label}...`
-                : null;
-            } else if (pct >= 75) {
-              encouragement = "Almost done with this pattern 🔥";
-            } else if (pct >= 50) {
-              encouragement = "Halfway there 💪";
-            } else if (pct >= 25) {
-              encouragement = "Good start — keep going";
-            }
-            if (!encouragement) return null;
-            return (
-              <div style={{
-                textAlign: "center",
-                color: "#64748b",
-                fontSize: "0.75rem",
-                marginTop: "0.4rem",
-                fontStyle: "italic",
-              }}>
-                {encouragement}
-              </div>
-            );
-          })()}
+        {/* Session */}
+        <span style={{ color: "#94a3b8", whiteSpace: "nowrap" }}>
+          Session:{" "}
+          <span style={{ color: "#f59e0b", fontWeight: "bold" }}>{dailyCompleted}</span>
+          <span style={{ color: "#475569" }}>/{dailyGoal} today</span>
+        </span>
+
+        {/* Streak */}
+        {streak > 0 && (
+          <>
+            <span style={{ color: "#2e3a5c" }}>·</span>
+            <span style={{ color: "#f97316", fontWeight: "bold", whiteSpace: "nowrap" }}>
+              🔥 {streak}
+            </span>
+          </>
+        )}
+
+        {/* Progress bar fills remaining space */}
+        <div style={{ flex: 1, minWidth: "60px" }}>
+          <ProgressBar value={masteredCount} max={totalPuzzles} color="#4ade80" />
         </div>
-      )}
+      </div>
 
-      {/* Puzzle board */}
-      {loadingPuzzle && (
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "12px",
-          padding: "3rem",
-          textAlign: "center",
-          color: "#64748b",
-        }}>
-          Loading puzzle...
-        </div>
-      )}
-
-      {currentPuzzle && !loadingPuzzle && (
-        <div style={{
-          backgroundColor: "#13132b",
-          border: "1px solid #2e3a5c",
-          borderRadius: "12px",
-          padding: "1.25rem",
-        }}>
-          <TrainingPuzzleBoard
-            key={puzzleKeyRef.current}
-            puzzle={currentPuzzle}
-            onResult={handlePuzzleResult}
-            patternLabel={currentPattern?.label}
+      {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: "#13132b", border: "1px solid #2e3a5c",
+        borderRadius: "12px", padding: "1.25rem",
+      }}>
+        {puzzle.type === "tactic" ? (
+          <TacticBoard
+            key={`tactic_${puzzleKey}`}
+            puzzleData={puzzle.puzzleData}
+            onResult={handleResult}
           />
+        ) : (
+          <BlunderBoard
+            key={`blunder_${puzzleKey}`}
+            puzzleData={puzzle.puzzleData}
+            onResult={handleResult}
+          />
+        )}
+      </div>
+
+      {/* ── Mastery dots ─────────────────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem",
+        backgroundColor: "#13132b", border: "1px solid #1e2a3a",
+        borderRadius: "10px", padding: "0.75rem",
+      }}>
+        <MasteryDots hits={puzzle.masteryHits} size={14} />
+        <div style={{ color: "#475569", fontSize: "0.75rem" }}>
+          Solve in under 10s to earn a mastery point
         </div>
-      )}
+      </div>
     </div>
   );
 }

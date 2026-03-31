@@ -14,6 +14,9 @@ import {
   getPuzzlesSolvedAllTime,
   getDailyTargetSettings,
   getTodaySolvedCount,
+  getCurrentMasterySet,
+  getMasteredCount,
+  getDailySessionCompleted,
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
@@ -438,6 +441,11 @@ export default function TrainingPlan() {
   // Weekly plan tasks
   const [tasks, setTasks] = useState<TrainingTask[]>([]);
 
+  // Sprint 36: Mastery set state
+  const [masterySetNumber, setMasterySetNumber] = useState<number | null>(null);
+  const [masteredCount, setMasteredCount] = useState(0);
+  const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
+
   const loadData = useCallback(() => {
     const uname = localStorage.getItem(CUSTOM_USERNAME_KEY);
     const plat = (localStorage.getItem(CUSTOM_PLATFORM_KEY) as Platform) ?? "chesscom";
@@ -468,6 +476,14 @@ export default function TrainingPlan() {
     setTrainedToday(hasTrainedToday());
     setDailyGoal(getDailyTargetSettings().dailyGoal);
     setTodaySolved(getTodaySolvedCount());
+
+    // Sprint 36: Mastery set stats
+    const masterySet = getCurrentMasterySet();
+    if (masterySet) {
+      setMasterySetNumber(masterySet.setNumber);
+      setMasteredCount(getMasteredCount());
+      setMasteryDailyCompleted(getDailySessionCompleted());
+    }
 
     // Build training tasks
     const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, dueIds.length, userGoal ?? "structured_plan");
@@ -570,6 +586,116 @@ export default function TrainingPlan() {
       `}</style>
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
+        {masterySetNumber !== null && (
+          <div style={{
+            backgroundColor: "#13132b",
+            border: "1px solid #2e3a5c",
+            borderRadius: "16px",
+            padding: "1.5rem",
+          }}>
+            <div style={sectionHeaderStyle}>Today&apos;s Training</div>
+
+            {/* Set progress */}
+            <div style={{
+              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
+              borderRadius: "10px", padding: "0.85rem 1rem", marginBottom: "0.75rem",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.88rem", fontWeight: 600 }}>
+                  Set {masterySetNumber}
+                </span>
+                <span style={{ color: "#4ade80", fontSize: "0.88rem", fontWeight: "bold" }}>
+                  {masteredCount}/100 mastered
+                </span>
+              </div>
+              <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", overflow: "hidden", border: "1px solid #1e2a3a" }}>
+                <div style={{
+                  height: "100%", backgroundColor: "#4ade80", borderRadius: "999px",
+                  width: `${Math.min(100, Math.round((masteredCount / 100) * 100))}%`,
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+            </div>
+
+            {/* Daily goal */}
+            <div style={{
+              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
+              borderRadius: "10px", padding: "0.85rem 1rem", marginBottom: "1rem",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Daily goal</span>
+                <span style={{ color: masteryDailyCompleted >= dailyGoal ? "#4ade80" : "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
+                  {masteryDailyCompleted}/{dailyGoal} puzzles
+                </span>
+              </div>
+              <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "6px", overflow: "hidden", border: "1px solid #1e2a3a" }}>
+                <div style={{
+                  height: "100%", backgroundColor: masteryDailyCompleted >= dailyGoal ? "#4ade80" : "#f59e0b",
+                  borderRadius: "999px",
+                  width: `${Math.min(100, dailyGoal > 0 ? Math.round((masteryDailyCompleted / dailyGoal) * 100) : 0)}%`,
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+              {masteryDailyCompleted < dailyGoal && (
+                <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
+                  Est. ~{Math.round((dailyGoal - masteryDailyCompleted) * 0.75)} minutes remaining today
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => router.push("/app/training")}
+              style={{
+                backgroundColor: masteryDailyCompleted >= dailyGoal ? "transparent" : "#4ade80",
+                color: masteryDailyCompleted >= dailyGoal ? "#64748b" : "#0f1a0a",
+                border: masteryDailyCompleted >= dailyGoal ? "1px solid #2e3a5c" : "none",
+                borderRadius: "10px", padding: "0.9rem",
+                fontSize: "0.95rem", fontWeight: "bold", cursor: "pointer", width: "100%",
+              }}
+            >
+              {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : "Continue Training →"}
+            </button>
+          </div>
+        )}
+
+        {/* ── Sprint 36: Drill Tactics Recommendation ───────────────────────── */}
+        {top3Weaknesses.length > 0 && (
+          <div style={{
+            backgroundColor: "#13132b",
+            border: "1px solid #2e3a5c",
+            borderRadius: "16px",
+            padding: "1.25rem 1.5rem",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+              <div>
+                <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginBottom: "0.25rem" }}>
+                  Weakest pattern
+                </div>
+                <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
+                  {top3Weaknesses[0].theme.charAt(0).toUpperCase() + top3Weaknesses[0].theme.slice(1).toLowerCase()}{" "}
+                  <span style={{ color: "#ef4444", fontWeight: "normal", fontSize: "0.85rem" }}>
+                    ({Math.round(top3Weaknesses[0].solveRate * 100)}% accuracy)
+                  </span>
+                </div>
+                <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.2rem" }}>
+                  Consider extra Drill Tactics time on this pattern
+                </div>
+              </div>
+              <button
+                onClick={() => router.push(`/app/patterns/${top3Weaknesses[0].theme.toLowerCase()}`)}
+                style={{
+                  backgroundColor: "transparent", border: "1px solid #2e3a5c",
+                  borderRadius: "8px", padding: "0.5rem 1rem",
+                  color: "#60a5fa", fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                Drill {top3Weaknesses[0].theme.charAt(0).toUpperCase() + top3Weaknesses[0].theme.slice(1).toLowerCase()} →
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Section 1: This Week's Plan ───────────────────────────────────── */}
         <div style={{
