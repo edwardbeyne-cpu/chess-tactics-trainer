@@ -261,7 +261,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const usedIds = useRef(new Set<string>());
   const startTimeRef = useRef(Date.now());
   const timerActiveRef = useRef(false);
-  const boardSize = useRef(400);
+  const boardSize = useRef(360);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
 
   calibEloRef.current = calibElo;
   puzzleIndexRef.current = puzzleIndex;
@@ -270,8 +271,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   phaseRef.current = phase;
 
   useEffect(() => {
-    boardSize.current =
-      typeof window !== "undefined" ? Math.min(480, window.innerWidth - 64) : 400;
+    function updateSize() {
+      if (boardContainerRef.current) {
+        const w = boardContainerRef.current.getBoundingClientRect().width;
+        boardSize.current = Math.min(480, Math.floor(w));
+      } else if (typeof window !== "undefined") {
+        boardSize.current = Math.min(480, window.innerWidth - 80);
+      }
+    }
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
   }, []);
 
   const loadPuzzle = useCallback((elo: number, used: Set<string>) => {
@@ -949,7 +959,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       </div>
 
       {/* Chess board */}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
+      <div ref={boardContainerRef} style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem", width: "100%" }}>
         <ChessBoard
           fen={currentFen}
           onMove={handleMove}
