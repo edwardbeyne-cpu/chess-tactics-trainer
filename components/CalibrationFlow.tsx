@@ -222,6 +222,7 @@ interface CalibrationFlowProps {
 export default function CalibrationFlow({ startingElo, onComplete }: CalibrationFlowProps) {
   // Puzzle-solving state
   const [phase, setPhase] = useState<"solving" | "transitioning" | "reveal">("solving");
+  const [boardOpacity, setBoardOpacity] = useState(1);
   const [puzzleIndex, setPuzzleIndex] = useState(0);
   const [calibElo, setCalibElo] = useState(startingElo);
   const [currentPuzzle, setCurrentPuzzle] = useState<LichessCachedPuzzle | null>(null);
@@ -348,24 +349,27 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
 
-    // Show result flash briefly before advancing
+    // Show result flash, then fade board, then load next puzzle
     if (!skipped) {
       setResultFlash(correct ? "correct" : "wrong");
-      setTimeout(() => setResultFlash(null), 500);
     }
 
-    const delay = skipped ? 0 : 500;
-    setTimeout(() => {
-      const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
-      const nextIdx = puzzleIndexRef.current + 1;
+    const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
+    const nextIdx = puzzleIndexRef.current + 1;
 
+    // After 400ms: clear flash and fade board to black
+    setTimeout(() => {
+      setResultFlash(null);
+      setBoardOpacity(0);
+    }, 400);
+
+    // After 600ms: load new puzzle then fade board back in
+    setTimeout(() => {
       if (nextIdx >= TOTAL_PUZZLES) {
         setFinalElo(newElo);
         setCalibElo(newElo);
         calibEloRef.current = newElo;
-        try {
-          localStorage.setItem("ctt_calibration_rating", String(newElo));
-        } catch { /* ignore */ }
+        try { localStorage.setItem("ctt_calibration_rating", String(newElo)); } catch { /* ignore */ }
         setPhase("reveal");
       } else {
         setCalibElo(newElo);
@@ -373,8 +377,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         setPuzzleIndex(nextIdx);
         puzzleIndexRef.current = nextIdx;
         loadPuzzle(newElo, usedIds.current);
+        setTimeout(() => setBoardOpacity(1), 50);
       }
-    }, delay);
+    }, 600);
   }
 
   const handleMove = useCallback(
@@ -986,7 +991,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
       {/* Chess board */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
-        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0, transition: "opacity 0.15s ease" }}>
+        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0, opacity: boardOpacity, transition: "opacity 0.2s ease" }}>
           <ChessBoard
             fen={currentFen}
             onMove={handleMove}
