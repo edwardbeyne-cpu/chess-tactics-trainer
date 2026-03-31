@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import CalibrationFlow from "@/components/CalibrationFlow";
+import { getMasteryProgress, saveMasteryProgress } from "@/lib/storage";
+import { generateMasterySet } from "@/components/TrainingSession";
 
 type Step = "checking" | "intro" | "calibrating";
 
@@ -21,7 +23,19 @@ export default function CalibrationPage() {
   }, [router]);
 
   function handleComplete(_finalElo: number) {
-    try { localStorage.setItem("ctt_calibration_complete", "true"); } catch { /* ignore */ }
+    try {
+      localStorage.setItem("ctt_calibration_complete", "true");
+      // Initialize mastery Set 1 so Training Plan shows it immediately
+      const progress = getMasteryProgress();
+      if (progress.sets.length === 0) {
+        const set1 = generateMasterySet(1);
+        saveMasteryProgress({
+          ...progress,
+          currentSetNumber: 1,
+          sets: [set1],
+        });
+      }
+    } catch { /* ignore */ }
     router.replace("/app/training-plan");
   }
 

@@ -196,7 +196,7 @@ function computeBlunderRatio(): number {
   return 0.2;
 }
 
-function generateMasterySet(setNumber: number): MasterySet {
+export function generateMasterySet(setNumber: number): MasterySet {
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
   const targetELO = calibrationRating + (setNumber - 1) * 100;
