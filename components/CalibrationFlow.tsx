@@ -296,9 +296,24 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     const puzzle = selectPuzzle(elo, used);
     if (!puzzle) return;
     used.add(puzzle.id);
+
+    // Apply the opponent's first move so the player sees the position they need to solve
+    // In Lichess puzzles, moves[0] is the opponent's move that creates the tactic
+    let startFen = puzzle.fen;
+    if (puzzle.moves && puzzle.moves.length > 0) {
+      const oppMove = puzzle.moves[0];
+      try {
+        const chess = new Chess(puzzle.fen);
+        chess.move({ from: oppMove.slice(0, 2), to: oppMove.slice(2, 4), promotion: oppMove[4] || undefined });
+        startFen = chess.fen();
+      } catch {
+        startFen = puzzle.fen;
+      }
+    }
+
     setCurrentPuzzle(puzzle);
-    setCurrentFen(puzzle.fen);
-    setMoveIndex(0);
+    setCurrentFen(startFen);
+    setMoveIndex(1); // Start at index 1 since opponent's move (index 0) is already applied
     setMadeError(false);
     madeErrorRef.current = false;
     setLastMove(undefined);
@@ -926,7 +941,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     );
   }
 
-  const orientation = currentPuzzle ? getPlayerOrientation(currentPuzzle) : getOrientation(currentFen);
+  // After applying opponent's first move, currentFen shows whose turn it is (the player's)
+  const orientation = getOrientation(currentFen);
   const bw = boardWidth;
 
   // ── Solving screen ─────────────────────────────────────────────────────────
