@@ -348,13 +348,13 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   function advancePuzzle(correct: boolean, skipped: boolean, secs: number) {
     timerActiveRef.current = false;
 
-    // Show result flash for 900ms before advancing
+    // Show result flash briefly before advancing
     if (!skipped) {
       setResultFlash(correct ? "correct" : "wrong");
-      setTimeout(() => setResultFlash(null), 900);
+      setTimeout(() => setResultFlash(null), 500);
     }
 
-    const delay = skipped ? 0 : 900;
+    const delay = skipped ? 0 : 500;
     setTimeout(() => {
       const newElo = applyCalibStep(calibEloRef.current, secs, correct, skipped);
       const nextIdx = puzzleIndexRef.current + 1;
@@ -986,7 +986,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
       {/* Chess board */}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: "0.5rem" }}>
-        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0 }}>
+        <div style={{ width: bw, height: bw, position: "relative", flexShrink: 0, transition: "opacity 0.15s ease" }}>
           <ChessBoard
             fen={currentFen}
             onMove={handleMove}
