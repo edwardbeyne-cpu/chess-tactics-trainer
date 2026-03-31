@@ -2132,7 +2132,15 @@ function savePatternRatings(ratings: Record<string, PatternRating>): void {
 
 export function getPatternRating(theme: string): PatternRating {
   const ratings = getPatternRatings();
-  return ratings[theme] ?? { theme, rating: 800, gamesPlayed: 0, history: [] };
+  if (ratings[theme]) return ratings[theme];
+  // Use calibration rating - 150 as starting point so puzzles are at the right level
+  const calibRating = (() => {
+    try {
+      const v = typeof window !== "undefined" ? localStorage.getItem("ctt_calibration_rating") : null;
+      return v ? Math.max(400, parseInt(v, 10) - 150) : 800;
+    } catch { return 800; }
+  })();
+  return { theme, rating: calibRating, gamesPlayed: 0, history: [] };
 }
 
 /**
