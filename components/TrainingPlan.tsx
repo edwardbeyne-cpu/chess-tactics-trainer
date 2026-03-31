@@ -826,38 +826,35 @@ export default function TrainingPlan() {
 
               // FALLBACK: No data yet — tier-based
               const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
-              const tierMessages: Record<string, { focus: string; context: string; goal: string }> = {
+              const tierMessages: Record<string, { headline: string; body: string; cta: string }> = {
                 beginner: {
-                  focus: "Fork, Pin, Skewer, Back Rank Mate, and Discovered Attack — the 5 patterns that appear in almost every beginner game.",
-                  context: "Connect your Chess.com account to personalize this further — we'll analyze your actual games and weight your puzzles toward patterns you miss most.",
-                  goal: "Master these 5 Tier 1 patterns and you'll start winning material in almost every game.",
+                  headline: "Most games at your level are decided by simple tactics you almost see.",
+                  body: "Forks, pins, back rank mates — these patterns end hundreds of games every day. Your opponents aren't smarter, they just spot them faster. Your Set 1 drills the 5 patterns that will start winning you material immediately.",
+                  cta: "Connect Chess.com to see which of these you've already been missing in your games.",
                 },
                 intermediate: {
-                  focus: "all 11 Tier 1 patterns plus high-impact Tier 2 tactics like Overloading and Deflection.",
-                  context: "Connect your Chess.com account to see exactly which tactics are costing you rating points in your real games.",
-                  goal: "At your rating, speed is the gap. Recognizing patterns instantly — not just eventually — is what improves your game rating.",
+                  headline: "You know these patterns exist. You're just not finding them fast enough.",
+                  body: "At 1000–1400, you can solve tactics when you know to look. The problem is spotting them mid-game, under time pressure, without a hint. Your Set 1 builds the reflex — same patterns, over and over, until your brain sees them without thinking.",
+                  cta: "Connect Chess.com to see exactly which tactics are costing you rating points right now.",
                 },
                 advanced: {
-                  focus: "Tier 2 and Tier 3 patterns including Interference, Clearance, and complex multi-move combinations.",
-                  context: "Connect your Chess.com account to identify your specific blind spots from real game analysis.",
-                  goal: "At 1400+, the gap between you and 1800 is pattern fluency — solving in 5 seconds what takes you 30.",
+                  headline: "The gap between 1400 and 1800 isn't calculation — it's pattern speed.",
+                  body: "You can solve most tactics given time. The difference is that 1800 players solve them in 4 seconds, not 40. Your Set 1 is built around patterns where your solve time will be highest — those are your real gaps. Master them and your rating follows.",
+                  cta: "Connect Chess.com to pinpoint which patterns are actually slowing you down in real games.",
                 },
                 elite: {
-                  focus: "advanced Tier 3 patterns and speed optimization across all 24 patterns.",
-                  context: "Connect your Chess.com account to pinpoint the rare patterns still catching you off guard.",
-                  goal: "Elite training is about automaticity — making every known pattern instant so calculation resources go to novelty.",
+                  headline: "You're not missing patterns. You're spending calculation resources on things you should already know cold.",
+                  body: "At your level, the games you lose aren't to missed tactics — they're to positions where you spent 3 minutes on something that should take 3 seconds. That 3 minutes comes back later when you need it most. Your Set 1 finds the patterns that aren't fully automatic yet and drills them until they are.",
+                  cta: "Connect Chess.com to identify the specific positions that are still costing you time.",
                 },
               };
               const msg = tierMessages[tier];
               return (
                 <>
-                  <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                    <span style={{ color: "#e2e8f0" }}>Your Set 1 focuses on</span> {msg.focus}
-                  </div>
-                  <div style={{ color: "#64748b", marginBottom: "0.5rem", fontStyle: "italic" }}>{msg.context}</div>
-                  <div style={{ color: "#64748b" }}>
-                    <span style={{ color: "#4ade80" }}>Goal:</span> {msg.goal}
-                  </div>
+                  <div style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "0.88rem", marginBottom: "0.5rem" }}>{msg.headline}</div>
+                  <div style={{ color: "#94a3b8", marginBottom: "0.5rem", lineHeight: 1.7 }}>{msg.body}</div>
+                  <div style={{ color: "#64748b", fontStyle: "italic", marginBottom: "0" }}>{msg.cta}</div>
+
                 </>
               );
             })()}
