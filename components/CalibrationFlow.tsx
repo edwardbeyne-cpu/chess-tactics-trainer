@@ -271,7 +271,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
   useEffect(() => {
     boardSize.current =
-      typeof window !== "undefined" ? Math.min(560, window.innerWidth - 32) : 480;
+      typeof window !== "undefined" ? Math.min(480, window.innerWidth - 64) : 400;
   }, []);
 
   const loadPuzzle = useCallback((elo: number, used: Set<string>) => {
