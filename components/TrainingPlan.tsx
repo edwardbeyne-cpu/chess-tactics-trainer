@@ -756,65 +756,104 @@ export default function TrainingPlan() {
               Coach Analysis
             </div>
             {(() => {
+              // Check for Chess.com game analysis data
+              const gameAnalysis = (() => {
+                try {
+                  const raw = localStorage.getItem("ctt_custom_analysis");
+                  if (!raw) return null;
+                  const data = JSON.parse(raw) as { missedTactics: Array<{ pattern: string; fen: string }>; platform: string; username: string };
+                  if (!data.missedTactics?.length) return null;
+                  // Count pattern frequencies
+                  const counts: Record<string, number> = {};
+                  data.missedTactics.forEach(m => { counts[m.pattern] = (counts[m.pattern] || 0) + 1; });
+                  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                  return { username: data.username, platform: data.platform, topPatterns: sorted.slice(0, 3), total: data.missedTactics.length };
+                } catch { return null; }
+              })();
+
               const hasPatternData = patternStats.filter(s => s.totalAttempts >= 5).length >= 3;
-              if (!hasPatternData) {
-                // Pre-training: show tier-based recommendation from calibration rating
-                const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
-                const tierMessages: Record<string, { focus: string; strong: string; goal: string }> = {
-                  beginner: {
-                    focus: "Fork, Pin, Skewer, Back Rank Mate, and Discovered Attack — the 5 patterns that appear in almost every beginner game.",
-                    strong: "You're building the foundation. At your level, recognizing these patterns once is the goal.",
-                    goal: "Master these 5 Tier 1 patterns and you'll start winning material in almost every game.",
-                  },
-                  intermediate: {
-                    focus: "all 11 Tier 1 patterns plus high-impact Tier 2 tactics like Overloading and Deflection.",
-                    strong: "You already recognize basic tactics. Your Set 1 pushes your speed and accuracy under pressure.",
-                    goal: "At your rating, speed is the gap. Recognizing patterns instantly — not just eventually — is what improves your game rating.",
-                  },
-                  advanced: {
-                    focus: "Tier 2 and Tier 3 patterns including Interference, Clearance, and complex multi-move combinations.",
-                    strong: "Your tactical foundation is solid. Set 1 will expose the specific patterns where your recognition slows down.",
-                    goal: "At 1400+, the difference between you and 1800 players is pattern fluency — solving in 5 seconds what takes you 30.",
-                  },
-                  elite: {
-                    focus: "advanced Tier 3 patterns and speed optimization across all 24 patterns.",
-                    strong: "You have strong pattern recognition. Set 1 is about making your strongest patterns automatic and finding blind spots.",
-                    goal: "Elite players solve known patterns instantly. Your training focuses on reducing average solve time to under 10 seconds.",
-                  },
-                };
-                const msg = tierMessages[tier];
+
+              // BEST: Chess.com game analysis available
+              if (gameAnalysis) {
+                const patternNames = gameAnalysis.topPatterns.map(([p]) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
                 return (
                   <>
                     <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      <span style={{ color: "#e2e8f0" }}>Your Set 1 focuses on</span> {msg.focus}
+                      <span style={{ color: "#e2e8f0" }}>Based on your {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} games</span> — we found {gameAnalysis.total} positions where you missed a tactical opportunity.
                     </div>
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>{msg.strong}</div>
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                      <span style={{ color: "#e2e8f0" }}>Most missed in your games:</span>{" "}
+                      {patternNames.slice(0, 2).join(" and ")}{patternNames[2] ? `, and ${patternNames[2]}` : ""}. Your Set 1 is weighted heavily toward these patterns.
+                    </div>
+                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                      This is not random puzzle practice — these are the exact tactical patterns costing you rating points in your actual games.
+                    </div>
                     <div style={{ color: "#64748b" }}>
-                      <span style={{ color: "#4ade80" }}>Goal:</span> {msg.goal}
+                      <span style={{ color: "#4ade80" }}>Goal:</span> Master these patterns so you never miss them in a real game again. Speed is the signal — under 10 seconds means it&apos;s automatic.
                     </div>
                   </>
                 );
               }
-              // Post-training: show actual weak/strong from pattern data
-              const sorted = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => a.solveRate - b.solveRate);
-              const weakest = sorted.slice(0, 2);
-              const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 2);
+
+              // GOOD: Has pattern data from training
+              if (hasPatternData) {
+                const sorted = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => a.solveRate - b.solveRate);
+                const weakest = sorted.slice(0, 2);
+                const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 2);
+                return (
+                  <>
+                    {weakest.length > 0 && (
+                      <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                        <span style={{ color: "#e2e8f0" }}>Focus areas:</span>{" "}
+                        {weakest.map(w => w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()).join(" and ")} — your lowest accuracy patterns. Your Set 1 is weighted toward these.
+                      </div>
+                    )}
+                    {strongest.length > 0 && (
+                      <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                        <span style={{ color: "#e2e8f0" }}>Strengths:</span>{" "}
+                        {strongest.map(s => s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()).join(" and ")} — keep reinforcing for speed.
+                      </div>
+                    )}
+                    <div style={{ color: "#64748b" }}>
+                      <span style={{ color: "#4ade80" }}>Goal:</span> Master all 100 puzzles. Weak patterns appear most frequently until accuracy improves.
+                    </div>
+                  </>
+                );
+              }
+
+              // FALLBACK: No data yet — tier-based
+              const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
+              const tierMessages: Record<string, { focus: string; context: string; goal: string }> = {
+                beginner: {
+                  focus: "Fork, Pin, Skewer, Back Rank Mate, and Discovered Attack — the 5 patterns that appear in almost every beginner game.",
+                  context: "Connect your Chess.com account to personalize this further — we'll analyze your actual games and weight your puzzles toward patterns you miss most.",
+                  goal: "Master these 5 Tier 1 patterns and you'll start winning material in almost every game.",
+                },
+                intermediate: {
+                  focus: "all 11 Tier 1 patterns plus high-impact Tier 2 tactics like Overloading and Deflection.",
+                  context: "Connect your Chess.com account to see exactly which tactics are costing you rating points in your real games.",
+                  goal: "At your rating, speed is the gap. Recognizing patterns instantly — not just eventually — is what improves your game rating.",
+                },
+                advanced: {
+                  focus: "Tier 2 and Tier 3 patterns including Interference, Clearance, and complex multi-move combinations.",
+                  context: "Connect your Chess.com account to identify your specific blind spots from real game analysis.",
+                  goal: "At 1400+, the gap between you and 1800 is pattern fluency — solving in 5 seconds what takes you 30.",
+                },
+                elite: {
+                  focus: "advanced Tier 3 patterns and speed optimization across all 24 patterns.",
+                  context: "Connect your Chess.com account to pinpoint the rare patterns still catching you off guard.",
+                  goal: "Elite training is about automaticity — making every known pattern instant so calculation resources go to novelty.",
+                },
+              };
+              const msg = tierMessages[tier];
               return (
                 <>
-                  {weakest.length > 0 && (
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      <span style={{ color: "#e2e8f0" }}>Focus areas:</span>{" "}
-                      {weakest.map(w => w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()).join(" and ")} — your lowest accuracy patterns. Your Set 1 is weighted toward these.
-                    </div>
-                  )}
-                  {strongest.length > 0 && (
-                    <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
-                      <span style={{ color: "#e2e8f0" }}>Strengths:</span>{" "}
-                      {strongest.map(s => s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()).join(" and ")} — keep reinforcing these for speed.
-                    </div>
-                  )}
+                  <div style={{ color: "#94a3b8", marginBottom: "0.5rem" }}>
+                    <span style={{ color: "#e2e8f0" }}>Your Set 1 focuses on</span> {msg.focus}
+                  </div>
+                  <div style={{ color: "#64748b", marginBottom: "0.5rem", fontStyle: "italic" }}>{msg.context}</div>
                   <div style={{ color: "#64748b" }}>
-                    <span style={{ color: "#4ade80" }}>Goal:</span> Master all 100 puzzles in Set 1. Your weak patterns will appear most frequently until your accuracy improves.
+                    <span style={{ color: "#4ade80" }}>Goal:</span> {msg.goal}
                   </div>
                 </>
               );
