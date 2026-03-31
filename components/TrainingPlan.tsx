@@ -950,16 +950,22 @@ export default function TrainingPlan() {
                   }} />
                 ))}
               </div>
-              <div style={{ display: "flex", gap: "1.5rem", fontSize: "0.75rem", color: "#64748b" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#4ade80", flexShrink: 0 }} />
-                  {masteredCount} mastered
-                </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#1e2a3a", border: "1px solid #2e3a5c", flexShrink: 0 }} />
-                  {100 - masteredCount} remaining
-                </span>
-              </div>
+              {masteredCount === 0 ? (
+                <div style={{ fontSize: "0.75rem", color: "#475569", textAlign: "center" }}>
+                  Complete a training session to start tracking progress
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: "1.5rem", fontSize: "0.75rem", color: "#64748b" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                    <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#4ade80", flexShrink: 0 }} />
+                    {masteredCount} mastered
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                    <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#1e2a3a", border: "1px solid #2e3a5c", flexShrink: 0 }} />
+                    {100 - masteredCount} remaining
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Set context */}
