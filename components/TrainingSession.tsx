@@ -652,55 +652,59 @@ interface FeedbackOverlayProps {
 }
 
 function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHits }: FeedbackOverlayProps) {
-  let bgColor = "#0a1520";
-  let borderColor = "#1e3a5c";
-  let mainText = "";
-  let subText = "";
+  // Slim banner — no modal, no text wall
+  const isFullMastery = masteryAwarded && newMasteryHits >= 3;
 
   if (!correct) {
-    bgColor = "#1a0808"; borderColor = "#5c1e1e";
-    mainText = "Mastery reset";
-    subText = "A wrong answer resets this puzzle's mastery hits";
-  } else if (masteryAwarded) {
-    bgColor = "#0a1f12"; borderColor = "#4ade80";
-    mainText = "Mastery point!";
-    subText = `${newMasteryHits}/3 mastery hits`;
-  } else if (overTimeLimit) {
-    bgColor = "#0a1228"; borderColor = "#3b82f6";
-    mainText = "Correct — solve faster for mastery";
-    subText = "Under 10 seconds earns a mastery point";
-  } else {
-    // correct, under limit, but non-consecutive rule blocked
-    bgColor = "#0a1228"; borderColor = "#3b82f6";
-    mainText = "Correct!";
-    subText = "Solve other puzzles first for non-consecutive mastery";
+    return (
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        backgroundColor: "rgba(239,68,68,0.15)", borderBottom: "2px solid #ef4444",
+        textAlign: "center", padding: "0.4rem",
+        color: "#ef4444", fontWeight: "700", fontSize: "0.88rem", zIndex: 20,
+      }}>
+        ✗ Wrong
+      </div>
+    );
   }
 
+  if (isFullMastery) {
+    return (
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        backgroundColor: "rgba(74,222,128,0.15)", borderBottom: "2px solid #4ade80",
+        textAlign: "center", padding: "0.4rem",
+        color: "#4ade80", fontWeight: "700", fontSize: "0.88rem", zIndex: 20,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+      }}>
+        ✓ Mastered! <MasteryDots hits={3} size={10} />
+      </div>
+    );
+  }
+
+  if (masteryAwarded) {
+    return (
+      <div style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        backgroundColor: "rgba(74,222,128,0.12)", borderBottom: "2px solid #22c55e",
+        textAlign: "center", padding: "0.4rem",
+        color: "#4ade80", fontWeight: "700", fontSize: "0.88rem", zIndex: 20,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem",
+      }}>
+        ✓ Correct <MasteryDots hits={newMasteryHits} size={10} />
+      </div>
+    );
+  }
+
+  // Correct but no mastery (over time or non-consecutive)
   return (
     <div style={{
-      position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)",
-      zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+      position: "absolute", top: 0, left: 0, right: 0,
+      backgroundColor: "rgba(74,222,128,0.08)", borderBottom: "1px solid #22c55e40",
+      textAlign: "center", padding: "0.4rem",
+      color: "#22c55e", fontWeight: "600", fontSize: "0.88rem", zIndex: 20,
     }}>
-      <div style={{
-        backgroundColor: bgColor, border: `2px solid ${borderColor}`,
-        borderRadius: "16px", padding: "2rem", textAlign: "center", maxWidth: "320px", width: "90%",
-      }}>
-        <div style={{
-          fontSize: "1.5rem", fontWeight: "bold",
-          color: !correct ? "#ef4444" : masteryAwarded ? "#4ade80" : "#60a5fa",
-          marginBottom: "0.5rem",
-        }}>
-          {mainText}
-        </div>
-        <div style={{ color: "#94a3b8", fontSize: "0.88rem", marginBottom: "1rem" }}>
-          {subText}
-        </div>
-        {correct && (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <MasteryDots hits={newMasteryHits} size={16} />
-          </div>
-        )}
-      </div>
+      ✓ Correct
     </div>
   );
 }
@@ -1118,15 +1122,7 @@ export default function TrainingSession() {
 
   return (
     <div style={{ maxWidth: "700px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
-      {/* Feedback overlay */}
-      {phase === "feedback" && feedback && (
-        <FeedbackOverlay
-          correct={feedback.correct}
-          masteryAwarded={feedback.masteryAwarded}
-          overTimeLimit={feedback.overTimeLimit}
-          newMasteryHits={feedback.newMasteryHits}
-        />
-      )}
+      {/* Feedback overlay — rendered inside puzzle card below */}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div style={{
@@ -1178,8 +1174,17 @@ export default function TrainingSession() {
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
       <div style={{
         backgroundColor: "#13132b", border: "1px solid #2e3a5c",
-        borderRadius: "12px", padding: "1.25rem",
+        borderRadius: "12px", padding: "1.25rem", position: "relative", overflow: "hidden",
       }}>
+        {/* Slim feedback banner */}
+        {phase === "feedback" && feedback && (
+          <FeedbackOverlay
+            correct={feedback.correct}
+            masteryAwarded={feedback.masteryAwarded}
+            overTimeLimit={feedback.overTimeLimit}
+            newMasteryHits={feedback.newMasteryHits}
+          />
+        )}
         {puzzle.type === "tactic" ? (
           <TacticBoard
             key={`tactic_${puzzleKey}`}
