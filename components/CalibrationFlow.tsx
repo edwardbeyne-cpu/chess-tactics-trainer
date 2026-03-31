@@ -949,13 +949,15 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   }
 
   // ── Loading / transition state ─────────────────────────────────────────────
-  if (!currentPuzzle) {
+  if (!currentPuzzle && boardOpacity > 0) {
     return (
       <div style={{ textAlign: "center", padding: "4rem 1rem", color: "#64748b", fontSize: "0.9rem" }}>
         Loading…
       </div>
     );
   }
+
+  if (!currentPuzzle) return null;
 
   // After applying opponent's first move, currentFen shows whose turn it is (the player's)
   const orientation = getOrientation(currentFen);
