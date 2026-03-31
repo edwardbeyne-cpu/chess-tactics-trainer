@@ -317,8 +317,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       }
     }
 
-    setCurrentPuzzle(puzzle);
+    // Set FEN first so board never shows original pre-opponent-move FEN
     setCurrentFen(startFen);
+    setCurrentPuzzle(puzzle);
     setMoveIndex(1); // Start at index 1 since opponent's move (index 0) is already applied
     setMadeError(false);
     madeErrorRef.current = false;
