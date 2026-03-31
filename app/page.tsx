@@ -204,7 +204,7 @@ export default function HomePage() {
               "No credit card required",
             ]}
             cta="Start Free"
-            ctaHref="/app/dashboard"
+            ctaHref="/app/calibration"
           />
           <PricingCard
             tier="pro"
@@ -219,7 +219,7 @@ export default function HomePage() {
               "Priority support",
             ]}
             cta="Start Free Trial"
-            ctaHref="/app/dashboard"
+            ctaHref="/app/calibration"
             highlighted
           />
         </div>
