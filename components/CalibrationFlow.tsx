@@ -261,8 +261,28 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const usedIds = useRef(new Set<string>());
   const startTimeRef = useRef(Date.now());
   const timerActiveRef = useRef(false);
-  const boardSize = useRef(360);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+
+  // Board width — use same logic as Puzzle.tsx useResponsiveBoardWidth
+  const [boardWidth, setBoardWidth] = useState<number>(() => {
+    if (typeof window === "undefined") return 360;
+    const vw = window.innerWidth;
+    if (vw < 640) return Math.min(vw - 48, 380);
+    if (vw <= 1024) return Math.min(Math.floor(vw * 0.5), 480);
+    return 480;
+  });
+
+  useEffect(() => {
+    function handleResize() {
+      const vw = window.innerWidth;
+      if (vw < 640) setBoardWidth(Math.min(vw - 48, 380));
+      else if (vw <= 1024) setBoardWidth(Math.min(Math.floor(vw * 0.5), 480));
+      else setBoardWidth(480);
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   calibEloRef.current = calibElo;
   puzzleIndexRef.current = puzzleIndex;
@@ -270,19 +290,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   elapsedRef.current = elapsed;
   phaseRef.current = phase;
 
-  useEffect(() => {
-    function updateSize() {
-      if (boardContainerRef.current) {
-        const w = boardContainerRef.current.getBoundingClientRect().width;
-        boardSize.current = Math.min(480, Math.floor(w));
-      } else if (typeof window !== "undefined") {
-        boardSize.current = Math.min(480, window.innerWidth - 80);
-      }
-    }
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, []);
+
 
   const loadPuzzle = useCallback((elo: number, used: Set<string>) => {
     const puzzle = selectPuzzle(elo, used);
@@ -919,7 +927,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   }
 
   const orientation = currentPuzzle ? getPlayerOrientation(currentPuzzle) : getOrientation(currentFen);
-  const bw = boardSize.current;
+  const bw = boardWidth;
 
   // ── Solving screen ─────────────────────────────────────────────────────────
   return (
