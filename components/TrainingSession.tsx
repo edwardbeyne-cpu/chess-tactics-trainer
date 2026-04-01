@@ -505,14 +505,17 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
-      <div style={{
-        fontSize: "0.9rem", fontWeight: 500, color: msgColor,
-        padding: "0.5rem 1rem", backgroundColor: "#0d1621", borderRadius: "8px",
-        border: `1px solid ${msgBorder}`, textAlign: "center",
-        width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
-      }}>
-        {message}
-      </div>
+      {/* Only show message bar when NOT failed — failed state uses the review panel below */}
+      {status !== "failed" && (
+        <div style={{
+          fontSize: "0.9rem", fontWeight: 500, color: msgColor,
+          padding: "0.5rem 1rem", backgroundColor: "#0d1621", borderRadius: "8px",
+          border: `1px solid ${msgBorder}`, textAlign: "center",
+          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
+        }}>
+          {message}
+        </div>
+      )}
 
       {/* CCT Panel — shown when CCT mode is on and board not yet unlocked */}
       {cctMode && status === "solve" && !cctUnlocked && (
