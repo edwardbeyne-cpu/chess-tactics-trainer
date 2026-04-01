@@ -53,9 +53,9 @@ interface SquareHighlight {
 }
 
 const COLOR_TO_CSS: Record<AnnotationColor, string> = {
-  green: "rgba(0, 180, 80, 0.5)",
-  yellow: "rgba(230, 190, 0, 0.5)",
-  red: "rgba(220, 50, 50, 0.5)",
+  green: "rgba(255, 170, 0, 0.85)",   // bright orange-yellow — pops on green board
+  yellow: "rgba(255, 200, 0, 0.85)",  // pure yellow
+  red: "rgba(220, 50, 50, 0.85)",     // keep red
 };
 
 const COLOR_TO_BRUSH: Record<AnnotationColor, string> = {
