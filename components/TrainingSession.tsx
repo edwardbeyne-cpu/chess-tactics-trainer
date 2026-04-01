@@ -412,8 +412,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
 
   useEffect(() => {
     if (cctMode && cctAllChecked && !cctUnlocked) {
-      const t = setTimeout(() => setCctUnlocked(true), 1000);
-      return () => clearTimeout(t);
+      setCctUnlocked(true); // Unlock immediately when all three checked
     }
   }, [cctAllChecked, cctMode, cctUnlocked]);
 
