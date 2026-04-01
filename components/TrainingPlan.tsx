@@ -607,31 +607,58 @@ export default function TrainingPlan() {
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-        {/* ── Review Day Nudge ──────────────────────────────────────────────── */}
-        {reviewDueCount >= 15 && (
+        {/* ── Review Day Nudge ───────────────────────────────────────────────── */}
+        {reviewDueCount >= 15 && !reviewNudgeDismissed && (
           <div style={{
-            backgroundColor: "#1a1200", border: "1px solid #f59e0b",
-            borderRadius: "12px", padding: "0.9rem 1.25rem",
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap",
+            backgroundColor: "#1a1200",
+            border: "1px solid #f59e0b",
+            borderRadius: "12px",
+            padding: "1rem 1.25rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
           }}>
-            <div>
-              <div style={{ color: "#f59e0b", fontWeight: "700", fontSize: "0.85rem", marginBottom: "0.15rem" }}>
-                {reviewDueCount} puzzles ready to review
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <div style={{ color: "#f59e0b", fontWeight: 600, fontSize: "0.88rem", marginBottom: "0.25rem" }}>
+                You have {reviewDueCount} puzzles ready to review.
               </div>
-              <div style={{ color: "#92400e", fontSize: "0.78rem" }}>
-                Spaced repetition works best when reviews happen on schedule. Consider doing these before new puzzles today.
+              <div style={{ color: "#92681c", fontSize: "0.78rem" }}>
+                Spaced repetition works best when reviews happen on schedule.
               </div>
             </div>
-            <a
-              href="/app/review"
-              style={{
-                backgroundColor: "#f59e0b", color: "#1a0a00",
-                borderRadius: "8px", padding: "0.45rem 0.9rem",
-                fontSize: "0.82rem", fontWeight: "700", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
-              }}
-            >
-              Start Review →
-            </a>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+              <a
+                href="/app/review"
+                style={{
+                  backgroundColor: "#f59e0b",
+                  color: "#000",
+                  borderRadius: "8px",
+                  padding: "0.45rem 0.9rem",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Start Review Session →
+              </a>
+              <button
+                onClick={dismissNudge}
+                style={{
+                  backgroundColor: "transparent",
+                  border: "none",
+                  color: "#92681c",
+                  fontSize: "1.1rem",
+                  cursor: "pointer",
+                  padding: "0.2rem",
+                  lineHeight: 1,
+                }}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
           </div>
         )}
 
