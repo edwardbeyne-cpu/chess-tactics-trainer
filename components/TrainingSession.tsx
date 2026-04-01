@@ -709,7 +709,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                   // Require CCT scan again on retry — missed puzzle = scan again
                   setCctChecked({ checks: false, captures: false, threats: false });
                   setCctUnlocked(false);
-                  onRetry(); // clears parent feedback state, keeps same puzzle
+                  // Don't call onRetry() — it can trigger advance in parent
+                  // Just reset TacticBoard internal state (above) which hides the overlay
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
               >
@@ -1444,6 +1445,7 @@ export default function TrainingSession() {
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     retryModeRef.current = true;
     setFeedback(null);
+    // DO NOT change puzzleKey or currentPuzzleIdx — stays on same puzzle
     setPhase("solving");
   }
 
