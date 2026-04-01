@@ -75,9 +75,31 @@ import PuzzleSettingsModal, {
   type PuzzleSettings,
 } from "./PuzzleSettingsModal";
 
-// ── Mode: lichess (live), classic (static), or mixed ──────────────────────
+// ── Mode: lichess (live), classic (static), mixed, or drillAll ────────────
 
-type PuzzleMode = "lichess" | "classic" | "mixed";
+type PuzzleMode = "lichess" | "classic" | "mixed" | "drillAll";
+
+// ── Mixed Drill ELO (ctt_mixed_drill_elo) — separate from puzzle/pattern ratings
+const MIXED_DRILL_ELO_KEY = "ctt_mixed_drill_elo";
+
+function getMixedDrillElo(): number {
+  if (typeof window === "undefined") return 800;
+  try {
+    const stored = localStorage.getItem(MIXED_DRILL_ELO_KEY);
+    if (stored) return parseInt(stored, 10);
+    const cal = parseInt(localStorage.getItem("ctt_calibration_rating") || "0", 10);
+    return cal > 0 ? Math.max(400, cal - 150) : 800;
+  } catch {
+    return 800;
+  }
+}
+
+function updateMixedDrillElo(won: boolean): number {
+  const current = getMixedDrillElo();
+  const newElo = Math.max(100, current + (won ? 15 : -10));
+  if (typeof window !== "undefined") localStorage.setItem(MIXED_DRILL_ELO_KEY, String(newElo));
+  return newElo;
+}
 
 // ── Review Queue helpers ───────────────────────────────────────────────────
 
@@ -1505,6 +1527,50 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
     }
   }, [eligibleMixedPatterns]);
 
+  const fetchDrillAllPuzzle = useCallback(() => {
+    const allThemeKeys = Object.keys(cachedPuzzlesByTheme);
+    if (allThemeKeys.length === 0) {
+      setError("No puzzles available.");
+      return;
+    }
+    const themeKey = allThemeKeys[Math.floor(Math.random() * allThemeKeys.length)];
+    const puzzleList = cachedPuzzlesByTheme[themeKey];
+    if (!puzzleList || puzzleList.length === 0) {
+      setError("No puzzles available for this pattern.");
+      return;
+    }
+    const randomIdx = Math.floor(Math.random() * puzzleList.length);
+    const raw = puzzleList[randomIdx];
+    setLoading(true);
+    setError(null);
+    setMixedRevealedPattern(null);
+    try {
+      const { fen, solution } = applyFirstMoveCurriculum(raw.fen, raw.moves);
+      const difficulty = raw.rating < 1200 ? "easy" : raw.rating < 1800 ? "medium" : "hard";
+      const patternName = THEME_KEY_TO_PATTERN_NAME[themeKey] ?? themeKey;
+      const patternObj = patterns.find((p) => (PATTERN_NAME_TO_THEME_KEY[p.name] ?? p.name.toLowerCase()) === themeKey);
+      const appPuzzle: AppPuzzle = {
+        id: raw.id,
+        title: `${patternName} — Drill All`,
+        theme: patternName.toUpperCase(),
+        patternTier: patternObj?.tier ?? 1,
+        difficulty,
+        description: `Find the best move!`,
+        fen,
+        solution,
+        hint: `Theme: ${raw.themes.slice(0, 2).join(", ")}`,
+        source: "lichess",
+        rating: raw.rating,
+        gameUrl: `https://lichess.org/training/${raw.id}`,
+      };
+      setCurrentPuzzle(appPuzzle);
+      setLoading(false);
+    } catch (err) {
+      setError(`Failed to load puzzle: ${err instanceof Error ? err.message : "Unknown error"}`);
+      setLoading(false);
+    }
+  }, []);
+
   // Sprint 11: URL param handling — ?pattern=fork&index=47
   useEffect(() => {
     const patternParam = searchParams?.get("pattern");
@@ -1539,17 +1605,18 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
   }
 
   async function handleResult(outcome: SM2Outcome, solveTimeMs: number) {
-    const pattern = mode === "mixed"
+    const isMixedLike = mode === "mixed" || mode === "drillAll";
+    const pattern = isMixedLike
       ? patterns.find((p) => p.name === currentPuzzle?.theme)
       : selectedPatternObj;
 
     const tier = pattern?.tier ?? currentPuzzle?.patternTier ?? 1;
     // In curriculum/pattern mode, selectedPattern is the theme key (e.g. "fork")
-    // In mixed mode, use the puzzle's theme name
-    const themeKey = mode === "mixed"
+    // In mixed/drillAll mode, use the puzzle's theme name
+    const themeKey = isMixedLike
       ? (PATTERN_NAME_TO_THEME_KEY[currentPuzzle?.theme ?? ""] ?? (currentPuzzle?.theme?.toLowerCase() ?? ""))
       : selectedPattern;
-    const themeName = (mode === "mixed" ? currentPuzzle?.theme : (THEME_KEY_TO_PATTERN_NAME[selectedPattern] ?? selectedPattern)) ?? "UNKNOWN";
+    const themeName = (isMixedLike ? currentPuzzle?.theme : (THEME_KEY_TO_PATTERN_NAME[selectedPattern] ?? selectedPattern)) ?? "UNKNOWN";
     // Sprint 13: Only "solved-first-try" counts as success. Any wrong move fails the puzzle.
     // "solved-after-retry" is treated as a FAIL — negative rating delta, stays in review queue.
     const isSolved = outcome === "solved-first-try";
@@ -1599,7 +1666,7 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
       }
 
       // Sprint 11: Update curriculum puzzle progress and pattern-specific ELO rating.
-      // IMPORTANT: Only update pattern rating in Pattern Mode (mode === "lichess").
+      // IMPORTANT: Only update pattern rating in Pattern Mode (mode === "lichess") or drillAll.
       // In Mixed Mode the pattern-specific rating must NOT change — only the
       // overall tactics rating (updateTacticsRating below) should update.
       // Sprint 10: Skip on repeat attempts.
@@ -1608,13 +1675,19 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
         updatePatternRating(themeKey, currentPuzzle.rating, isSolved, currentPuzzle.id);
       }
 
-      // Sprint 12: Update Puzzle Rating — only in mixed/Puzzles mode, never in Drill Tactics
+      // drillAll: give pattern credit + track mixed drill ELO separately
+      if (!isRepeat && mode === "drillAll" && themeKey) {
+        updatePatternRating(themeKey, currentPuzzle.rating, isSolved, currentPuzzle.id);
+        updateMixedDrillElo(isSolved);
+      }
+
+      // Sprint 12: Update Puzzle Rating — only in mixed/Puzzles mode, never in Drill Tactics or drillAll
       if (!isRepeat && mode === "mixed" && currentPuzzle?.rating) {
         updatePuzzleRating(currentPuzzle.rating, isSolved);
       }
 
-      // Reveal pattern in mixed mode after solving
-      if (mode === "mixed") {
+      // Reveal pattern in mixed/drillAll mode after solving
+      if (mode === "mixed" || mode === "drillAll") {
         setMixedRevealedPattern(themeName);
       }
     }
@@ -1774,6 +1847,8 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
   function handleNext() {
     if (mode === "mixed") {
       fetchMixedPuzzle();
+    } else if (mode === "drillAll") {
+      fetchDrillAllPuzzle();
     } else if (selectedPattern) {
       loadNextCurriculumPuzzle(selectedPattern, currentPuzzleIndex);
     }
@@ -1795,17 +1870,19 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
       isRepeatAttemptRef.current = true;
       if (mode === "lichess" && selectedPattern) {
         loadCurriculumPuzzle(selectedPattern, currentPuzzleIndex);
-      } else if (mode === "mixed") {
-        // For mixed, just re-show the same puzzle
+      } else if (mode === "mixed" || mode === "drillAll") {
+        // For mixed/drillAll, just re-show the same puzzle
         setCurrentPuzzle({ ...currentPuzzle });
       }
     }
   }
 
-  // Start mixed mode
+  // Start mixed/drillAll mode
   useEffect(() => {
     if (mode === "mixed") {
       fetchMixedPuzzle();
+    } else if (mode === "drillAll") {
+      fetchDrillAllPuzzle();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -1935,10 +2012,10 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
         </div>
       )}
 
-      {/* Mixed Mode */}
-      {mode === "mixed" && (
+      {/* Mixed Mode / Drill All Mode */}
+      {(mode === "mixed" || mode === "drillAll") && (
         <div>
-          {eligibleMixedPatterns().length === 0 && !loading && !currentPuzzle && (
+          {mode === "mixed" && eligibleMixedPatterns().length === 0 && !loading && !currentPuzzle && (
             <div style={{ backgroundColor: "#1a1508", border: "1px solid #4a3a0a", borderRadius: "12px", padding: "2rem", textAlign: "center", marginBottom: "1rem" }}>
               <div style={{ color: "#f59e0b", fontWeight: "bold", marginBottom: "0.5rem" }}>Puzzles requires 20+ attempts per pattern</div>
               <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
@@ -1950,14 +2027,14 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
           {loading && (
             <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "3rem", textAlign: "center" }}>
               <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⟳</div>
-              <div style={{ color: "#94a3b8" }}>Fetching random puzzle from Lichess...</div>
+              <div style={{ color: "#94a3b8" }}>Loading puzzle...</div>
             </div>
           )}
 
           {error && (
             <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #ef4444", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
               <div style={{ color: "#ef4444", marginBottom: "1rem" }}>{error}</div>
-              <button onClick={fetchMixedPuzzle} style={{ backgroundColor: "#2e75b6", color: "white", border: "none", borderRadius: "8px", padding: "0.6rem 1.25rem", cursor: "pointer" }}>
+              <button onClick={mode === "drillAll" ? fetchDrillAllPuzzle : fetchMixedPuzzle} style={{ backgroundColor: "#2e75b6", color: "white", border: "none", borderRadius: "8px", padding: "0.6rem 1.25rem", cursor: "pointer" }}>
                 Retry
               </button>
             </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import patterns, { type Pattern } from "@/data/patterns";
+import PuzzlePage from "@/components/Puzzle";
 import {
   getPatternCurriculumSummary,
   getPatternTimeStats,
@@ -285,6 +286,10 @@ function CurriculumPatternCard({
 export default function Patterns() {
   const router = useRouter();
 
+  // Sprint 40: Drill mode toggle
+  const [drillMode, setDrillMode] = useState<"one" | "all">("one");
+  const [drillAllStarted, setDrillAllStarted] = useState(false);
+
   // Sprint 12: Global Time Standard selector
   const [activeTimeStandard, setActiveTimeStandard] = useState<number>(0);
   // Tier display needs to be client-only (reads localStorage)
@@ -352,14 +357,80 @@ export default function Patterns() {
 
   return (
     <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-      {/* Header — Sprint 33: headline + one subheadline + time standard only */}
+      {/* Sprint 40: Drill mode toggle — top of page */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.75rem" }}>
+        {(["one", "all"] as const).map((m) => {
+          const isActive = drillMode === m;
+          return (
+            <button
+              key={m}
+              onClick={() => { setDrillMode(m); setDrillAllStarted(false); }}
+              style={{
+                flex: 1,
+                backgroundColor: isActive ? "#16a34a" : "transparent",
+                color: isActive ? "white" : "#64748b",
+                border: `2px solid ${isActive ? "#16a34a" : "#2e3a5c"}`,
+                borderRadius: "999px",
+                padding: "0.65rem 1rem",
+                cursor: "pointer",
+                fontSize: "0.92rem",
+                fontWeight: isActive ? "bold" : "normal",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => { if (!isActive) { e.currentTarget.style.borderColor = "#4ade80"; e.currentTarget.style.color = "#94a3b8"; } }}
+              onMouseLeave={(e) => { if (!isActive) { e.currentTarget.style.borderColor = "#2e3a5c"; e.currentTarget.style.color = "#64748b"; } }}
+            >
+              {m === "one" ? "Drill One Pattern" : "Drill All Patterns"}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Sprint 40: Drill All Patterns mode */}
+      {drillMode === "all" && (
+        drillAllStarted ? (
+          <Suspense fallback={<div style={{ color: "#94a3b8", padding: "3rem", textAlign: "center" }}>Loading puzzle...</div>}>
+            <PuzzlePage defaultMode="drillAll" />
+          </Suspense>
+        ) : (
+          <div style={{ textAlign: "center", padding: "3rem 1.5rem", backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "16px", marginBottom: "2rem" }}>
+            <div style={{ color: "#e2e8f0", fontSize: "1.35rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
+              5,600 puzzles. All 28 patterns. One session.
+            </div>
+            <div style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "2rem", maxWidth: "420px", margin: "0 auto 2rem", lineHeight: 1.6 }}>
+              Puzzles start easy and get harder as you improve. Every correct solve counts toward that pattern&apos;s progress.
+            </div>
+            <button
+              onClick={() => setDrillAllStarted(true)}
+              style={{
+                backgroundColor: "#16a34a",
+                color: "white",
+                border: "none",
+                borderRadius: "10px",
+                padding: "0.85rem 2.5rem",
+                fontSize: "1.05rem",
+                fontWeight: "bold",
+                cursor: "pointer",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#15803d"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "#16a34a"; }}
+            >
+              Start Drilling →
+            </button>
+          </div>
+        )
+      )}
+
+      {/* Header + pattern grid — only shown in "Drill One Pattern" mode */}
+      {drillMode === "one" && (<>
       <div style={{ marginBottom: "2rem" }}>
         <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
           <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
             Drill Tactics
           </h1>
           <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 1.25rem", maxWidth: "540px", lineHeight: 1.6 }}>
-            Master tactical patterns one by one — up to 200 puzzles per pattern, sorted from easiest to hardest
+            Choose a pattern to drill, or drill all 28 at random above.
           </p>
         </div>
 
@@ -501,6 +572,7 @@ export default function Patterns() {
           </div>
         );
       })}
+      </>)}
 
     </div>
   );
