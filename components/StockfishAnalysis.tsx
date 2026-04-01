@@ -163,6 +163,19 @@ try {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const handleBoardMove = useCallback((from: string, to: string): boolean => {
+    try {
+      const game = new Chess(boardFen);
+      const move = game.move({ from, to, promotion: "q" });
+      if (!move) return false;
+      setBoardFen(game.fen());
+      setLastMove([from, to]);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [boardFen]);
+
   const handleMoveClick = useCallback((lineIdx: number, moveIdx: number) => {
     const line = lines[lineIdx];
     if (!line || moveIdx >= line.moves.length) return;
@@ -307,7 +320,8 @@ try {
                 fen={boardFen}
                 orientation={orientation}
                 lastMove={lastMove}
-                draggable={false}
+                draggable={true}
+                onMove={handleBoardMove}
                 boardWidth={380}
               />
               <div style={{ display: "flex", justifyContent: "center", marginTop: "0.5rem" }}>
