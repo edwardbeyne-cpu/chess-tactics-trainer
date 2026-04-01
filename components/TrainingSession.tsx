@@ -657,13 +657,12 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       {/* CCT nudge — flashes when they try to move before completing CCT */}
       {cctNudge && (
         <div style={{
-          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
-          backgroundColor: "rgba(251,191,36,0.15)", border: "1px solid #f59e0b",
+          width: boardWidth, boxSizing: "border-box",
+          backgroundColor: "#1a1000", border: "2px solid #f59e0b",
           borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
-          color: "#f59e0b", fontSize: "0.82rem", fontWeight: "600",
-          animation: "fadeIn 0.1s ease",
+          color: "#f59e0b", fontSize: "0.82rem", fontWeight: "700",
         }}>
-          ⚡ Complete CCT first — tap Checks, Captures, and Threats above
+          ⚡ Complete CCT first — tap Checks, Captures, and Threats on the left
         </div>
       )}
 
