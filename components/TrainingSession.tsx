@@ -585,11 +585,12 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
         {status === "failed" && (
           <div style={{
             position: "absolute", inset: 0,
-            backgroundColor: "rgba(0,0,0,0.82)",
+            backgroundColor: "rgba(10,15,26,0.93)",
             display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center",
             borderRadius: "4px", padding: "1.5rem",
             gap: "0",
+            zIndex: 50, // above Chessground pieces (z-index 2-11)
           }}>
             <div style={{ color: "#ef4444", fontSize: "1.5rem", fontWeight: "900", marginBottom: "0.25rem" }}>✗</div>
             <div style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "700", marginBottom: "0.15rem" }}>Missed this one</div>
@@ -1453,8 +1454,8 @@ export default function TrainingSession() {
         backgroundColor: "#13132b", border: "1px solid #2e3a5c",
         borderRadius: "12px", padding: "1.25rem", position: "relative", overflow: "hidden",
       }}>
-        {/* Slim feedback banner */}
-        {phase === "feedback" && feedback && (
+        {/* Slim feedback banner — correct only; wrong uses board overlay */}
+        {phase === "feedback" && feedback && feedback.correct && (
           <FeedbackOverlay
             correct={feedback.correct}
             masteryAwarded={feedback.masteryAwarded}
