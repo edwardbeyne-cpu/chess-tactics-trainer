@@ -419,6 +419,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
     }
   }, [cctAllChecked, cctMode, cctUnlocked, onCctUnlocked]);
 
+  const [isDesktop, setIsDesktop] = useState(false);
   const [boardWidth, setBoardWidth] = useState(460);
   useEffect(() => {
     function getWidth() {
@@ -431,7 +432,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       return Math.max(320, Math.min(maxFromWidth, maxFromHeight));
     }
     setBoardWidth(getWidth());
-    const handler = () => setBoardWidth(getWidth());
+    setIsDesktop(window.innerWidth >= 700);
+    const handler = () => { setBoardWidth(getWidth()); setIsDesktop(window.innerWidth >= 700); };
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
@@ -516,10 +518,10 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const msgBorder = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+    <div style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "flex-start" : "center", justifyContent: "center", gap: "1rem" }}>
 
       {/* LEFT COLUMN: CCT + info (desktop only) */}
-      {boardWidth >= 400 && (
+      {isDesktop && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "220px", flexShrink: 0, paddingTop: "0.25rem" }}>
           {/* CCT Panel — fixed min-height so board never jumps */}
           {cctMode && status === "solve" && (
@@ -574,7 +576,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       {/* RIGHT COLUMN (or single column mobile): board + overlays */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
       {/* Mobile only: message bar above board */}
-      {boardWidth < 400 && status === "solve" && (
+      {!isDesktop && status === "solve" && (
         <div style={{
           fontSize: "0.9rem", fontWeight: 500, color: msgColor,
           padding: "0.5rem 1rem", backgroundColor: "#0d1621", borderRadius: "8px",
@@ -586,7 +588,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       )}
 
       {/* CCT Panel — mobile only (desktop uses left column) */}
-      {cctMode && status === "solve" && boardWidth < 400 && (
+      {cctMode && status === "solve" && !isDesktop && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
           backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
@@ -739,7 +741,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       </div>
 
       {/* Mobile only: puzzle info below board */}
-      {boardWidth < 400 && (
+      {!isDesktop && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
           <span>Rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
           <span>•</span>
