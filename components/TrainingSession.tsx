@@ -419,17 +419,16 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
     }
   }, [cctAllChecked, cctMode, cctUnlocked, onCctUnlocked]);
 
-  const [boardWidth, setBoardWidth] = useState(440);
+  const [boardWidth, setBoardWidth] = useState(460);
   useEffect(() => {
     function getWidth() {
-      if (typeof window === "undefined") return 440;
+      if (typeof window === "undefined") return 460;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Reserve: nav(56) + topBar(50) + CCT panel(80) + prompt(44) + info(32) + padding(60) = ~322px
-      const maxFromHeight = Math.floor((vh - 322) * 0.95);
-      // Width: content area is max 700px, board should leave padding
-      const maxFromWidth = vw < 640 ? vw - 32 : Math.min(500, Math.floor(vw * 0.42));
-      return Math.max(280, Math.min(maxFromWidth, maxFromHeight));
+      // Fixed-height CCT panel means we only need to reserve: nav(56) + topBar(48) + mastery dots(60) + padding(40) = ~204px
+      const maxFromHeight = Math.floor((vh - 204) * 0.90);
+      const maxFromWidth = vw < 640 ? vw - 32 : Math.min(520, Math.floor(vw * 0.44));
+      return Math.max(320, Math.min(maxFromWidth, maxFromHeight));
     }
     setBoardWidth(getWidth());
     const handler = () => setBoardWidth(getWidth());
@@ -517,26 +516,17 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const msgBorder = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c";
 
   return (
-    <div style={{ display: "flex", flexDirection: boardWidth >= 400 ? "row" : "column", alignItems: "flex-start", gap: "1rem", justifyContent: "center" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
 
       {/* LEFT COLUMN: CCT + info (desktop only) */}
       {boardWidth >= 400 && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "220px", flexShrink: 0, paddingTop: "0.25rem" }}>
-          {/* Message bar */}
-          {status === "solve" && (
-            <div style={{
-              fontSize: "0.88rem", fontWeight: 500, color: msgColor,
-              padding: "0.5rem 0.75rem", backgroundColor: "#0d1621", borderRadius: "8px",
-              border: `1px solid ${msgBorder}`, textAlign: "center",
-            }}>
-              {message}
-            </div>
-          )}
-          {/* CCT Panel */}
+          {/* CCT Panel — fixed min-height so board never jumps */}
           {cctMode && status === "solve" && (
             <div style={{
               backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
               borderRadius: "8px", padding: "0.75rem", transition: "border-color 0.2s",
+              minHeight: "160px", display: "flex", flexDirection: "column", justifyContent: "flex-start",
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
                 <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ CCT</div>
