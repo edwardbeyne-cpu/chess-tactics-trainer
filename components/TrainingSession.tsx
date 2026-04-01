@@ -521,8 +521,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
         </div>
       )}
 
-      {/* CCT Panel — shown when CCT mode is on and board not yet unlocked */}
-      {cctMode && status === "solve" && !cctUnlocked && (
+      {/* CCT Panel — shown when CCT mode is on (stays visible after unlock to prevent layout jump) */}
+      {cctMode && status === "solve" && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
           backgroundColor: "#0d1621", border: "1px solid #2e3a5c",
@@ -531,9 +531,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
           <div style={{ color: "#475569", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.6rem" }}>
             Scan before you move
           </div>
-          {cctAllChecked ? (
-            <div style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.4rem 0" }}>
-              ✓ Good — now find the move
+          {cctUnlocked || cctAllChecked ? (
+            <div style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.4rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+              <span style={{ fontSize: "1rem" }}>✓</span> Board unlocked — make your move
             </div>
           ) : (
             <>
