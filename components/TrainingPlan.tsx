@@ -680,7 +680,7 @@ export default function TrainingPlan() {
                   <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase" }}>Tactics Rating</div>
                   <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{tacticsRating}</div>
                 </div>
-                {ratingDelta !== 0 && (
+                {ratingDelta > 0 && (
                   <div style={{
                     color: ratingDelta > 0 ? "#4ade80" : "#ef4444",
                     fontSize: "0.9rem",

@@ -25,6 +25,16 @@ export default function CalibrationPage() {
   function handleComplete(_finalElo: number) {
     try {
       localStorage.setItem("ctt_calibration_complete", "true");
+      // Sync calibration rating into tactics rating so both show same starting number
+      const calibRating = _finalElo || parseInt(localStorage.getItem("ctt_calibration_rating") || "800", 10);
+      const existingTactics = (() => { try { return JSON.parse(localStorage.getItem("ctt_tactics_rating") || "null"); } catch { return null; } })();
+      if (!existingTactics || existingTactics.tacticsRating === 800) {
+        localStorage.setItem("ctt_tactics_rating", JSON.stringify({
+          tacticsRating: calibRating,
+          tacticsRatingStart: calibRating,
+          tacticsRatingHistory: [],
+        }));
+      }
       // Initialize mastery Set 1 so Training Plan shows it immediately
       const progress = getMasteryProgress();
       if (progress.sets.length === 0) {
