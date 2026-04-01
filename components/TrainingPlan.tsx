@@ -433,6 +433,7 @@ export default function TrainingPlan() {
   const [failureStats, setFailureStats] = useState<FailureModeStats>({ missed: 0, miscalculated: 0, rushed: 0, unsure: 0, total: 0 });
   const [streakDays, setStreakDays] = useState(0);
   const [reviewDueCount, setReviewDueCount] = useState(0);
+  const [reviewNudgeDismissed, setReviewNudgeDismissed] = useState(false);
   const [totalPuzzlesSolved, setTotalPuzzlesSolved] = useState(0);
   const [goal, setGoal] = useState<string | null>(null);
   const [trainedToday, setTrainedToday] = useState(false);
@@ -496,6 +497,13 @@ export default function TrainingPlan() {
     setTasks(generatedTasks);
   }, []);
 
+  function dismissNudge() {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `ctt_review_nudge_dismissed_${today}`;
+    localStorage.setItem(key, "1");
+    setReviewNudgeDismissed(true);
+  }
+
   useEffect(() => {
     setMounted(true);
     loadData();
@@ -518,6 +526,12 @@ export default function TrainingPlan() {
       .then((d: any) => { if (d?.avatar) setChesscomAvatar(d.avatar); })
       .catch(() => null);
   }, [username, platform]);
+
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `ctt_review_nudge_dismissed_${today}`;
+    if (localStorage.getItem(key)) setReviewNudgeDismissed(true);
+  }, []);
 
   if (!mounted) return null;
 
@@ -592,6 +606,34 @@ export default function TrainingPlan() {
       `}</style>
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* ── Review Day Nudge ──────────────────────────────────────────────── */}
+        {reviewDueCount >= 15 && (
+          <div style={{
+            backgroundColor: "#1a1200", border: "1px solid #f59e0b",
+            borderRadius: "12px", padding: "0.9rem 1.25rem",
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ color: "#f59e0b", fontWeight: "700", fontSize: "0.85rem", marginBottom: "0.15rem" }}>
+                {reviewDueCount} puzzles ready to review
+              </div>
+              <div style={{ color: "#92400e", fontSize: "0.78rem" }}>
+                Spaced repetition works best when reviews happen on schedule. Consider doing these before new puzzles today.
+              </div>
+            </div>
+            <a
+              href="/app/review"
+              style={{
+                backgroundColor: "#f59e0b", color: "#1a0a00",
+                borderRadius: "8px", padding: "0.45rem 0.9rem",
+                fontSize: "0.82rem", fontWeight: "700", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0,
+              }}
+            >
+              Start Review →
+            </a>
+          </div>
+        )}
 
         {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
         <div style={{

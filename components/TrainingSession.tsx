@@ -387,9 +387,11 @@ function MasteryDots({ hits, size = 14 }: { hits: number; size?: number }) {
 interface TacticBoardProps {
   puzzleData: { fen: string; solution: string[]; rating: number; theme: string };
   onResult: (correct: boolean) => void;
+  onAdvance: () => void;
+  onRetry: () => void;
 }
 
-function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
+function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardProps) {
   const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
@@ -398,6 +400,7 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
+  const retryModeRef = useRef(false);
 
   // CCT Mode — Checks, Captures, Threats
   const [cctMode] = useState(() => getCCTMode());
@@ -438,15 +441,14 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
     const isCorrect = from === expFrom && to === expTo;
 
     if (!isCorrect) {
-      setMessage("Wrong move — try again!");
+      setStatus("failed");
+      setMessage("✗ Wrong");
       if (!hasScoredRef.current) {
         hasScoredRef.current = true;
-        setTimeout(() => {
-          if (!resultCalledRef.current) {
-            resultCalledRef.current = true;
-            onResult(false);
-          }
-        }, 800);
+        if (!resultCalledRef.current) {
+          resultCalledRef.current = true;
+          onResult(false);
+        }
       }
       return false;
     }
@@ -463,7 +465,9 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
       if (nextIndex >= puzzleData.solution.length) {
         setStatus("solved");
         setMessage("Correct!");
-        if (!resultCalledRef.current) {
+        if (retryModeRef.current) {
+          setTimeout(() => onAdvance(), 800);
+        } else if (!resultCalledRef.current) {
           resultCalledRef.current = true;
           onResult(true);
         }
@@ -483,7 +487,9 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
         } catch {
           setStatus("solved");
           setMessage("Correct!");
-          if (!resultCalledRef.current) {
+          if (retryModeRef.current) {
+            setTimeout(() => onAdvance(), 800);
+          } else if (!resultCalledRef.current) {
             resultCalledRef.current = true;
             onResult(true);
           }
@@ -574,6 +580,69 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
         <span>•</span>
         <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
       </div>
+
+      {/* Wrong Answer Review Panel */}
+      {status === "failed" && (
+        <div style={{
+          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
+          backgroundColor: "#0d1621", borderLeft: "3px solid #ef4444",
+          borderRadius: "10px", padding: "1rem",
+        }}>
+          <div style={{ color: "#ef4444", fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.25rem" }}>
+            Missed this one
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "0.75rem" }}>
+            You&apos;ll see it again soon — spaced repetition will bring it back.
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            <button
+              onClick={() => {
+                retryModeRef.current = true;
+                setFen(puzzleData.fen);
+                setMoveIndex(0);
+                setStatus("solve");
+                setMessage(`${sideToMove} to move — find the tactic`);
+                setLastMove(undefined);
+                onRetry();
+              }}
+              style={{
+                backgroundColor: "transparent", border: "1px solid #4ade80",
+                borderRadius: "8px", padding: "0.5rem 1rem",
+                color: "#4ade80", fontSize: "0.85rem", cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              ↺ Retry Puzzle
+            </button>
+            <button
+              onClick={() => {
+                const encodedFen = encodeURIComponent(puzzleData.fen);
+                window.open(`https://lichess.org/analysis/${encodedFen}`, "_blank");
+                setTimeout(() => onAdvance(), 1000);
+              }}
+              style={{
+                backgroundColor: "transparent", border: "1px solid #60a5fa",
+                borderRadius: "8px", padding: "0.5rem 1rem",
+                color: "#60a5fa", fontSize: "0.85rem", cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              🔍 Review with Engine
+            </button>
+            <button
+              onClick={() => onAdvance()}
+              style={{
+                backgroundColor: "transparent", border: "1px solid #2e3a5c",
+                borderRadius: "8px", padding: "0.5rem 1rem",
+                color: "#94a3b8", fontSize: "0.85rem", cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              → Next Puzzle
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -958,6 +1027,9 @@ export default function TrainingSession() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceFnRef = useRef<() => void>(() => {});
+  const retryModeRef = useRef(false);
+  const advanceTriggerRef = useRef<(() => void) | null>(null);
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1041,57 +1113,68 @@ export default function TrainingSession() {
 
     const solveTimeMs = Date.now() - puzzleStartTime;
     const puzzle = currentSet.puzzles[currentPuzzleIdx];
+    const isRetry = retryModeRef.current;
+    retryModeRef.current = false;
 
-    // Record attempt and get updated mastery
-    const { masteryHits, masteryAwarded } = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
+    let masteryHits = puzzle.masteryHits;
+    let masteryAwarded = false;
     const overTimeLimit = correct && solveTimeMs >= MASTERY_TIME_LIMIT_MS;
+    let freshSet = currentSet;
+    let freshProgress = getMasteryProgress();
+    let newDailyCount = 0;
 
-    // Update local set state from storage
-    const freshProgress = getMasteryProgress();
-    const freshSet = freshProgress.sets.find((s) => s.setNumber === currentSet.setNumber) ?? currentSet;
-    setCurrentSet(freshSet);
-    setMasteryProgress(freshProgress);
+    if (!isRetry) {
+      // Record attempt and get updated mastery
+      const result = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
+      masteryHits = result.masteryHits;
+      masteryAwarded = result.masteryAwarded;
 
-    // Update session stats and persist to localStorage
-    setSessionTotal((t: number) => {
-      const newT = t + 1;
-      setSessionCorrect((c: number) => {
-        const newC = correct ? c + 1 : c;
-        setSessionUnder10s((u: number) => {
-          const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
-          setSessionNewMastered((m: number) => {
-            const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
-            try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
-            return newM;
+      // Update local set state from storage
+      const fp = getMasteryProgress();
+      const fs = fp.sets.find((s) => s.setNumber === currentSet.setNumber) ?? currentSet;
+      setCurrentSet(fs);
+      setMasteryProgress(fp);
+      freshSet = fs;
+      freshProgress = fp;
+
+      // Update session stats and persist to localStorage
+      setSessionTotal((t: number) => {
+        const newT = t + 1;
+        setSessionCorrect((c: number) => {
+          const newC = correct ? c + 1 : c;
+          setSessionUnder10s((u: number) => {
+            const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
+            setSessionNewMastered((m: number) => {
+              const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
+              try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
+              return newM;
+            });
+            return newU;
           });
-          return newU;
+          return newC;
         });
-        return newC;
+        return newT;
       });
-      return newT;
-    });
-    if (!correct) {
-      // Track missed puzzles for end-of-session review
-      if (puzzle.type === "tactic" && puzzle.puzzleData) {
+
+      if (!correct && puzzle.type === "tactic" && puzzle.puzzleData) {
         const pd = puzzle.puzzleData as { fen: string; solution: string[] };
         setSessionMissedPuzzles((prev) => {
           if (prev.some((p) => p.id === puzzle.id)) return prev;
           return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
         });
       }
+
+      newDailyCount = incrementDailySession();
+      setDailyCompleted(newDailyCount);
+      recordActivityToday();
     }
-    // Increment daily count
-    const newDailyCount = incrementDailySession();
-    setDailyCompleted(newDailyCount);
-    recordActivityToday();
 
     // Show feedback
     setFeedback({ correct, masteryAwarded, overTimeLimit, newMasteryHits: masteryHits });
     setPhase("feedback");
 
-    // After 1.5s, advance
-    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
-    feedbackTimeoutRef.current = setTimeout(() => {
+    // Build advance function (reused for auto-advance on correct, or user-triggered on wrong)
+    const advance = () => {
       setFeedback(null);
 
       const settings = getDailyTargetSettings();
@@ -1119,9 +1202,31 @@ export default function TrainingSession() {
       setPuzzleKey((k) => k + 1);
       setPuzzleStartTime(Date.now());
       setPhase("solving");
-    }, 1500);
+    };
+
+    if (correct) {
+      // Auto-advance after 1.5s for correct answers
+      if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+      feedbackTimeoutRef.current = setTimeout(advance, 1500);
+    } else {
+      // Wrong: wait for user to choose via review panel buttons
+      advanceFnRef.current = advance;
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSet, currentPuzzleIdx, puzzleStartTime]);
+
+  // ── Handle advance (called by TacticBoard review panel) ───────────────────
+  const handleAdvance = useCallback(() => {
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    advanceFnRef.current();
+  }, []);
+
+  // ── Handle retry (called by TacticBoard review panel) ─────────────────────
+  const handleRetry = useCallback(() => {
+    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    setFeedback(null);
+    setPhase("solving");
+  }, []);
 
   // ── Handle "keep going" after session complete ─────────────────────────────
   function handleContinue() {
@@ -1271,6 +1376,15 @@ export default function TrainingSession() {
         <div style={{ flex: 1, minWidth: "60px" }}>
           <ProgressBar value={masteredCount} max={totalPuzzles} color="#4ade80" />
         </div>
+
+        {/* Settings shortcut */}
+        <a
+          href="/app/settings"
+          title="Puzzle Settings"
+          style={{ color: "#475569", textDecoration: "none", fontSize: "1rem", flexShrink: 0, lineHeight: 1 }}
+        >
+          ⚙️
+        </a>
       </div>
 
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
@@ -1292,6 +1406,8 @@ export default function TrainingSession() {
             key={`tactic_${puzzleKey}`}
             puzzleData={puzzle.puzzleData}
             onResult={handleResult}
+            onAdvance={handleAdvance}
+            onRetry={handleRetry}
           />
         ) : (
           <BlunderBoard
