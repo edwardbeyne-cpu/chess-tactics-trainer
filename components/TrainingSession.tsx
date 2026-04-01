@@ -232,7 +232,7 @@ export function generateMasterySet(setNumber: number): MasterySet {
     for (const theme of weakestThemes) {
       const pool = cachedPuzzlesByTheme[theme] ?? [];
       const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
-      const source = shuffleArray(eligible.length > 0 ? eligible : pool.filter((p) => !usedIds.has(p.id)));
+      const minElo = Math.max(800, targetELO - 400); const fallback = pool.filter((p) => !usedIds.has(p.id) && p.rating >= minElo); const source = shuffleArray(eligible.length > 0 ? eligible : (fallback.length > 0 ? fallback : pool.filter((p) => !usedIds.has(p.id))));
       for (let i = 0; i < Math.min(perWeak, source.length) && puzzles.filter(p => p.type === "tactic").length < weakTacticTarget; i++) {
         const raw = source[i];
         if (usedIds.has(raw.id)) continue;
@@ -262,7 +262,7 @@ export function generateMasterySet(setNumber: number): MasterySet {
     otherIdx++;
     const pool = cachedPuzzlesByTheme[theme] ?? [];
     const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
-    const source = eligible.length > 0 ? eligible : pool.filter((p) => !usedIds.has(p.id));
+    const minElo2 = Math.max(800, targetELO - 400); const fallback2 = pool.filter((p) => !usedIds.has(p.id) && p.rating >= minElo2); const source = eligible.length > 0 ? eligible : (fallback2.length > 0 ? fallback2 : pool.filter((p) => !usedIds.has(p.id)));
     if (source.length === 0) continue;
     const raw = source[Math.floor(Math.random() * source.length)];
     if (usedIds.has(raw.id)) continue;
