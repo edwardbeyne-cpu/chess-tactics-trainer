@@ -185,6 +185,71 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Why This Works — methodology section */}
+      <section style={{ maxWidth: "800px", margin: "0 auto", padding: "2rem 2rem 5rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", textAlign: "center", marginBottom: "0.5rem" }}>
+          Why this works — and why random puzzles don&apos;t
+        </h2>
+        <p style={{ color: "#64748b", textAlign: "center", marginBottom: "3rem", fontSize: "1rem" }}>
+          Most chess apps give you an endless stream of random puzzles. The research says that&apos;s the wrong approach.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+          {[
+            {
+              number: "01",
+              headline: "Pattern internalization requires repetition",
+              body: "Chess tactics are about recognizing patterns — forks, pins, back rank weaknesses. You don't build that recognition by seeing a pattern once. You build it by seeing it enough times that your brain expects it before you consciously calculate it. Random puzzles scatter your reps across hundreds of patterns, giving each one minimal exposure.",
+              color: "#4ade80",
+            },
+            {
+              number: "02",
+              headline: "Weakness-targeted practice compounds faster",
+              body: "If your blind spot is back rank mates, doing 100 puzzles that hammer that theme overloads your brain with that specific signal. Random puzzles might show you 3 back rank mates in 100 attempts — nowhere near enough reps to wire the pattern in. Chess Tactics Trainer analyzes your Chess.com games and weights your puzzles toward the exact patterns costing you rating points.",
+              color: "#60a5fa",
+            },
+            {
+              number: "03",
+              headline: "Spaced repetition is the gold standard",
+              body: "The optimal method isn't just repeating the same puzzles — it's repeating them on a forgetting curve schedule. You review a puzzle right before you'd naturally forget the solution. This is what makes repetition efficient rather than brute-force drilling. We use the SM-2 algorithm (the same one used by Anki) to schedule every puzzle automatically.",
+              color: "#a78bfa",
+            },
+            {
+              number: "04",
+              headline: "Random puzzles have a role — but it's secondary",
+              body: "Random puzzles are good for testing whether pattern recognition transfers to novel positions. They're a diagnostic, not a training method. Chess Tactics Trainer uses them exactly this way: once you've mastered your core patterns, Drill All Patterns tests whether that recognition fires in mixed, unpredictable positions.",
+              color: "#f59e0b",
+            },
+          ].map((item) => (
+            <div key={item.number} style={{ display: "flex", gap: "1.5rem", alignItems: "flex-start" }}>
+              <div style={{
+                color: item.color, fontWeight: "900", fontSize: "1.5rem",
+                fontVariantNumeric: "tabular-nums", flexShrink: 0, lineHeight: 1.2,
+                width: "2.5rem",
+              }}>
+                {item.number}
+              </div>
+              <div>
+                <div style={{ color: "#e2e8f0", fontWeight: "700", fontSize: "1rem", marginBottom: "0.4rem" }}>
+                  {item.headline}
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.7 }}>
+                  {item.body}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "3rem", padding: "1.5rem", backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "14px", textAlign: "center" }}>
+          <div style={{ color: "#4ade80", fontWeight: "700", fontSize: "1rem", marginBottom: "0.5rem" }}>
+            The model that actually works
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.7 }}>
+            Identify your weak patterns → drill targeted puzzles with spaced repetition → use mixed puzzles to test transfer.
+            <br />This is exactly how Chess Tactics Trainer is designed — the SM-2 algorithm and pattern-based organization aren&apos;t just features. They&apos;re the reason it works.
+          </div>
+        </div>
+      </section>
+
       {/* Pricing preview */}
       <section style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 2rem 5rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", textAlign: "center", marginBottom: "0.5rem" }}>
