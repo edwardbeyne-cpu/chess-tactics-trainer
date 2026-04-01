@@ -517,9 +517,74 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const msgBorder = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.75rem" }}>
-      {/* Only show message bar when actively solving — failed uses overlay, solved uses FeedbackOverlay */}
-      {status === "solve" && (
+    <div style={{ display: "flex", flexDirection: boardWidth >= 400 ? "row" : "column", alignItems: "flex-start", gap: "1rem", justifyContent: "center" }}>
+
+      {/* LEFT COLUMN: CCT + info (desktop only) */}
+      {boardWidth >= 400 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "220px", flexShrink: 0, paddingTop: "0.25rem" }}>
+          {/* Message bar */}
+          {status === "solve" && (
+            <div style={{
+              fontSize: "0.88rem", fontWeight: 500, color: msgColor,
+              padding: "0.5rem 0.75rem", backgroundColor: "#0d1621", borderRadius: "8px",
+              border: `1px solid ${msgBorder}`, textAlign: "center",
+            }}>
+              {message}
+            </div>
+          )}
+          {/* CCT Panel */}
+          {cctMode && status === "solve" && (
+            <div style={{
+              backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
+              borderRadius: "8px", padding: "0.75rem", transition: "border-color 0.2s",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+                <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ CCT</div>
+                {!cctUnlocked && <div style={{ color: "#334155", fontSize: "0.65rem" }}>Board locked</div>}
+              </div>
+              {!cctUnlocked && !cctAllChecked && (
+                <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.5rem", lineHeight: 1.4 }}>
+                  Scan for <span style={{ color: "#94a3b8" }}>Checks</span>, <span style={{ color: "#94a3b8" }}>Captures</span>, <span style={{ color: "#94a3b8" }}>Threats</span> before moving.
+                </div>
+              )}
+              {cctUnlocked || cctAllChecked ? (
+                <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0" }}>✓ Board unlocked</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                  {(["checks", "captures", "threats"] as const).map((key) => {
+                    const checked = cctChecked[key];
+                    const label = key.charAt(0).toUpperCase() + key.slice(1);
+                    const icons = { checks: "♟", captures: "⚔", threats: "⚠" };
+                    return (
+                      <button key={key} onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                        style={{
+                          padding: "0.45rem 0.6rem", borderRadius: "6px", fontSize: "0.8rem", fontWeight: 600,
+                          cursor: checked ? "default" : "pointer",
+                          backgroundColor: checked ? "rgba(74,222,128,0.12)" : "#13132b",
+                          color: checked ? "#4ade80" : "#e2e8f0",
+                          border: `1px solid ${checked ? "#4ade80" : "#3a4a6a"}`,
+                          display: "flex", alignItems: "center", gap: "0.5rem",
+                        }}>
+                        <span>{checked ? "✓" : icons[key]}</span> {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Puzzle info */}
+          <div style={{ color: "#475569", fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+            <div>Rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></div>
+            <div>{orientation === "white" ? "White to move" : "Black to move"}</div>
+          </div>
+        </div>
+      )}
+
+      {/* RIGHT COLUMN (or single column mobile): board + overlays */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+      {/* Mobile only: message bar above board */}
+      {boardWidth < 400 && status === "solve" && (
         <div style={{
           fontSize: "0.9rem", fontWeight: 500, color: msgColor,
           padding: "0.5rem 1rem", backgroundColor: "#0d1621", borderRadius: "8px",
@@ -530,8 +595,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
         </div>
       )}
 
-      {/* CCT Panel — shown when CCT mode is on (stays visible after unlock to prevent layout jump) */}
-      {cctMode && status === "solve" && (
+      {/* CCT Panel — mobile only (desktop uses left column) */}
+      {cctMode && status === "solve" && boardWidth < 400 && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
           backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
@@ -684,11 +749,15 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
-        <span>Puzzle rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
-        <span>•</span>
-        <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
-      </div>
+      {/* Mobile only: puzzle info below board */}
+      {boardWidth < 400 && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
+          <span>Rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
+          <span>•</span>
+          <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
+        </div>
+      )}
+      </div>{/* end right column */}
     </div>
   );
 }
