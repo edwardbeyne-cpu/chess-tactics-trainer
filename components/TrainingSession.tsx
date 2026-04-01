@@ -596,6 +596,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%", maxWidth: "220px" }}>
               <button
                 onClick={() => {
+                  // Reset puzzle state in place — do NOT call onRetry() which loads a new puzzle
                   resultCalledRef.current = false;
                   hasScoredRef.current = false;
                   setFen(puzzleData.fen);
@@ -603,7 +604,6 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
                   setStatus("solve");
                   setMessage(`${sideToMove} to move — find the tactic`);
                   setLastMove(undefined);
-                  onRetry();
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
               >
