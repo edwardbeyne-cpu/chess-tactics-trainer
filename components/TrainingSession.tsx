@@ -417,13 +417,17 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
     }
   }, [cctAllChecked, cctMode, cctUnlocked]);
 
-  const [boardWidth, setBoardWidth] = useState(520);
+  const [boardWidth, setBoardWidth] = useState(440);
   useEffect(() => {
     function getWidth() {
-      const vw = typeof window !== "undefined" ? window.innerWidth : 520;
-      if (vw < 640) return Math.min(vw - 16, 480);
-      if (vw <= 1024) return Math.min(640, Math.floor(vw * 0.92));
-      return Math.min(660, Math.floor(vw * 0.62));
+      if (typeof window === "undefined") return 440;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // Reserve: nav(56) + topBar(50) + CCT panel(80) + prompt(44) + info(32) + padding(60) = ~322px
+      const maxFromHeight = Math.floor((vh - 322) * 0.95);
+      // Width: content area is max 700px, board should leave padding
+      const maxFromWidth = vw < 640 ? vw - 32 : Math.min(500, Math.floor(vw * 0.42));
+      return Math.max(280, Math.min(maxFromWidth, maxFromHeight));
     }
     setBoardWidth(getWidth());
     const handler = () => setBoardWidth(getWidth());
