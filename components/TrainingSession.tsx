@@ -709,8 +709,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                   // Require CCT scan again on retry — missed puzzle = scan again
                   setCctChecked({ checks: false, captures: false, threats: false });
                   setCctUnlocked(false);
-                  // Don't call onRetry() — it can trigger advance in parent
-                  // Just reset TacticBoard internal state (above) which hides the overlay
+                  onRetry(); // set retryPendingRef to block any queued advance
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
               >
@@ -1244,6 +1243,7 @@ export default function TrainingSession() {
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceFnRef = useRef<() => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
+  const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1395,6 +1395,11 @@ export default function TrainingSession() {
 
     // Build advance function (reused for auto-advance on correct, or user-triggered on wrong)
     const advance = () => {
+      // Block if user clicked Retry
+      if (retryPendingRef.current) {
+        retryPendingRef.current = false;
+        return;
+      }
       setFeedback(null);
 
       const settings = getDailyTargetSettings();
@@ -1443,9 +1448,9 @@ export default function TrainingSession() {
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
   function handleRetry() {
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    retryPendingRef.current = true; // block any pending advance from firing
     retryModeRef.current = true;
     setFeedback(null);
-    // DO NOT change puzzleKey or currentPuzzleIdx — stays on same puzzle
     setPhase("solving");
   }
 
