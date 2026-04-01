@@ -567,67 +567,56 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
         </div>
       )}
 
-      <ChessBoard
-        fen={fen}
-        onMove={handleMove}
-        lastMove={lastMove}
-        draggable={status === "solve" && cctComplete}
-        boardWidth={boardWidth}
-        orientation={orientation as "white" | "black"}
-      />
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
-        <span>Puzzle rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
-        <span>•</span>
-        <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
-      </div>
+      {/* Board with overlay */}
+      <div style={{ position: "relative", width: boardWidth, height: boardWidth }}>
+        <ChessBoard
+          fen={fen}
+          onMove={handleMove}
+          lastMove={lastMove}
+          draggable={status === "solve" && cctComplete}
+          boardWidth={boardWidth}
+          orientation={orientation as "white" | "black"}
+        />
 
-      {/* Wrong Answer Review Panel */}
-      {status === "failed" && (
-        <div style={{
-          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
-          backgroundColor: "#0d1621", borderLeft: "3px solid #ef4444",
-          borderRadius: "10px", padding: "1rem",
-        }}>
-          <div style={{ color: "#ef4444", fontSize: "0.78rem", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.25rem" }}>
-            Missed this one
-          </div>
-          <div style={{ color: "#64748b", fontSize: "0.78rem", marginBottom: "0.75rem" }}>
-            You&apos;ll see it again soon — spaced repetition will bring it back.
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            <button
-              onClick={() => {
-                resultCalledRef.current = false;
-                hasScoredRef.current = false;
-                setFen(puzzleData.fen);
-                setMoveIndex(0);
-                setStatus("solve");
-                setMessage(`${sideToMove} to move — find the tactic`);
-                setLastMove(undefined);
-                onRetry();
-              }}
-              style={{
-                backgroundColor: "transparent", border: "1px solid #4ade80",
-                borderRadius: "8px", padding: "0.5rem 1rem",
-                color: "#4ade80", fontSize: "0.85rem", cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
-              ↺ Retry Puzzle
-            </button>
-            <button
-              onClick={() => {
-                const encodedFen = encodeURIComponent(puzzleData.fen);
-                window.open(`https://lichess.org/analysis/${encodedFen}`, "_blank");
-                setTimeout(() => onAdvance(), 1000);
-              }}
-              style={{
-                backgroundColor: "transparent", border: "1px solid #60a5fa",
-                borderRadius: "8px", padding: "0.5rem 1rem",
-                color: "#60a5fa", fontSize: "0.85rem", cursor: "pointer",
-                textAlign: "left",
-              }}
-            >
+        {/* Wrong Answer Overlay — centered on board */}
+        {status === "failed" && (
+          <div style={{
+            position: "absolute", inset: 0,
+            backgroundColor: "rgba(0,0,0,0.82)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            borderRadius: "4px", padding: "1.5rem",
+            gap: "0",
+          }}>
+            <div style={{ color: "#ef4444", fontSize: "1.5rem", fontWeight: "900", marginBottom: "0.25rem" }}>✗</div>
+            <div style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "700", marginBottom: "0.15rem" }}>Missed this one</div>
+            <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "1.25rem", textAlign: "center" }}>
+              You&apos;ll see it again — spaced repetition brings it back.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%", maxWidth: "220px" }}>
+              <button
+                onClick={() => {
+                  resultCalledRef.current = false;
+                  hasScoredRef.current = false;
+                  setFen(puzzleData.fen);
+                  setMoveIndex(0);
+                  setStatus("solve");
+                  setMessage(`${sideToMove} to move — find the tactic`);
+                  setLastMove(undefined);
+                  onRetry();
+                }}
+                style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
+              >
+                ↺ Retry Puzzle
+              </button>
+              <button
+                onClick={() => {
+                  const encodedFen = encodeURIComponent(puzzleData.fen);
+                  window.open(`https://lichess.org/analysis/${encodedFen}`, "_blank");
+                  setTimeout(() => onAdvance(), 500);
+                }}
+                style={{ backgroundColor: "#0a1228", border: "1px solid #60a5fa", borderRadius: "8px", padding: "0.55rem 1rem", color: "#60a5fa", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
+              >
               🔍 Review with Engine
             </button>
             <button
@@ -644,6 +633,13 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
           </div>
         </div>
       )}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", fontSize: "0.78rem", color: "#475569" }}>
+        <span>Puzzle rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></span>
+        <span>•</span>
+        <span>{orientation === "white" ? "White to move" : "Black to move"}</span>
+      </div>
     </div>
   );
 }
