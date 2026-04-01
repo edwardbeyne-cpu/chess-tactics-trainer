@@ -3270,8 +3270,12 @@ export function getDailySessionCompleted(): number {
 const CCT_MODE_KEY = "ctt_cct_mode";
 
 export function getCCTMode(): boolean {
-  if (typeof window === "undefined") return false;
-  try { return localStorage.getItem(CCT_MODE_KEY) === "true"; } catch { return false; }
+  if (typeof window === "undefined") return true; // default on
+  try {
+    const val = localStorage.getItem(CCT_MODE_KEY);
+    // Default is ON — only off if explicitly set to "false"
+    return val === null ? true : val !== "false";
+  } catch { return true; }
 }
 
 export function setCCTMode(v: boolean): void {

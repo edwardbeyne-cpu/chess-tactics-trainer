@@ -25,6 +25,7 @@ import {
   getStreakData,
   getDailyTargetSettings,
   getCCTMode,
+  setCCTMode,
   type MasteryPuzzle,
   type MasterySet,
   type MasteryProgress,
@@ -597,7 +598,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             <button
               onClick={() => {
-                retryModeRef.current = true;
+                resultCalledRef.current = false;
+                hasScoredRef.current = false;
                 setFen(puzzleData.fen);
                 setMoveIndex(0);
                 setStatus("solve");
@@ -805,6 +807,74 @@ function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHit
       color: "#22c55e", fontWeight: "600", fontSize: "0.88rem", zIndex: 20,
     }}>
       ✓ Correct
+    </div>
+  );
+}
+
+// ── Quick Settings Popup ────────────────────────────────────────────────────
+function QuickSettings() {
+  const [open, setOpen] = useState(false);
+  const [cctOn, setCctOn] = useState(() => getCCTMode());
+
+  function toggleCCT() {
+    const next = !cctOn;
+    setCctOn(next);
+    setCCTMode(next);
+  }
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Quick Settings"
+        style={{ background: "none", border: "none", color: open ? "#4ade80" : "#475569", fontSize: "1rem", cursor: "pointer", padding: "0.2rem", lineHeight: 1 }}
+      >
+        ⚙️
+      </button>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          {/* Popup */}
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0,
+            backgroundColor: "#13132b", border: "1px solid #2e3a5c",
+            borderRadius: "10px", padding: "0.85rem 1rem", zIndex: 100,
+            minWidth: "220px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.65rem" }}>
+              Puzzle Settings
+            </div>
+            {/* CCT toggle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
+              <div>
+                <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "600" }}>CCT Mode</div>
+                <div style={{ color: "#475569", fontSize: "0.72rem" }}>Checks · Captures · Threats</div>
+              </div>
+              <button
+                onClick={toggleCCT}
+                style={{
+                  width: "40px", height: "22px", borderRadius: "11px", border: "none",
+                  backgroundColor: cctOn ? "#4ade80" : "#2e3a5c",
+                  cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "white",
+                  position: "absolute", top: "3px",
+                  left: cctOn ? "21px" : "3px",
+                  transition: "left 0.2s",
+                }} />
+              </button>
+            </div>
+            <div style={{ borderTop: "1px solid #1e2a3a", marginTop: "0.65rem", paddingTop: "0.65rem" }}>
+              <a href="/app/settings" style={{ color: "#4ade80", fontSize: "0.78rem", textDecoration: "none" }}>
+                All Settings →
+              </a>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1028,8 +1098,6 @@ export default function TrainingSession() {
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceFnRef = useRef<() => void>(() => {});
-  const retryModeRef = useRef(false);
-  const advanceTriggerRef = useRef<(() => void) | null>(null);
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1113,8 +1181,6 @@ export default function TrainingSession() {
 
     const solveTimeMs = Date.now() - puzzleStartTime;
     const puzzle = currentSet.puzzles[currentPuzzleIdx];
-    const isRetry = retryModeRef.current;
-    retryModeRef.current = false;
 
     let masteryHits = puzzle.masteryHits;
     let masteryAwarded = false;
@@ -1123,51 +1189,49 @@ export default function TrainingSession() {
     let freshProgress = getMasteryProgress();
     let newDailyCount = 0;
 
-    if (!isRetry) {
-      // Record attempt and get updated mastery
-      const result = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
-      masteryHits = result.masteryHits;
-      masteryAwarded = result.masteryAwarded;
+    // Record attempt and get updated mastery
+    const result = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
+    masteryHits = result.masteryHits;
+    masteryAwarded = result.masteryAwarded;
 
-      // Update local set state from storage
-      const fp = getMasteryProgress();
-      const fs = fp.sets.find((s) => s.setNumber === currentSet.setNumber) ?? currentSet;
-      setCurrentSet(fs);
-      setMasteryProgress(fp);
-      freshSet = fs;
-      freshProgress = fp;
+    // Update local set state from storage
+    const fp = getMasteryProgress();
+    const fs = fp.sets.find((s) => s.setNumber === currentSet.setNumber) ?? currentSet;
+    setCurrentSet(fs);
+    setMasteryProgress(fp);
+    freshSet = fs;
+    freshProgress = fp;
 
-      // Update session stats and persist to localStorage
-      setSessionTotal((t: number) => {
-        const newT = t + 1;
-        setSessionCorrect((c: number) => {
-          const newC = correct ? c + 1 : c;
-          setSessionUnder10s((u: number) => {
-            const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
-            setSessionNewMastered((m: number) => {
-              const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
-              try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
-              return newM;
-            });
-            return newU;
+    // Update session stats and persist to localStorage
+    setSessionTotal((t: number) => {
+      const newT = t + 1;
+      setSessionCorrect((c: number) => {
+        const newC = correct ? c + 1 : c;
+        setSessionUnder10s((u: number) => {
+          const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
+          setSessionNewMastered((m: number) => {
+            const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
+            try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
+            return newM;
           });
-          return newC;
+          return newU;
         });
-        return newT;
+        return newC;
       });
+      return newT;
+    });
 
-      if (!correct && puzzle.type === "tactic" && puzzle.puzzleData) {
-        const pd = puzzle.puzzleData as { fen: string; solution: string[] };
-        setSessionMissedPuzzles((prev) => {
-          if (prev.some((p) => p.id === puzzle.id)) return prev;
-          return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
-        });
-      }
-
-      newDailyCount = incrementDailySession();
-      setDailyCompleted(newDailyCount);
-      recordActivityToday();
+    if (!correct && puzzle.type === "tactic" && puzzle.puzzleData) {
+      const pd = puzzle.puzzleData as { fen: string; solution: string[] };
+      setSessionMissedPuzzles((prev) => {
+        if (prev.some((p) => p.id === puzzle.id)) return prev;
+        return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
+      });
     }
+
+    newDailyCount = incrementDailySession();
+    setDailyCompleted(newDailyCount);
+    recordActivityToday();
 
     // Show feedback
     setFeedback({ correct, masteryAwarded, overTimeLimit, newMasteryHits: masteryHits });
@@ -1204,29 +1268,28 @@ export default function TrainingSession() {
       setPhase("solving");
     };
 
-    if (correct) {
-      // Auto-advance after 1.5s for correct answers
+    advanceFnRef.current = advance;
+
+    if (correct || puzzle.type !== "tactic") {
+      // Auto-advance after 1.5s for correct answers and wrong blunder answers
       if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
       feedbackTimeoutRef.current = setTimeout(advance, 1500);
-    } else {
-      // Wrong: wait for user to choose via review panel buttons
-      advanceFnRef.current = advance;
     }
+    // Wrong tactic answers: wait for user to choose via review panel buttons
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSet, currentPuzzleIdx, puzzleStartTime]);
 
   // ── Handle advance (called by TacticBoard review panel) ───────────────────
-  const handleAdvance = useCallback(() => {
-    if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+  function handleAdvance() {
     advanceFnRef.current();
-  }, []);
+  }
 
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
-  const handleRetry = useCallback(() => {
+  function handleRetry() {
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     setFeedback(null);
     setPhase("solving");
-  }, []);
+  }
 
   // ── Handle "keep going" after session complete ─────────────────────────────
   function handleContinue() {
@@ -1377,14 +1440,8 @@ export default function TrainingSession() {
           <ProgressBar value={masteredCount} max={totalPuzzles} color="#4ade80" />
         </div>
 
-        {/* Settings shortcut */}
-        <a
-          href="/app/settings"
-          title="Puzzle Settings"
-          style={{ color: "#475569", textDecoration: "none", fontSize: "1rem", flexShrink: 0, lineHeight: 1 }}
-        >
-          ⚙️
-        </a>
+        {/* Quick Settings popup */}
+        <QuickSettings />
       </div>
 
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
