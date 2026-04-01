@@ -913,24 +913,24 @@ export default function TrainingPlan() {
               const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
               const tierMessages: Record<string, { headline: string; body: string; cta: string }> = {
                 beginner: {
-                  headline: "Most games at your level are decided by simple tactics you almost see.",
-                  body: "Forks, pins, back rank mates — these patterns end hundreds of games every day. Your opponents aren't smarter, they just spot them faster. Your Set 1 drills the 5 patterns that will start winning you material immediately.",
-                  cta: "Connect Chess.com to see which of these you've already been missing in your games.",
+                  headline: "Master these 100 puzzles and you will start winning material in every game.",
+                  body: "These aren't random puzzles — they are the exact patterns that decide games at your level. Forks, pins, back rank mates. Your opponents won't see them. You will. Each puzzle you master is a weapon you carry into every game you play from now on.",
+                  cta: "Connect Chess.com to personalize your 100 puzzles around patterns you're missing in your actual games.",
                 },
                 intermediate: {
-                  headline: "You know these patterns exist. You're just not finding them fast enough.",
-                  body: "At 1000–1400, you can solve tactics when you know to look. The problem is spotting them mid-game, under time pressure, without a hint. Your Set 1 builds the reflex — same patterns, over and over, until your brain sees them without thinking.",
-                  cta: "Connect Chess.com to see exactly which tactics are costing you rating points right now.",
+                  headline: "Master these 100 puzzles and your opponents will start making mistakes you instantly punish.",
+                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These 100 puzzles drill the patterns until your brain recognizes them automatically, without thinking. One session at a time, your instincts get sharper.",
+                  cta: "Connect Chess.com to weight your puzzles toward the patterns costing you the most rating points.",
                 },
                 advanced: {
-                  headline: "The gap between 1400 and 1800 isn't calculation — it's pattern speed.",
-                  body: "You can solve most tactics given time. The difference is that 1800 players solve them in 4 seconds, not 40. Your Set 1 is built around patterns where your solve time will be highest — those are your real gaps. Master them and your rating follows.",
-                  cta: "Connect Chess.com to pinpoint which patterns are actually slowing you down in real games.",
+                  headline: "Master these 100 puzzles and you will solve in seconds what used to take minutes.",
+                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These 100 puzzles are calibrated to your exact rating, targeting the positions where your recognition slows down. Master them and the time you save goes straight into better decisions later in the game.",
+                  cta: "Connect Chess.com to see exactly which patterns are still costing you time in real games.",
                 },
                 elite: {
-                  headline: "You're not missing patterns. You're spending calculation resources on things you should already know cold.",
-                  body: "At your level, the games you lose aren't to missed tactics — they're to positions where you spent 3 minutes on something that should take 3 seconds. That 3 minutes comes back later when you need it most. Your Set 1 finds the patterns that aren't fully automatic yet and drills them until they are.",
-                  cta: "Connect Chess.com to identify the specific positions that are still costing you time.",
+                  headline: "Master these 100 puzzles and the positions that slow you down now will never slow you down again.",
+                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These 100 puzzles find the patterns in your blind spots — the ones that still require a beat of calculation when they should be instant. Drill them to mastery and your calculation becomes available for the positions that actually demand it.",
+                  cta: "Connect Chess.com to target the specific positions that are still costing you time.",
                 },
               };
               const msg = tierMessages[tier];
