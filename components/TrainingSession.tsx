@@ -390,9 +390,10 @@ interface TacticBoardProps {
   onResult: (correct: boolean) => void;
   onAdvance: () => void;
   onRetry: () => void;
+  onCctUnlocked?: () => void; // called when CCT completes so parent resets timer
 }
 
-function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardProps) {
+function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }: TacticBoardProps) {
   const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
@@ -413,9 +414,10 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
 
   useEffect(() => {
     if (cctMode && cctAllChecked && !cctUnlocked) {
-      setCctUnlocked(true); // Unlock immediately when all three checked
+      setCctUnlocked(true);
+      onCctUnlocked?.(); // Reset parent timer so 10s countdown starts from now
     }
-  }, [cctAllChecked, cctMode, cctUnlocked]);
+  }, [cctAllChecked, cctMode, cctUnlocked, onCctUnlocked]);
 
   const [boardWidth, setBoardWidth] = useState(440);
   useEffect(() => {
@@ -1267,12 +1269,18 @@ export default function TrainingSession() {
       return newT;
     });
 
-    if (!correct && puzzle.type === "tactic" && puzzle.puzzleData) {
+    if (puzzle.type === "tactic" && puzzle.puzzleData) {
       const pd = puzzle.puzzleData as { fen: string; solution: string[] };
-      setSessionMissedPuzzles((prev) => {
-        if (prev.some((p) => p.id === puzzle.id)) return prev;
-        return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
-      });
+      if (!correct) {
+        // Add to missed if not already there
+        setSessionMissedPuzzles((prev) => {
+          if (prev.some((p) => p.id === puzzle.id)) return prev;
+          return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
+        });
+      } else if (isRetry) {
+        // Solved on retry — remove from missed list
+        setSessionMissedPuzzles((prev) => prev.filter((p) => p.id !== puzzle.id));
+      }
     }
 
     newDailyCount = incrementDailySession();
@@ -1513,6 +1521,7 @@ export default function TrainingSession() {
             onResult={handleResult}
             onAdvance={handleAdvance}
             onRetry={handleRetry}
+            onCctUnlocked={() => setPuzzleStartTime(Date.now())}
           />
         ) : (
           <BlunderBoard
