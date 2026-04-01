@@ -856,6 +856,45 @@ interface FeedbackOverlayProps {
   newMasteryHits: number;
 }
 
+// ── Correct Banner (solid bar above board, fully visible) ──────────────────
+function CorrectBanner({ masteryAwarded, overTimeLimit, newMasteryHits }: Omit<FeedbackOverlayProps, 'correct'>) {
+  const isFullMastery = masteryAwarded && newMasteryHits >= 3;
+  if (isFullMastery) {
+    return (
+      <div style={{
+        backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "10px",
+        padding: "0.65rem 1rem", textAlign: "center",
+        color: "#4ade80", fontWeight: "700", fontSize: "0.95rem",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem",
+      }}>
+        <span style={{ fontSize: "1.2rem" }}>★</span> Mastered! <MasteryDots hits={3} size={11} />
+      </div>
+    );
+  }
+  if (masteryAwarded) {
+    return (
+      <div style={{
+        backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "10px",
+        padding: "0.65rem 1rem", textAlign: "center",
+        color: "#4ade80", fontWeight: "700", fontSize: "0.95rem",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: "0.6rem",
+      }}>
+        <span>✓ Correct</span> <MasteryDots hits={newMasteryHits} size={11} />
+        <span style={{ color: "#22c55e", fontSize: "0.78rem", fontWeight: "normal" }}>+1 mastery hit</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{
+      backgroundColor: "#0a1f12", border: "1px solid #22c55e",
+      borderRadius: "10px", padding: "0.65rem 1rem", textAlign: "center",
+      color: "#4ade80", fontWeight: "700", fontSize: "0.95rem",
+    }}>
+      ✓ {overTimeLimit ? "Correct — solve faster for mastery" : "Correct!"}
+    </div>
+  );
+}
+
 function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHits }: FeedbackOverlayProps) {
   // Slim banner — no modal, no text wall
   const isFullMastery = masteryAwarded && newMasteryHits >= 3;
@@ -1560,19 +1599,19 @@ export default function TrainingSession() {
       </div>
 
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
+      {/* Correct feedback — solid bar ABOVE the board card, fully visible */}
+      {phase === "feedback" && feedback && feedback.correct && (
+        <CorrectBanner
+          masteryAwarded={feedback.masteryAwarded}
+          overTimeLimit={feedback.overTimeLimit}
+          newMasteryHits={feedback.newMasteryHits}
+        />
+      )}
+
       <div style={{
         backgroundColor: "#13132b", border: "1px solid #2e3a5c",
         borderRadius: "12px", padding: "1.25rem", position: "relative", overflow: "hidden",
       }}>
-        {/* Slim feedback banner — correct only; wrong uses board overlay */}
-        {phase === "feedback" && feedback && feedback.correct && (
-          <FeedbackOverlay
-            correct={feedback.correct}
-            masteryAwarded={feedback.masteryAwarded}
-            overTimeLimit={feedback.overTimeLimit}
-            newMasteryHits={feedback.newMasteryHits}
-          />
-        )}
         {puzzle.type === "tactic" ? (
           <TacticBoard
             key={`tactic_${puzzleKey}`}
