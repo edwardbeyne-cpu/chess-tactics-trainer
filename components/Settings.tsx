@@ -12,6 +12,8 @@ import {
   fetchAndSavePlatformRatings,
   getDailyTargetSettings,
   saveDailyTargetSettings,
+  getCCTMode,
+  setCCTMode,
 } from "@/lib/storage";
 import BoardThemeSettings from "./BoardThemeSettings";
 import DataExport from "./DataExport";
@@ -123,6 +125,40 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
         transition: "left 0.2s",
       }} />
     </button>
+  );
+}
+
+// ── Training Options Section ───────────────────────────────────────────────
+
+function TrainingOptionsSection() {
+  const [cctMode, setCctModeState] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return getCCTMode();
+  });
+
+  function handleCCTToggle(v: boolean) {
+    setCctModeState(v);
+    setCCTMode(v);
+  }
+
+  return (
+    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
+      <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.5rem" }}>
+        Training Options
+      </div>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: 500, marginBottom: "0.3rem" }}>
+            CCT Mode — Checks, Captures, Threats
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.55 }}>
+            Before each puzzle, confirm you&apos;ve scanned for Checks, Captures, and Threats.
+            Builds the pre-move discipline that prevents blunders.
+          </div>
+        </div>
+        <Toggle enabled={cctMode} onChange={handleCCTToggle} />
+      </div>
+    </div>
   );
 }
 
@@ -553,6 +589,9 @@ export default function Settings() {
           Current goal: <strong style={{ color: "#e2e8f0" }}>{dailyGoal} puzzles/day</strong>
         </div>
       </div>
+
+      {/* Sprint 41: Training Options */}
+      <TrainingOptionsSection />
 
       {/* Sprint 9: Board & Piece Themes */}
       <BoardThemeSettings />

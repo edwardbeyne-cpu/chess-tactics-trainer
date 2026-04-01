@@ -3262,3 +3262,18 @@ export function getDailySessionCompleted(): number {
   if (progress.dailySessionDate !== today) return 0;
   return progress.dailySessionCompleted;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 41 — CCT Mode (Checks, Captures, Threats)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CCT_MODE_KEY = "ctt_cct_mode";
+
+export function getCCTMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return localStorage.getItem(CCT_MODE_KEY) === "true"; } catch { return false; }
+}
+
+export function setCCTMode(v: boolean): void {
+  try { localStorage.setItem(CCT_MODE_KEY, String(v)); } catch { /* ignore */ }
+}

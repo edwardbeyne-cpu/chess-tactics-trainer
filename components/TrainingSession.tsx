@@ -24,6 +24,7 @@ import {
   recordActivityToday,
   getStreakData,
   getDailyTargetSettings,
+  getCCTMode,
   type MasteryPuzzle,
   type MasterySet,
   type MasteryProgress,
@@ -398,6 +399,20 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
 
+  // CCT Mode — Checks, Captures, Threats
+  const [cctMode] = useState(() => getCCTMode());
+  const [cctChecked, setCctChecked] = useState({ checks: false, captures: false, threats: false });
+  const [cctUnlocked, setCctUnlocked] = useState(false);
+  const cctComplete = !cctMode || cctUnlocked;
+  const cctAllChecked = cctChecked.checks && cctChecked.captures && cctChecked.threats;
+
+  useEffect(() => {
+    if (cctMode && cctAllChecked && !cctUnlocked) {
+      const t = setTimeout(() => setCctUnlocked(true), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [cctAllChecked, cctMode, cctUnlocked]);
+
   const [boardWidth, setBoardWidth] = useState(520);
   useEffect(() => {
     function getWidth() {
@@ -495,11 +510,62 @@ function TacticBoard({ puzzleData, onResult }: TacticBoardProps) {
       }}>
         {message}
       </div>
+
+      {/* CCT Panel — shown when CCT mode is on and board not yet unlocked */}
+      {cctMode && status === "solve" && !cctUnlocked && (
+        <div style={{
+          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
+          backgroundColor: "#0d1621", border: "1px solid #2e3a5c",
+          borderRadius: "8px", padding: "0.75rem 1rem",
+        }}>
+          <div style={{ color: "#475569", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.6rem" }}>
+            Scan before you move
+          </div>
+          {cctAllChecked ? (
+            <div style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.4rem 0" }}>
+              ✓ Good — now find the move
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.55rem" }}>
+                {(["checks", "captures", "threats"] as const).map((key) => {
+                  const checked = cctChecked[key];
+                  const label = key.charAt(0).toUpperCase() + key.slice(1);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                      style={{
+                        flex: 1,
+                        padding: "0.45rem 0.5rem",
+                        borderRadius: "6px",
+                        fontSize: "0.82rem",
+                        fontWeight: 600,
+                        cursor: checked ? "default" : "pointer",
+                        backgroundColor: checked ? "rgba(74,222,128,0.12)" : "#13132b",
+                        color: checked ? "#4ade80" : "#64748b",
+                        border: `1px solid ${checked ? "#4ade80" : "#2e3a5c"}`,
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {checked ? `✓ ${label}` : label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ color: "#334155", fontSize: "0.72rem", textAlign: "center" }}>
+                Board unlocks when all three are checked
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <ChessBoard
         fen={fen}
         onMove={handleMove}
         lastMove={lastMove}
-        draggable={status === "solve"}
+        draggable={status === "solve" && cctComplete}
         boardWidth={boardWidth}
         orientation={orientation as "white" | "black"}
       />
