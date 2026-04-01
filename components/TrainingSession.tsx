@@ -466,9 +466,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
       if (nextIndex >= puzzleData.solution.length) {
         setStatus("solved");
         setMessage("Correct!");
-        if (retryModeRef.current) {
-          setTimeout(() => onAdvance(), 800);
-        } else if (!resultCalledRef.current) {
+        if (!resultCalledRef.current) {
           resultCalledRef.current = true;
           onResult(true);
         }
@@ -488,9 +486,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
         } catch {
           setStatus("solved");
           setMessage("Correct!");
-          if (retryModeRef.current) {
-            setTimeout(() => onAdvance(), 800);
-          } else if (!resultCalledRef.current) {
+          if (!resultCalledRef.current) {
             resultCalledRef.current = true;
             onResult(true);
           }
@@ -1098,6 +1094,7 @@ export default function TrainingSession() {
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceFnRef = useRef<() => void>(() => {});
+  const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1181,6 +1178,8 @@ export default function TrainingSession() {
 
     const solveTimeMs = Date.now() - puzzleStartTime;
     const puzzle = currentSet.puzzles[currentPuzzleIdx];
+    const isRetry = retryModeRef.current;
+    retryModeRef.current = false;
 
     let masteryHits = puzzle.masteryHits;
     let masteryAwarded = false;
@@ -1189,6 +1188,7 @@ export default function TrainingSession() {
     let freshProgress = getMasteryProgress();
     let newDailyCount = 0;
 
+    if (!isRetry) {
     // Record attempt and get updated mastery
     const result = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
     masteryHits = result.masteryHits;
@@ -1232,6 +1232,7 @@ export default function TrainingSession() {
     newDailyCount = incrementDailySession();
     setDailyCompleted(newDailyCount);
     recordActivityToday();
+    } // end if (!isRetry)
 
     // Show feedback
     setFeedback({ correct, masteryAwarded, overTimeLimit, newMasteryHits: masteryHits });
@@ -1287,6 +1288,7 @@ export default function TrainingSession() {
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
   function handleRetry() {
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    retryModeRef.current = true;
     setFeedback(null);
     setPhase("solving");
   }
