@@ -203,9 +203,9 @@ export function generateMasterySet(setNumber: number): MasterySet {
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
   const targetELO = calibrationRating + (setNumber - 1) * 100;
-  const blunderRatio = computeBlunderRatio();
-  const blunderCount = Math.round(100 * blunderRatio);
-  const tacticCount = 100 - blunderCount;
+  // Blunder puzzles removed from training set — standalone feature only
+  const blunderCount = 0;
+  const tacticCount = 100;
 
   const usedIds = new Set<string>();
   const puzzles: MasteryPuzzle[] = [];
@@ -315,7 +315,7 @@ export function generateMasterySet(setNumber: number): MasterySet {
     completedAt: null,
     targetELO,
     puzzles: shuffleArray(puzzles).slice(0, 100),
-    blunderRatio,
+    blunderRatio: 0,
   };
 }
 
