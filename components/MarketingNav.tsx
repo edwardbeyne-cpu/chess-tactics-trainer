@@ -59,7 +59,7 @@ export default function MarketingNav() {
           Pricing
         </Link>
         <Link
-          href="/app/dashboard"
+          href="/app/calibration"
           style={{
             backgroundColor: "#4ade80",
             color: "#0f0f1a",
