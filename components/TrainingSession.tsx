@@ -427,8 +427,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const maxFromHeight = Math.floor((vh - 220) * 0.88);
-      // On desktop: subtract CCT panel (220px) + gap (16px) + page padding (64px)
-      const maxFromWidth = vw < 700 ? vw - 32 : Math.min(480, vw - 220 - 16 - 64);
+      // Container is max 900px. On desktop: 900 - 220(CCT) - 16(gap) - 64(page padding) = 600, cap at 500
+      const containerW = Math.min(900, vw - 64); // 64px page padding
+      const maxFromWidth = vw < 700 ? vw - 32 : Math.min(500, containerW - 220 - 16);
       return Math.max(300, Math.min(maxFromWidth, maxFromHeight));
     }
     setBoardWidth(getWidth());
@@ -1546,7 +1547,7 @@ export default function TrainingSession() {
   const totalPuzzles = currentSet.puzzles.length;
 
   return (
-    <div style={{ maxWidth: "700px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
       {/* Feedback overlay — rendered inside puzzle card below */}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
