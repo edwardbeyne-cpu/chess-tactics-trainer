@@ -423,13 +423,13 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const [boardWidth, setBoardWidth] = useState(460);
   useEffect(() => {
     function getWidth() {
-      if (typeof window === "undefined") return 460;
+      if (typeof window === "undefined") return 440;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Fixed-height CCT panel means we only need to reserve: nav(56) + topBar(48) + mastery dots(60) + padding(40) = ~204px
-      const maxFromHeight = Math.floor((vh - 204) * 0.90);
-      const maxFromWidth = vw < 640 ? vw - 32 : Math.min(520, Math.floor(vw * 0.44));
-      return Math.max(320, Math.min(maxFromWidth, maxFromHeight));
+      const maxFromHeight = Math.floor((vh - 220) * 0.88);
+      // On desktop: subtract CCT panel (220px) + gap (16px) + page padding (64px)
+      const maxFromWidth = vw < 700 ? vw - 32 : Math.min(480, vw - 220 - 16 - 64);
+      return Math.max(300, Math.min(maxFromWidth, maxFromHeight));
     }
     setBoardWidth(getWidth());
     setIsDesktop(window.innerWidth >= 700);
@@ -518,7 +518,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const msgBorder = status === "solved" ? "#4ade80" : status === "failed" ? "#ef4444" : "#2e3a5c";
 
   return (
-    <div style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "flex-start" : "center", justifyContent: "center", gap: "1rem" }}>
+    <div style={{ display: "flex", flexDirection: isDesktop ? "row" : "column", alignItems: isDesktop ? "flex-start" : "center", justifyContent: "center", gap: "1rem", overflow: "hidden", width: "100%" }}>
 
       {/* LEFT COLUMN: CCT + info (desktop only) */}
       {isDesktop && (
