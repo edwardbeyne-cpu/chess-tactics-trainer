@@ -407,6 +407,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
   const [cctMode] = useState(() => getCCTMode());
   const [cctChecked, setCctChecked] = useState({ checks: false, captures: false, threats: false });
   const [cctUnlocked, setCctUnlocked] = useState(false);
+  const [cctNudge, setCctNudge] = useState(false);
   const cctComplete = !cctMode || cctUnlocked;
   const cctAllChecked = cctChecked.checks && cctChecked.captures && cctChecked.threats;
 
@@ -438,8 +439,13 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
 
   function handleMove(from: string, to: string): boolean {
     if (status !== "solve") return false;
-    // CCT gate: block moves until all three checked (but board stays draggable for responsiveness)
-    if (!cctComplete) return false;
+    // CCT gate: block moves until all three checked
+    if (!cctComplete) {
+      // Show nudge to complete CCT first
+      setCctNudge(true);
+      setTimeout(() => setCctNudge(false), 2000);
+      return false;
+    }
 
     const expectedUci = puzzleData.solution[moveIndex];
     const expFrom = expectedUci.slice(0, 2);
@@ -526,49 +532,81 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
       {cctMode && status === "solve" && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
-          backgroundColor: "#0d1621", border: "1px solid #2e3a5c",
+          backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
           borderRadius: "8px", padding: "0.75rem 1rem",
+          transition: "border-color 0.2s",
         }}>
-          <div style={{ color: "#475569", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.6rem" }}>
-            Scan before you move
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+            <div style={{ color: "#475569", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              ⚡ CCT — Scan before you move
+            </div>
+            {!cctUnlocked && (
+              <div style={{ color: "#334155", fontSize: "0.7rem" }}>Board locked until done</div>
+            )}
           </div>
+          {!cctUnlocked && !cctAllChecked && (
+            <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "0.6rem", lineHeight: 1.5 }}>
+              Before moving, mentally scan for: <span style={{ color: "#94a3b8" }}>Checks</span> your opponent can give, <span style={{ color: "#94a3b8" }}>Captures</span> available, and <span style={{ color: "#94a3b8" }}>Threats</span> they have. Confirm each below.
+            </div>
+          )}
           {cctUnlocked || cctAllChecked ? (
             <div style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.4rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
               <span style={{ fontSize: "1rem" }}>✓</span> Board unlocked — make your move
             </div>
           ) : (
             <>
-              <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.55rem" }}>
+              <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.4rem" }}>
                 {(["checks", "captures", "threats"] as const).map((key) => {
                   const checked = cctChecked[key];
                   const label = key.charAt(0).toUpperCase() + key.slice(1);
+                  const descriptions: Record<string, string> = {
+                    checks: "Can opponent check me?",
+                    captures: "What can be captured?",
+                    threats: "What are they threatening?",
+                  };
                   return (
                     <button
                       key={key}
                       onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                      title={descriptions[key]}
                       style={{
                         flex: 1,
-                        padding: "0.45rem 0.5rem",
+                        padding: "0.5rem 0.4rem",
                         borderRadius: "6px",
-                        fontSize: "0.82rem",
+                        fontSize: "0.8rem",
                         fontWeight: 600,
                         cursor: checked ? "default" : "pointer",
                         backgroundColor: checked ? "rgba(74,222,128,0.12)" : "#13132b",
-                        color: checked ? "#4ade80" : "#64748b",
-                        border: `1px solid ${checked ? "#4ade80" : "#2e3a5c"}`,
+                        color: checked ? "#4ade80" : "#e2e8f0",
+                        border: `1px solid ${checked ? "#4ade80" : "#3a4a6a"}`,
                         transition: "all 0.15s",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem",
                       }}
                     >
-                      {checked ? `✓ ${label}` : label}
+                      <span style={{ fontSize: "1.1rem" }}>{checked ? "✓" : key === "checks" ? "♟" : key === "captures" ? "⚔" : "⚠"}</span>
+                      <span>{label}</span>
                     </button>
                   );
                 })}
               </div>
-              <div style={{ color: "#334155", fontSize: "0.72rem", textAlign: "center" }}>
-                Board unlocks when all three are checked
+              <div style={{ color: "#475569", fontSize: "0.7rem", textAlign: "center" }}>
+                Tap each after mentally scanning — board unlocks when all 3 are confirmed
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* CCT nudge — flashes when they try to move before completing CCT */}
+      {cctNudge && (
+        <div style={{
+          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
+          backgroundColor: "rgba(251,191,36,0.15)", border: "1px solid #f59e0b",
+          borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
+          color: "#f59e0b", fontSize: "0.82rem", fontWeight: "600",
+          animation: "fadeIn 0.1s ease",
+        }}>
+          ⚡ Complete CCT first — tap Checks, Captures, and Threats above
         </div>
       )}
 
