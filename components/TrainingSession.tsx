@@ -607,6 +607,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
                   setStatus("solve");
                   setMessage(`${sideToMove} to move — find the tactic`);
                   setLastMove(undefined);
+                  // Reset CCT so player scans again on retry
+                  setCctChecked({ checks: false, captures: false, threats: false });
+                  setCctUnlocked(false);
                   onRetry(); // clears parent feedback state, keeps same puzzle
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
