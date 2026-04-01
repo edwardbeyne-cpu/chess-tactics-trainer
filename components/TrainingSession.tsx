@@ -438,6 +438,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
 
   function handleMove(from: string, to: string): boolean {
     if (status !== "solve") return false;
+    // CCT gate: block moves until all three checked (but board stays draggable for responsiveness)
+    if (!cctComplete) return false;
 
     const expectedUci = puzzleData.solution[moveIndex];
     const expFrom = expectedUci.slice(0, 2);
@@ -576,7 +578,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry }: TacticBoardPr
           fen={fen}
           onMove={handleMove}
           lastMove={lastMove}
-          draggable={status === "solve" && cctComplete}
+          draggable={status === "solve"}
           boardWidth={boardWidth}
           orientation={orientation as "white" | "black"}
         />
