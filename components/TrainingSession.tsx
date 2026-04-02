@@ -1658,7 +1658,13 @@ export default function TrainingSession() {
         </div>
         {/* Stockfish analysis button */}
         <button
-          onClick={() => setShowAnalysis((v) => !v)}
+          onClick={() => {
+            if (phase === "solving") {
+              // Opening engine before attempting = gave up = score as wrong
+              handleResult(false);
+            }
+            setShowAnalysis((v) => !v);
+          }}
           style={{
             marginTop: "0.25rem",
             backgroundColor: "transparent", border: "1px solid #2e3a5c",
