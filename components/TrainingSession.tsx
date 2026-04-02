@@ -1448,9 +1448,11 @@ export default function TrainingSession() {
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
   function handleRetry() {
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+    feedbackTimeoutRef.current = null;
     retryPendingRef.current = true; // block any pending advance from firing
     retryModeRef.current = true;
     setFeedback(null);
+    setPuzzleKey((k) => k + 1); // force full remount — clears all internal TacticBoard state
     setPhase("solving");
   }
 
