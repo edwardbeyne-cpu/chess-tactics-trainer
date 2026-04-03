@@ -90,10 +90,21 @@ export default function CalibrationPage() {
               color: "#94a3b8",
               fontSize: "1rem",
               lineHeight: 1.6,
-              margin: "0 0 2.5rem",
+              margin: "0 0 0.75rem",
             }}
           >
             Solve 10 puzzles at your own pace. We use your results to personalize your training.
+          </p>
+          <p
+            style={{
+              color: "#4ade80",
+              fontSize: "0.9rem",
+              lineHeight: 1.6,
+              margin: "0 0 2.5rem",
+              fontWeight: 600,
+            }}
+          >
+            At the end, you&apos;ll get your personalized training plan.
           </p>
           <button
             onClick={() => setStep("calibrating")}
