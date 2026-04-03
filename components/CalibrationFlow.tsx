@@ -1118,8 +1118,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     );
   }
 
-  // After applying opponent's first move, currentFen shows whose turn it is (the player's)
-  const orientation = getOrientation(currentFen);
+  // Orientation is fixed at puzzle load time — never recompute from currentFen mid-puzzle
+  // (prevents board flip when wrong move changes whose turn it is)
+  const orientation = getOrientation(currentPuzzle?.fen || currentFen);
   const bw = boardWidth;
 
   // ── Solving screen ─────────────────────────────────────────────────────────
