@@ -949,14 +949,20 @@ export default function TrainingPlan() {
         </div>
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
-        {masterySetNumber !== null && (
-          <div style={{
+        <div style={{
             backgroundColor: "#13132b",
             border: "1px solid #2e3a5c",
             borderRadius: "16px",
             padding: "1.5rem",
           }}>
             <div style={sectionHeaderStyle}>Today&apos;s Training</div>
+            {masterySetNumber === null && (
+              <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
+                <div style={{ color: "#94a3b8", marginBottom: "1rem", fontSize: "0.9rem" }}>No active set — start training to generate your first set.</div>
+                <a href="/app/training" style={{ backgroundColor: "#f97316", color: "#fff", padding: "0.6rem 1.5rem", borderRadius: "8px", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none" }}>Start Training →</a>
+              </div>
+            )}
+            {masterySetNumber !== null && (<>
 
             {/* Set progress */}
             <div style={{
@@ -1061,13 +1067,13 @@ export default function TrainingPlan() {
                 <span style={{ color: "#94a3b8" }}>Your set:</span> {masterySetSize} puzzles weighted toward your weakest patterns at your calibration level.
               </div>
               <div>
-                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(100 / Math.max(1, dailyGoal)))} days.
+                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))))} days.
               </div>
             </div>
+            </>)}
           </div>
-        )}
 
-        {/* ── Sprint 36: Drill Tactics Recommendation ───────────────────────── */}
+        {/* Sprint 36 - Drill Tactics Recommendation */}
         {top3Weaknesses.length > 0 && (
           <div style={{
             backgroundColor: "#13132b",
