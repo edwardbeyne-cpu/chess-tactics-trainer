@@ -287,6 +287,8 @@ export default function ChessBoard({
 
   return (
     <div
+      data-fen={fen}
+      data-board="chess-tactics-trainer"
       style={{
         width: boardWidth,
         height: boardWidth,
