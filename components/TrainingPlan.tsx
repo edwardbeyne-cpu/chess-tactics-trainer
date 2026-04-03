@@ -1031,7 +1031,7 @@ export default function TrainingPlan() {
                 Set {masterySetNumber} — Puzzle Progress
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "0.75rem" }}>
-                {Array.from({ length: 100 }).map((_, i) => (
+                {Array.from({ length: masterySetSize }).map((_, i) => (
                   <div key={i} style={{
                     width: "10px", height: "10px", borderRadius: "2px",
                     backgroundColor: i < masteredCount ? "#4ade80" : "#1e2a3a",
@@ -1052,7 +1052,7 @@ export default function TrainingPlan() {
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                     <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#1e2a3a", border: "1px solid #2e3a5c", flexShrink: 0 }} />
-                    {100 - masteredCount} remaining
+                    {masterySetSize - masteredCount} remaining
                   </span>
                 </div>
               )}
