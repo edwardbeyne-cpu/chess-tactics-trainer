@@ -3106,7 +3106,7 @@ export interface MasterySet {
   createdAt: number;
   completedAt: number | null;
   targetELO: number;
-  puzzles: MasteryPuzzle[];     // always 100
+  puzzles: MasteryPuzzle[];     // variable size (default 10)
   blunderRatio: number;
 }
 
@@ -3160,7 +3160,7 @@ export function getMasteredCount(): number {
 
 export function isSetComplete(): boolean {
   const set = getCurrentMasterySet();
-  if (!set || set.puzzles.length < 100) return false;
+  if (!set) return false;
   return set.puzzles.every((p) => p.masteryHits >= 3);
 }
 

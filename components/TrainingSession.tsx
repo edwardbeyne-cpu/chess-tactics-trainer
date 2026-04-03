@@ -201,15 +201,20 @@ function computeBlunderRatio(): number {
   return 0.2;
 }
 
-export function generateMasterySet(setNumber: number): MasterySet {
+export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuzzle[] = []): MasterySet {
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
-  const targetELO = calibrationRating + (setNumber - 1) * 100;
+  const targetELO = calibrationRating + (setNumber - 1) * 50;
   // Blunder puzzles removed from training set — standalone feature only
   const blunderCount = 0;
-  const tacticCount = 100;
+  const SET_SIZE = Math.min(20, Math.max(5, getDailyTargetSettings().dailyGoal));
+  const newTacticCount = Math.max(0, SET_SIZE - carriedPuzzles.length);
 
   const usedIds = new Set<string>();
+  // Mark carried puzzle IDs as used so new puzzles don't duplicate them
+  for (const p of carriedPuzzles) {
+    usedIds.add(p.id.replace(/^(tactic|blunder)_/, ""));
+  }
   const puzzles: MasteryPuzzle[] = [];
 
   // ── Tactic puzzles ──────────────────────────────────────────────────────
@@ -223,8 +228,8 @@ export function generateMasterySet(setNumber: number): MasterySet {
     .slice(0, 3)
     .map((s) => s.theme.toLowerCase());
 
-  const weakTacticTarget = Math.round(tacticCount * 0.5);
-  const spreadTacticTarget = tacticCount - weakTacticTarget;
+  const weakTacticTarget = Math.round(newTacticCount * 0.5);
+  const spreadTacticTarget = newTacticCount - weakTacticTarget;
 
   // Select from weak patterns (50% of tactic slots)
   if (weakestThemes.length > 0) {
@@ -257,7 +262,7 @@ export function generateMasterySet(setNumber: number): MasterySet {
   // Fill remaining tactic slots from other patterns (spread)
   const otherThemes = shuffleArray(allThemes.filter((t) => !weakestThemes.includes(t)));
   let otherIdx = 0;
-  while (puzzles.filter((p) => p.type === "tactic").length < tacticCount && otherIdx < otherThemes.length * 5) {
+  while (puzzles.filter((p) => p.type === "tactic").length < newTacticCount && otherIdx < otherThemes.length * 5) {
     const theme = otherThemes[otherIdx % otherThemes.length];
     otherIdx++;
     const pool = cachedPuzzlesByTheme[theme] ?? [];
@@ -311,12 +316,16 @@ export function generateMasterySet(setNumber: number): MasterySet {
     }
   }
 
+  const resetCarried = carriedPuzzles.map((p) => ({
+    ...p, masteryHits: 0, lastSolvedAt: [], lastMasteryHitCounter: 0, attempts: 0, correctAttempts: 0,
+  }));
+
   return {
     setNumber,
     createdAt: Date.now(),
     completedAt: null,
     targetELO,
-    puzzles: shuffleArray(puzzles).slice(0, 100),
+    puzzles: [...resetCarried, ...shuffleArray(puzzles)].slice(0, SET_SIZE),
     blunderRatio: 0,
   };
 }
@@ -1133,6 +1142,22 @@ interface SetCompleteProps {
 }
 
 function SetCompleteScreen({ set, onStartNext }: SetCompleteProps) {
+  const [countdown, setCountdown] = useState(3);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(interval);
+          onStartNext();
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [onStartNext]);
+
   const daysToComplete = set.completedAt
     ? Math.max(1, Math.round((set.completedAt - set.createdAt) / 86400000))
     : 0;
@@ -1142,6 +1167,8 @@ function SetCompleteScreen({ set, onStartNext }: SetCompleteProps) {
   const avgTime = Math.round(set.puzzles
     .filter((p) => p.avgSolveTime > 0)
     .reduce((s, p, _, arr) => s + p.avgSolveTime / arr.length, 0) / 1000);
+  const masteredInSet = set.puzzles.filter((p) => p.masteryHits >= 3).length;
+  const totalInSet = set.puzzles.length;
 
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -1154,7 +1181,7 @@ function SetCompleteScreen({ set, onStartNext }: SetCompleteProps) {
           Set {set.setNumber} Complete!
         </h2>
         <p style={{ color: "#94a3b8", fontSize: "0.9rem", margin: 0, lineHeight: 1.6 }}>
-          You&apos;ve mastered 100 tactical patterns. Time to level up.
+          You&apos;ve mastered {masteredInSet}/{totalInSet} tactical patterns. Time to level up.
         </p>
       </div>
 
@@ -1188,7 +1215,7 @@ function SetCompleteScreen({ set, onStartNext }: SetCompleteProps) {
           width: "100%",
         }}
       >
-        Start Set {set.setNumber + 1} →
+        Start Set {set.setNumber + 1} → {countdown > 0 ? `(${countdown})` : ""}
       </button>
     </div>
   );
@@ -1210,6 +1237,7 @@ export default function TrainingSession() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [masteryProgress, setMasteryProgress] = useState<MasteryProgress | null>(null);
   const [currentSet, setCurrentSet] = useState<MasterySet | null>(null);
+  const [completedSet, setCompletedSet] = useState<MasterySet | null>(null);
   const [currentPuzzleIdx, setCurrentPuzzleIdx] = useState(-1);
   const [puzzleKey, setPuzzleKey] = useState(0); // force remount
   const [puzzleStartTime, setPuzzleStartTime] = useState(0);
@@ -1275,7 +1303,7 @@ export default function TrainingSession() {
     let set = getCurrentMasterySet();
 
     // Generate first set if none exists
-    if (!set || set.puzzles.length < 100) {
+    if (!set) {
       set = generateMasterySet(progress.currentSetNumber);
       progress = { ...progress, sets: [...progress.sets, set] };
       saveMasteryProgress(progress);
@@ -1284,8 +1312,21 @@ export default function TrainingSession() {
     setMasteryProgress(progress);
     setCurrentSet(set);
 
-    // Check if the set was already completed
+    // Check if the set was already completed (e.g. loaded with stale/old data)
     if (set.completedAt || isSetComplete()) {
+      // Generate next set if not already done
+      const updatedSet = { ...set, completedAt: set.completedAt ?? Date.now() };
+      const nextSetNumber = set.setNumber + 1;
+      const nextSet = generateMasterySet(nextSetNumber, []);
+      const updatedProgress = {
+        ...progress,
+        sets: [...progress.sets.map((s) => s.setNumber === set.setNumber ? updatedSet : s), nextSet],
+        currentSetNumber: nextSetNumber,
+      };
+      saveMasteryProgress(updatedProgress);
+      setMasteryProgress(updatedProgress);
+      setCompletedSet(updatedSet);
+      setCurrentSet(nextSet);
       setPhase("set_complete");
       return;
     }
@@ -1315,9 +1356,18 @@ export default function TrainingSession() {
   function markSetComplete(progress: MasteryProgress, set: MasterySet) {
     const updatedSet = { ...set, completedAt: Date.now() };
     const updatedSets = progress.sets.map((s) => (s.setNumber === set.setNumber ? updatedSet : s));
-    const updatedProgress = { ...progress, sets: updatedSets };
+
+    // Generate next set immediately (all puzzles mastered, nothing to carry)
+    const nextSetNumber = set.setNumber + 1;
+    const nextSet = generateMasterySet(nextSetNumber, []);
+    const updatedProgress = {
+      ...progress,
+      sets: [...updatedSets, nextSet],
+      currentSetNumber: nextSetNumber,
+    };
     saveMasteryProgress(updatedProgress);
-    setCurrentSet(updatedSet);
+    setCompletedSet(updatedSet);  // used by SetCompleteScreen for display
+    setCurrentSet(nextSet);       // ready to solve when user advances
     setMasteryProgress(updatedProgress);
     setPhase("set_complete");
   }
@@ -1483,30 +1533,19 @@ export default function TrainingSession() {
   }
 
   // ── Handle start next set ─────────────────────────────────────────────────
+  // Next set was already generated and saved in markSetComplete; just start solving it.
   function handleStartNextSet() {
-    if (!masteryProgress) return;
-    const nextSetNumber = (currentSet?.setNumber ?? 0) + 1;
-    const newSet = generateMasterySet(nextSetNumber);
-    const updatedProgress: MasteryProgress = {
-      ...masteryProgress,
-      currentSetNumber: nextSetNumber,
-      sets: [...masteryProgress.sets, newSet],
-      dailySessionCompleted: 0,
-      dailySessionDate: new Date().toISOString().slice(0, 10),
-    };
-    saveMasteryProgress(updatedProgress);
-    setMasteryProgress(updatedProgress);
-    setCurrentSet(newSet);
+    if (!currentSet) return;
     setSessionCorrect(0);
     setSessionTotal(0);
     setSessionUnder10s(0);
     setSessionNewMastered(0);
     setDailyCompleted(0);
 
-    const idx = pickNextPuzzleIdx(newSet, null);
+    const idx = pickNextPuzzleIdx(currentSet, null);
     if (idx === -1) return;
     setCurrentPuzzleIdx(idx);
-    lastShownIdRef.current = newSet.puzzles[idx].id;
+    lastShownIdRef.current = currentSet.puzzles[idx].id;
     setPuzzleKey((k) => k + 1);
     setPuzzleStartTime(Date.now());
     setPhase("solving");
@@ -1523,8 +1562,8 @@ export default function TrainingSession() {
 
   const masteredCount = getMasteredCount();
 
-  if (phase === "set_complete" && currentSet) {
-    return <SetCompleteScreen set={currentSet} onStartNext={handleStartNextSet} />;
+  if (phase === "set_complete" && completedSet) {
+    return <SetCompleteScreen set={completedSet} onStartNext={handleStartNextSet} />;
   }
 
   if (phase === "session_complete") {
