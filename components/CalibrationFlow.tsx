@@ -546,7 +546,21 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const barColor =
     elapsed < 30 ? "#4ade80" : elapsed < 60 ? "#fbbf24" : "#ef4444";
 
-  // ── Reveal screen ──────────────────────────────────────────────────────────
+  // ── Percentile from Lichess public puzzle rating distribution ──────────────
+  function getPercentile(elo: number): string {
+    // Based on Lichess puzzle rating distribution (millions of rated players)
+    if (elo >= 2400) return "top 2%";
+    if (elo >= 2200) return "top 5%";
+    if (elo >= 2000) return "top 10%";
+    if (elo >= 1800) return "top 15%";
+    if (elo >= 1600) return "top 25%";
+    if (elo >= 1400) return "top 35%";
+    if (elo >= 1200) return "top 50%";
+    if (elo >= 1000) return "top 65%";
+    return "top 80%";
+  }
+
+// ── Reveal screen ──────────────────────────────────────────────────────────
   if (phase === "reveal") {
     const tier =
       finalElo >= 1800
@@ -556,6 +570,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         : finalElo >= 1000
         ? { label: "Intermediate", color: "#60a5fa" }
         : { label: "Beginner", color: "#94a3b8" };
+    const percentile = getPercentile(finalElo);
 
     // ── Sub-step: rating reveal ─────────────────────────────────────────────
     if (revealStep === "rating") {
@@ -591,7 +606,10 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             }}>
               {tier.label}
             </div>
-            <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.6, margin: 0 }}>
+            <p style={{ color: "#4ade80", fontSize: "0.95rem", fontWeight: "700", margin: "0 0 0.4rem" }}>
+              {percentile} of puzzle solvers
+            </p>
+            <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
               Based on your solve speed and accuracy across 10 puzzles
             </p>
           </div>
