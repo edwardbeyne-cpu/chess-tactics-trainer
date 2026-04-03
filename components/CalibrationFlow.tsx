@@ -128,14 +128,20 @@ async function fetchRecentGames(platform: Platform, username: string): Promise<A
       if (!archivesRes.ok) return [];
       const { archives } = await archivesRes.json() as { archives: string[] };
       if (!archives?.length) return [];
-      const gamesRes = await fetch(archives[archives.length - 1], { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } });
-      if (!gamesRes.ok) return [];
-      const { games } = await gamesRes.json() as { games: Array<{ pgn: string; white: { username: string }; black: { username: string } }> };
-      if (!games?.length) return [];
-      return games.slice(-10).map(g => ({
-        pgn: g.pgn,
-        playerColor: g.white.username.toLowerCase() === username.toLowerCase() ? "white" : "black",
-      }));
+      // Pull last 2 months of archives to get ~50 games
+      const recentArchives = archives.slice(-2);
+      const allGames: Array<{ pgn: string; playerColor: string }> = [];
+      for (const archive of recentArchives) {
+        if (allGames.length >= 50) break;
+        const gamesRes = await fetch(archive, { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } });
+        if (!gamesRes.ok) continue;
+        const { games } = await gamesRes.json() as { games: Array<{ pgn: string; white: { username: string }; black: { username: string } }> };
+        if (!games?.length) continue;
+        for (const g of games.slice(-50)) {
+          allGames.push({ pgn: g.pgn, playerColor: g.white.username.toLowerCase() === username.toLowerCase() ? "white" : "black" });
+        }
+      }
+      return allGames.slice(-50);
     } else {
       const res = await fetch(
         `https://lichess.org/api/games/user/${username}?max=10&moves=true&pgnInJson=false`,
@@ -745,7 +751,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             Train smarter, not harder
           </p>
           <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: "0 0 1rem" }}>
-            Players who connect their Chess.com account improve 2x faster — because your training targets your actual weaknesses, not just general patterns.
+            We&apos;ll scan your last 50 games, find the 3 patterns where you&apos;re bleeding the most rating points, and put them first in your queue.
           </p>
 
           {/* Static ELO line chart preview */}
