@@ -1242,6 +1242,7 @@ export default function TrainingSession() {
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceFnRef = useRef<() => void>(() => {});
+  const handleResultRef = useRef<(correct: boolean) => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
   const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
 
@@ -1440,6 +1441,10 @@ export default function TrainingSession() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSet, currentPuzzleIdx, puzzleStartTime]);
 
+  // Keep ref always pointing to latest handleResult so TacticBoard never calls a stale closure
+  handleResultRef.current = handleResult;
+  const stableHandleResult = useCallback((correct: boolean) => handleResultRef.current(correct), []);
+
   // ── Handle advance (called by TacticBoard review panel) ───────────────────
   function handleAdvance() {
     advanceFnRef.current();
@@ -1627,7 +1632,7 @@ export default function TrainingSession() {
           <TacticBoard
             key={`tactic_${puzzleKey}`}
             puzzleData={puzzle.puzzleData}
-            onResult={handleResult}
+            onResult={stableHandleResult}
             onAdvance={handleAdvance}
             onRetry={handleRetry}
             onCctUnlocked={() => setPuzzleStartTime(Date.now())}
@@ -1636,7 +1641,7 @@ export default function TrainingSession() {
           <BlunderBoard
             key={`blunder_${puzzleKey}`}
             puzzleData={puzzle.puzzleData}
-            onResult={handleResult}
+            onResult={stableHandleResult}
           />
         )}
       </div>
