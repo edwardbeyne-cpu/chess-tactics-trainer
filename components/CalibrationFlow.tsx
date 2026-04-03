@@ -784,9 +784,18 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "700", margin: "0 0 0.5rem" }}>
             Train smarter, not harder
           </p>
-          <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: "0 0 1rem" }}>
-            We&apos;ll scan your last 50 games, find the 3 patterns where you&apos;re bleeding the most rating points, and put them first in your queue.
-          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", margin: "0 0 1rem", textAlign: "left" }}>
+            {[
+              "We scan your last 50 games",
+              "We find your top 3 tactical weaknesses",
+              "We weight your training set around those patterns",
+            ].map((step, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.6rem", color: "#94a3b8", fontSize: "0.82rem" }}>
+                <span style={{ color: "#4ade80", fontWeight: 700, flexShrink: 0 }}>✓</span>
+                {step}
+              </div>
+            ))}
+          </div>
 
           {/* Static ELO line chart preview */}
           <div style={{
