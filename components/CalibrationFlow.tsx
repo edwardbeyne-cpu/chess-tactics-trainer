@@ -95,9 +95,10 @@ function detectMissedTacticSimple(fen: string): string | null {
   return null;
 }
 
-function analyzeGamesForQueue(games: Array<{ pgn: string; playerColor: string }>): Array<{ pattern: string; fen: string }> {
-  const results: Array<{ pattern: string; fen: string }> = [];
-  for (const { pgn, playerColor } of games.slice(0, 10)) {
+function analyzeGamesForQueue(games: Array<{ pgn: string; playerColor: string }>): Array<{ pattern: string; fen: string; moveNumber?: number }> {
+  const results: Array<{ pattern: string; fen: string; moveNumber?: number }> = [];
+  // Scan all games (up to 50) to get enough pattern data
+  for (const { pgn, playerColor } of games) {
     const moves = parsePgnMoves(pgn);
     const isWhite = playerColor.toLowerCase().startsWith("w");
     const c = new Chess();
@@ -109,13 +110,14 @@ function analyzeGamesForQueue(games: Array<{ pgn: string; playerColor: string }>
       try {
         c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length === 5 ? uci[4] : undefined });
       } catch { break; }
-      if (isPlayerTurn && moveNum > 1) {
+      // Scan every position (not just player turns) to get more tactical patterns
+      if (moveNum > 1) {
         const pattern = detectMissedTacticSimple(fen);
-        if (pattern) results.push({ pattern, fen });
+        if (pattern) results.push({ pattern, fen, moveNumber: moveNum });
       }
     }
   }
-  return results.slice(0, 20);
+  return results.slice(0, 50);
 }
 
 async function fetchRecentGames(platform: Platform, username: string): Promise<Array<{ pgn: string; playerColor: string }>> {
@@ -493,7 +495,6 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     try {
       const games = await fetchRecentGames(plat, uname);
       if (games.length > 0) {
-        saveGameSnapshot(games);
         const missed = analyzeGamesForQueue(games);
         if (missed.length > 0) {
           localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify({
@@ -502,6 +503,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           const queue = missed.map((m, i) => ({ id: `custom_${i}`, fen: m.fen, theme: m.pattern, source: `${plat}:${uname}` }));
           localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(queue));
         }
+        // Save snapshot AFTER analysis so pattern data is available
+        saveGameSnapshot(games);
       }
     } catch {
       // Silent background task
