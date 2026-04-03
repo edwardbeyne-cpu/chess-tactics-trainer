@@ -619,8 +619,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
       function handleCustomCommit() {
         const val = parseInt(customGoalInput, 10);
-        if (!isNaN(val) && val >= 1 && val <= 100) {
-          commitGoal(val);
+        if (!isNaN(val) && val >= 1) {
+          commitGoal(Math.min(20, val));
         }
       }
 

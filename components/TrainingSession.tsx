@@ -320,12 +320,15 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
     ...p, masteryHits: 0, lastSolvedAt: [], lastMasteryHitCounter: 0, attempts: 0, correctAttempts: 0,
   }));
 
+  // Hard cap — never exceed SET_SIZE regardless of what loops produced
+  const finalPuzzles = [...resetCarried, ...shuffleArray(puzzles)].slice(0, SET_SIZE);
+
   return {
     setNumber,
     createdAt: Date.now(),
     completedAt: null,
     targetELO,
-    puzzles: [...resetCarried, ...shuffleArray(puzzles)].slice(0, SET_SIZE),
+    puzzles: finalPuzzles,
     blunderRatio: 0,
   };
 }
