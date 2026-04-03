@@ -247,7 +247,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [eloChange, setEloChange] = useState(0);
 
   // Reveal sub-step: rating → daily_goal → connect
-  const [revealStep, setRevealStep] = useState<"rating" | "daily_goal" | "connect">("rating");
+  const [revealStep, setRevealStep] = useState<"rating" | "connect" | "daily_goal">("rating");
 
   // Daily goal step state
   const [selectedGoal, setSelectedGoal] = useState<number | null>(null);
@@ -615,7 +615,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           </div>
 
           <button
-            onClick={() => setRevealStep("daily_goal")}
+            onClick={() => setRevealStep("connect")}
             style={{
               backgroundColor: "#4ade80",
               color: "#0f1a0a",
@@ -641,7 +641,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       function commitGoal(goal: number) {
         setSelectedGoal(goal);
         saveDailyTargetSettings({ dailyGoal: goal });
-        setRevealStep("connect");
+        onComplete(finalElo);
       }
 
       function handleCustomCommit() {
@@ -655,13 +655,20 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
           <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
             <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "700", margin: "0 0 0.6rem" }}>
-              How many puzzles can you commit to daily?
+              How fast do you want to improve?
             </p>
             <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: 0 }}>
-              Players who set a daily goal complete 3x more puzzles
+              Players who set a daily goal improve 3x faster
             </p>
           </div>
 
+          {(() => {
+            const TIER_LABELS: Record<number, { label: string; sub: string }> = {
+              5:  { label: "Casual",     sub: "5 puzzles / day" },
+              10: { label: "Serious",    sub: "10 puzzles / day" },
+              20: { label: "Aggressive", sub: "20 puzzles / day" },
+            };
+            return (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginBottom: "1rem" }}>
             {PRESET_GOALS.map((g) => (
               <button
@@ -677,10 +684,14 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                   padding: "0.9rem",
                   cursor: "pointer",
                   transition: "all 0.15s",
-                  textAlign: "center",
+                  textAlign: "left",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
                 }}
               >
-                {g} puzzles / day
+                <span>{TIER_LABELS[g]?.label ?? `${g} puzzles / day`}</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 400, color: selectedGoal === g ? "#4ade80" : "#64748b" }}>{TIER_LABELS[g]?.sub}</span>
               </button>
             ))}
 
@@ -743,10 +754,12 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
               </div>
             )}
           </div>
+            );
+          })()}
 
           <div style={{ textAlign: "center" }}>
             <button
-              onClick={() => { saveDailyTargetSettings({ dailyGoal: 10 }); setRevealStep("connect"); }}
+              onClick={() => { saveDailyTargetSettings({ dailyGoal: 10 }); onComplete(finalElo); }}
               style={{
                 background: "none",
                 border: "none",
@@ -954,9 +967,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           )}
         </div>
 
-        {/* Start Training CTA */}
+        {/* Continue to daily goal CTA */}
         <button
-          onClick={() => onComplete(finalElo)}
+          onClick={() => setRevealStep("daily_goal")}
           style={{
             backgroundColor: "#4ade80",
             color: "#0f1a0a",
@@ -969,13 +982,13 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             width: "100%",
           }}
         >
-          Start Training →
+          Continue →
         </button>
 
         {!connected && (
           <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
             <button
-              onClick={() => onComplete(finalElo)}
+              onClick={() => setRevealStep("daily_goal")}
               style={{
                 background: "none",
                 border: "none",
