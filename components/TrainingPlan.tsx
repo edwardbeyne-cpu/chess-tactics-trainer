@@ -448,6 +448,7 @@ export default function TrainingPlan() {
   // Sprint 36: Mastery set state
   const [masterySetNumber, setMasterySetNumber] = useState<number | null>(null);
   const [masteredCount, setMasteredCount] = useState(0);
+  const [masterySetSize, setMasterySetSize] = useState(20);
   const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
 
   const loadData = useCallback(() => {
@@ -489,6 +490,7 @@ export default function TrainingPlan() {
     if (masterySet) {
       setMasterySetNumber(masterySet.setNumber);
       setMasteredCount(getMasteredCount());
+      setMasterySetSize(masterySet.puzzles.length);
       setMasteryDailyCompleted(getDailySessionCompleted());
     }
 
@@ -873,7 +875,7 @@ export default function TrainingPlan() {
                       </div>
                     )}
                     <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
-                      The 100 puzzles below are designed around your weaknesses. Master them and you will improve at chess.
+                      The puzzles below are designed around your weaknesses. Master them and you will improve at chess.
                     </div>
                   </>
                 );
@@ -903,7 +905,7 @@ export default function TrainingPlan() {
                       </div>
                     )}
                     <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
-                      The 100 puzzles below are designed around your weaknesses. Master them and you will improve at chess.
+                      The puzzles below are designed around your weaknesses. Master them and you will improve at chess.
                     </div>
                   </>
                 );
@@ -913,23 +915,23 @@ export default function TrainingPlan() {
               const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
               const tierMessages: Record<string, { headline: string; body: string; cta: string }> = {
                 beginner: {
-                  headline: "Master these 100 puzzles and you will start winning material in every game.",
+                  headline: "Master these puzzles and you will start winning material in every game.",
                   body: "These aren't random puzzles — they are the exact patterns that decide games at your level. Forks, pins, back rank mates. Your opponents won't see them. You will. Each puzzle you master is a weapon you carry into every game you play from now on.",
-                  cta: "Connect Chess.com to personalize your 100 puzzles around patterns you're missing in your actual games.",
+                  cta: "Connect Chess.com to personalize your puzzles around patterns you're missing in your actual games.",
                 },
                 intermediate: {
-                  headline: "Master these 100 puzzles and your opponents will start making mistakes you instantly punish.",
-                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These 100 puzzles drill the patterns until your brain recognizes them automatically, without thinking. One session at a time, your instincts get sharper.",
+                  headline: "Master these puzzles and your opponents will start making mistakes you instantly punish.",
+                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These puzzles drill the patterns until your brain recognizes them automatically, without thinking. One session at a time, your instincts get sharper.",
                   cta: "Connect Chess.com to weight your puzzles toward the patterns costing you the most rating points.",
                 },
                 advanced: {
-                  headline: "Master these 100 puzzles and you will solve in seconds what used to take minutes.",
-                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These 100 puzzles are calibrated to your exact rating, targeting the positions where your recognition slows down. Master them and the time you save goes straight into better decisions later in the game.",
+                  headline: "Master these puzzles and you will solve in seconds what used to take minutes.",
+                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These puzzles are calibrated to your exact rating, targeting the positions where your recognition slows down. Master them and the time you save goes straight into better decisions later in the game.",
                   cta: "Connect Chess.com to see exactly which patterns are still costing you time in real games.",
                 },
                 elite: {
-                  headline: "Master these 100 puzzles and the positions that slow you down now will never slow you down again.",
-                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These 100 puzzles find the patterns in your blind spots — the ones that still require a beat of calculation when they should be instant. Drill them to mastery and your calculation becomes available for the positions that actually demand it.",
+                  headline: "Master these puzzles and the positions that slow you down now will never slow you down again.",
+                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These puzzles find the patterns in your blind spots — the ones that still require a beat of calculation when they should be instant. Drill them to mastery and your calculation becomes available for the positions that actually demand it.",
                   cta: "Connect Chess.com to target the specific positions that are still costing you time.",
                 },
               };
@@ -966,13 +968,13 @@ export default function TrainingPlan() {
                   Set {masterySetNumber}
                 </span>
                 <span style={{ color: "#4ade80", fontSize: "0.88rem", fontWeight: "bold" }}>
-                  {masteredCount}/100 mastered
+                  {masteredCount}/{masterySetSize} mastered
                 </span>
               </div>
               <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", overflow: "hidden", border: "1px solid #1e2a3a" }}>
                 <div style={{
                   height: "100%", backgroundColor: "#4ade80", borderRadius: "999px",
-                  width: `${Math.min(100, Math.round((masteredCount / 100) * 100))}%`,
+                  width: `${Math.min(100, Math.round((masteredCount / masterySetSize) * 100))}%`,
                   transition: "width 0.4s ease",
                 }} />
               </div>
@@ -1056,7 +1058,7 @@ export default function TrainingPlan() {
                 <span style={{ color: "#94a3b8" }}>Mastery rule:</span> Solve any puzzle correctly in under 10 seconds — 3 separate times — to master it. Spaced across sessions.
               </div>
               <div style={{ marginBottom: "0.35rem" }}>
-                <span style={{ color: "#94a3b8" }}>Your set:</span> 100 puzzles weighted toward your weakest patterns at your calibration level.
+                <span style={{ color: "#94a3b8" }}>Your set:</span> {masterySetSize} puzzles weighted toward your weakest patterns at your calibration level.
               </div>
               <div>
                 <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(100 / Math.max(1, dailyGoal)))} days.
