@@ -1452,13 +1452,17 @@ export default function TrainingSession() {
 
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
   function handleRetry() {
+    // Clear any pending auto-advance timeout — must happen before anything else
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     feedbackTimeoutRef.current = null;
-    retryPendingRef.current = true; // block any pending advance from firing
+    // Set retry mode — handleResult will skip mastery recording on next solve
     retryModeRef.current = true;
+    // Clear feedback overlay
     setFeedback(null);
-    setPuzzleKey((k) => k + 1); // force full remount — clears all internal TacticBoard state
     setPhase("solving");
+    // DO NOT bump puzzleKey — TacticBoard's onClick already resets its own internal state
+    // (fen, moveIndex, status, resultCalledRef, hasScoredRef) before calling onRetry()
+    // Bumping puzzleKey causes a remount which races with the internal reset
   }
 
   // ── Handle "keep going" after session complete ─────────────────────────────
