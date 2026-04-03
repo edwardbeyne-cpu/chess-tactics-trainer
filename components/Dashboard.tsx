@@ -34,7 +34,9 @@ import {
   getPatternTimeStats,
   getTimeStandard,
   saveTimeStandard,
+  getGameSnapshots,
   type RatingSnapshot,
+  type GameSnapshot,
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
 import patterns from "@/data/patterns";
@@ -66,6 +68,233 @@ function getAccuracyBorder(rate: number): string {
   if (rate >= 0.75) return "#1a4a2a";
   if (rate >= 0.5) return "#4a3000";
   return "#4a1a1a";
+}
+
+// ── Game Stats Section ─────────────────────────────────────────────────────
+
+async function fetchAndSaveGameSnapshots(platform: string, username: string): Promise<void> {
+  try {
+    let games: Array<{ pgn: string; playerColor: string }> = [];
+    if (platform === "chesscom") {
+      const archivesRes = await fetch(
+        `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
+        { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } }
+      );
+      if (!archivesRes.ok) return;
+      const { archives } = await archivesRes.json() as { archives: string[] };
+      if (!archives?.length) return;
+      const reversedArchives = [...archives].reverse();
+      for (const archive of reversedArchives) {
+        if (games.length >= 50) break;
+        const gamesRes = await fetch(archive, { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } });
+        if (!gamesRes.ok) continue;
+        const { games: archiveGames } = await gamesRes.json() as {
+          games: Array<{ pgn: string; white: { username: string }; black: { username: string } }>;
+        };
+        if (!archiveGames?.length) continue;
+        for (const g of [...archiveGames].reverse()) {
+          games.push({
+            pgn: g.pgn,
+            playerColor: g.white.username.toLowerCase() === username.toLowerCase() ? "white" : "black",
+          });
+          if (games.length >= 50) break;
+        }
+      }
+    } else {
+      const res = await fetch(
+        `https://lichess.org/api/games/user/${username}?max=10&moves=true&pgnInJson=false`,
+        { headers: { Accept: "application/x-ndjson" } }
+      );
+      if (!res.ok) return;
+      const text = await res.text();
+      games = text.trim().split("\n").filter(Boolean).map((line) => {
+        try {
+          const game = JSON.parse(line);
+          return {
+            pgn: game.moves ?? "",
+            playerColor: game.players?.white?.user?.name?.toLowerCase() === username.toLowerCase() ? "white" : "black",
+          };
+        } catch { return null; }
+      }).filter((x): x is { pgn: string; playerColor: string } => x !== null);
+    }
+    if (games.length > 0) {
+      // Import dynamically to avoid circular dep — call saveGameSnapshot from storage
+      const { saveGameSnapshot } = await import("@/lib/storage");
+      saveGameSnapshot(games);
+    }
+  } catch { /* silent */ }
+}
+
+function GameStatsSection() {
+  const [snapshots, setSnapshots] = useState<GameSnapshot[]>([]);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    setSnapshots(getGameSnapshots());
+  }, []);
+
+  if (!mounted) return null;
+
+  const username = typeof window !== "undefined" ? localStorage.getItem("ctt_custom_username") : null;
+  const platform = typeof window !== "undefined" ? (localStorage.getItem("ctt_custom_platform") ?? "chesscom") : "chesscom";
+
+  if (snapshots.length === 0 && !username) return null;
+
+  const latest = snapshots[snapshots.length - 1] ?? null;
+  const recent3 = snapshots.slice(-3);
+
+  // Phase with most errors
+  const worstPhase = latest ? (
+    Object.entries(latest.phaseBreakdown).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  ) : null;
+
+  async function handleReconnect() {
+    if (!username || reconnecting) return;
+    setReconnecting(true);
+    await fetchAndSaveGameSnapshots(platform, username);
+    setSnapshots(getGameSnapshots());
+    setReconnecting(false);
+  }
+
+  return (
+    <div style={{
+      backgroundColor: "#1a1a2e",
+      border: "1px solid #2e3a5c",
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginBottom: "1.5rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
+        <div>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: 0 }}>
+            Game Stats
+          </h2>
+          {username && (
+            <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.2rem" }}>
+              {platform === "chesscom" ? "Chess.com" : "Lichess"} · {username}
+            </div>
+          )}
+        </div>
+        {username && (
+          <button
+            onClick={handleReconnect}
+            disabled={reconnecting}
+            style={{
+              backgroundColor: "transparent",
+              border: "1px solid #2e3a5c",
+              borderRadius: "8px",
+              color: reconnecting ? "#475569" : "#94a3b8",
+              fontSize: "0.78rem",
+              padding: "0.4rem 0.85rem",
+              cursor: reconnecting ? "not-allowed" : "pointer",
+            }}
+          >
+            {reconnecting ? "Updating..." : "Reconnect Chess.com to update"}
+          </button>
+        )}
+      </div>
+
+      {snapshots.length === 0 ? (
+        <div style={{ color: "#475569", fontSize: "0.88rem", textAlign: "center", padding: "0.75rem 0" }}>
+          Connect Chess.com to see your game stats
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
+          {/* Win rate trend */}
+          <div style={{ backgroundColor: "#0d1621", border: "1px solid #1e3a5c", borderRadius: "10px", padding: "1rem" }}>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+              Win Rate
+            </div>
+            <div style={{ color: "#4ade80", fontSize: "2rem", fontWeight: "bold", lineHeight: 1 }}>
+              {latest ? Math.round(latest.winRate * 100) : "—"}%
+            </div>
+            {recent3.length >= 2 && (
+              <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.5rem", alignItems: "center" }}>
+                {recent3.map((s, i) => {
+                  const pct = Math.round(s.winRate * 100);
+                  const isLast = i === recent3.length - 1;
+                  return (
+                    <span key={s.date} style={{ color: isLast ? "#4ade80" : "#334155", fontSize: "0.78rem", fontWeight: isLast ? "bold" : "normal" }}>
+                      {pct}%{i < recent3.length - 1 && <span style={{ color: "#1e3a5c", margin: "0 0.2rem" }}>→</span>}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {latest && (
+              <div style={{ color: "#334155", fontSize: "0.72rem", marginTop: "0.35rem" }}>
+                Avg {latest.avgGameLength} moves/game
+              </div>
+            )}
+          </div>
+
+          {/* Top 3 weak patterns */}
+          <div style={{ backgroundColor: "#0d1621", border: "1px solid #1e3a5c", borderRadius: "10px", padding: "1rem" }}>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+              Top Weaknesses (games)
+            </div>
+            {(latest?.weakPatterns?.length ?? 0) === 0 ? (
+              <div style={{ color: "#475569", fontSize: "0.82rem" }}>No pattern data yet</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {(latest?.weakPatterns ?? []).map(({ pattern, missRate }) => {
+                  const pct = Math.round(missRate * 100);
+                  const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
+                  return (
+                    <div key={pattern} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <div style={{ color: "#94a3b8", fontSize: "0.8rem", width: "80px", flexShrink: 0 }}>{label}</div>
+                      <div style={{ flex: 1, backgroundColor: "#0f0f1a", borderRadius: "999px", height: "6px", border: "1px solid #1e2a3a", overflow: "hidden" }}>
+                        <div style={{ height: "100%", backgroundColor: "#f97316", borderRadius: "999px", width: `${pct}%` }} />
+                      </div>
+                      <div style={{ color: "#f97316", fontSize: "0.75rem", fontWeight: "bold", width: "30px", textAlign: "right", flexShrink: 0 }}>{pct}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Game phase errors */}
+          <div style={{ backgroundColor: "#0d1621", border: "1px solid #1e3a5c", borderRadius: "10px", padding: "1rem" }}>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.75rem" }}>
+              Errors by Phase
+            </div>
+            {latest ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                {(["opening", "middlegame", "endgame"] as const).map((phase) => {
+                  const count = latest.phaseBreakdown[phase];
+                  const isWorst = phase === worstPhase;
+                  const total = Object.values(latest.phaseBreakdown).reduce((a, b) => a + b, 0);
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  return (
+                    <div key={phase} style={{
+                      display: "flex", alignItems: "center", gap: "0.5rem",
+                      backgroundColor: isWorst ? "#1f0a0a" : "transparent",
+                      border: isWorst ? "1px solid #4a1a1a" : "1px solid transparent",
+                      borderRadius: "6px",
+                      padding: isWorst ? "0.3rem 0.5rem" : "0.3rem 0",
+                    }}>
+                      <div style={{ color: isWorst ? "#ef4444" : "#64748b", fontSize: "0.8rem", width: "80px", flexShrink: 0, textTransform: "capitalize", fontWeight: isWorst ? "bold" : "normal" }}>
+                        {phase}
+                      </div>
+                      <div style={{ flex: 1, backgroundColor: "#0f0f1a", borderRadius: "999px", height: "6px", border: "1px solid #1e2a3a", overflow: "hidden" }}>
+                        <div style={{ height: "100%", backgroundColor: isWorst ? "#ef4444" : "#334155", borderRadius: "999px", width: `${pct}%` }} />
+                      </div>
+                      <div style={{ color: isWorst ? "#ef4444" : "#475569", fontSize: "0.75rem", width: "24px", textAlign: "right", flexShrink: 0 }}>{count}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ color: "#475569", fontSize: "0.82rem" }}>No data yet</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Section 1: Hero — Overall Tactics Rating ──────────────────────────────
@@ -921,6 +1150,9 @@ export default function Dashboard() {
           </HelpModal>
         </div>
       </div>
+
+      {/* Game Stats */}
+      <GameStatsSection />
 
       {/* Hero — Overall Tactics Rating */}
       <RatingHero />

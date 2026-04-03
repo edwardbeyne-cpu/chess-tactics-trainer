@@ -3058,6 +3058,149 @@ export function getMoveComparisonStats(): {
   return { totalSessions: 0, evaluationScore: 0, bestPickPct: 0 };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Game Snapshots — tracks win rate, weak patterns, game length over time
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GAME_SNAPSHOTS_KEY = "ctt_game_snapshots";
+
+export interface GameSnapshot {
+  date: string; // YYYY-MM-DD
+  winRate: number; // 0–1
+  weakPatterns: Array<{ pattern: string; missRate: number }>;
+  avgGameLength: number; // move count
+  phaseBreakdown: { opening: number; middlegame: number; endgame: number };
+}
+
+export function getGameSnapshots(): GameSnapshot[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(GAME_SNAPSHOTS_KEY);
+    return raw ? (JSON.parse(raw) as GameSnapshot[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Parse result string from PGN header (e.g. [Result "1-0"])
+function parsePgnResult(pgn: string): string | null {
+  const m = pgn.match(/\[Result\s+"([^"]+)"\]/);
+  return m ? m[1] : null;
+}
+
+// Count half-moves from PGN moves section (rough move count)
+function countPgnMoves(pgn: string): number {
+  // Strip headers
+  const movesSection = pgn.replace(/\[[^\]]*\]/g, "").trim();
+  // Count move numbers like "1." "2." etc
+  const nums = movesSection.match(/\d+\./g);
+  return nums ? nums.length : 0;
+}
+
+export function saveGameSnapshot(games: Array<{ pgn: string; playerColor: string }>): void {
+  if (typeof window === "undefined" || games.length === 0) return;
+  try {
+    // Win rate
+    let wins = 0;
+    let total = 0;
+    const moveCounts: number[] = [];
+    const phaseMisses = { opening: 0, middlegame: 0, endgame: 0 };
+    const patternMissCounts: Record<string, number> = {};
+    let patternTotalPositions = 0;
+
+    for (const { pgn, playerColor } of games) {
+      const result = parsePgnResult(pgn);
+      const isWhite = playerColor.toLowerCase().startsWith("w");
+      if (result) {
+        total++;
+        if (result === "1-0" && isWhite) wins++;
+        else if (result === "0-1" && !isWhite) wins++;
+        else if (result === "1/2-1/2") wins += 0.5;
+      }
+
+      // Move count
+      const mc = countPgnMoves(pgn);
+      if (mc > 0) moveCounts.push(mc);
+
+      // Phase breakdown: scan moves in PGN for missed tactic positions
+      // We use the stored ctt_game_analysis data if available, otherwise skip phase analysis
+      // (Phase breakdown is best-effort from stored analysis)
+    }
+
+    // Use stored game analysis for pattern/phase data
+    try {
+      const analysisRaw = localStorage.getItem("ctt_game_analysis");
+      if (analysisRaw) {
+        const analysis = JSON.parse(analysisRaw) as {
+          missedTactics: Array<{ pattern: string; fen: string; moveNumber?: number }>;
+        };
+        if (analysis.missedTactics?.length) {
+          for (const m of analysis.missedTactics) {
+            const pat = m.pattern ?? "fork";
+            patternMissCounts[pat] = (patternMissCounts[pat] || 0) + 1;
+            patternTotalPositions++;
+            const mv = m.moveNumber ?? 20;
+            if (mv <= 10) phaseMisses.opening++;
+            else if (mv <= 30) phaseMisses.middlegame++;
+            else phaseMisses.endgame++;
+          }
+        }
+      } else {
+        // Fallback: use custom_analysis key (same data, different key name)
+        const altRaw = localStorage.getItem("ctt_custom_analysis");
+        if (altRaw) {
+          const altData = JSON.parse(altRaw) as {
+            missedTactics: Array<{ pattern: string; fen: string }>;
+          };
+          if (altData.missedTactics?.length) {
+            for (const m of altData.missedTactics) {
+              const pat = m.pattern ?? "fork";
+              patternMissCounts[pat] = (patternMissCounts[pat] || 0) + 1;
+              patternTotalPositions++;
+              // No move number available — default to middlegame
+              phaseMisses.middlegame++;
+            }
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
+    const winRate = total > 0 ? wins / total : 0;
+    const avgGameLength = moveCounts.length > 0
+      ? Math.round(moveCounts.reduce((a, b) => a + b, 0) / moveCounts.length)
+      : 0;
+
+    // Build weak patterns sorted by miss rate (miss count / total positions)
+    const weakPatterns = Object.entries(patternMissCounts)
+      .map(([pattern, count]) => ({
+        pattern,
+        missRate: patternTotalPositions > 0 ? count / patternTotalPositions : 0,
+      }))
+      .sort((a, b) => b.missRate - a.missRate)
+      .slice(0, 3);
+
+    const snapshot: GameSnapshot = {
+      date: new Date().toISOString().slice(0, 10),
+      winRate,
+      weakPatterns,
+      avgGameLength,
+      phaseBreakdown: phaseMisses,
+    };
+
+    const existing = getGameSnapshots();
+    // Replace today's snapshot if one exists, otherwise append
+    const todayIdx = existing.findIndex((s) => s.date === snapshot.date);
+    if (todayIdx >= 0) {
+      existing[todayIdx] = snapshot;
+    } else {
+      existing.push(snapshot);
+    }
+    // Keep last 12
+    const trimmed = existing.slice(-12);
+    localStorage.setItem(GAME_SNAPSHOTS_KEY, JSON.stringify(trimmed));
+  } catch { /* ignore */ }
+}
+
 // Verbalization
 export type VerbalizedPattern = string;
 export function recordVerbalization(_puzzleId: string, _pattern: VerbalizedPattern): void { /* stub */ }

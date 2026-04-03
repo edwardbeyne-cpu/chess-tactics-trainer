@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Chess } from "chess.js";
 import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
 import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
-import { saveDailyTargetSettings } from "@/lib/storage";
+import { saveDailyTargetSettings, saveGameSnapshot } from "@/lib/storage";
 
 const ChessBoard = dynamic(() => import("@/components/ChessBoard"), { ssr: false });
 
@@ -493,6 +493,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     try {
       const games = await fetchRecentGames(plat, uname);
       if (games.length > 0) {
+        saveGameSnapshot(games);
         const missed = analyzeGamesForQueue(games);
         if (missed.length > 0) {
           localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify({

@@ -948,6 +948,106 @@ export default function TrainingPlan() {
           </div>
         </div>
 
+        {/* ── Where You Are Losing ─────────────────────────────────────────── */}
+        {(() => {
+          // Pull weak patterns from getAllPatternStats (training data)
+          const weakFromTraining = patternStats
+            .filter((s) => s.totalAttempts >= 1)
+            .sort((a, b) => a.solveRate - b.solveRate)
+            .slice(0, 3);
+
+          // Pull weak patterns from game analysis (ctt_game_analysis or ctt_custom_analysis)
+          const gameWeakPatterns: Array<{ pattern: string; missRate: number }> = (() => {
+            try {
+              const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+              if (!raw) return [];
+              const data = JSON.parse(raw) as { missedTactics: Array<{ pattern: string }> };
+              if (!data.missedTactics?.length) return [];
+              const counts: Record<string, number> = {};
+              const total = data.missedTactics.length;
+              data.missedTactics.forEach((m) => { counts[m.pattern] = (counts[m.pattern] || 0) + 1; });
+              return Object.entries(counts)
+                .map(([pattern, count]) => ({ pattern, missRate: count / total }))
+                .sort((a, b) => b.missRate - a.missRate)
+                .slice(0, 3);
+            } catch { return []; }
+          })();
+
+          const hasGameData = gameWeakPatterns.length > 0;
+          const hasTrainingData = weakFromTraining.length > 0;
+          const displayPatterns = hasGameData ? gameWeakPatterns : (hasTrainingData ? weakFromTraining.map((s) => ({ pattern: s.theme, missRate: 1 - s.solveRate })) : []);
+
+          // Get mastery set for "How your training fixes this"
+          const masterySet = getCurrentMasterySet();
+
+          return (
+            <div style={{
+              backgroundColor: "#13132b",
+              border: "1px solid #2e3a5c",
+              borderRadius: "16px",
+              padding: "1.5rem",
+            }}>
+              <div style={sectionHeaderStyle}>Where You Are Losing</div>
+
+              {displayPatterns.length === 0 ? (
+                <div style={{ color: "#475569", fontSize: "0.88rem", textAlign: "center", padding: "0.75rem 0" }}>
+                  Connect Chess.com to see where you&apos;re losing rating points
+                </div>
+              ) : (
+                <>
+                  {/* Top 3 weak patterns with miss rate bars */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.25rem" }}>
+                    {displayPatterns.map(({ pattern, missRate }) => {
+                      const pct = Math.round(missRate * 100);
+                      const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
+                      return (
+                        <div key={pattern} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                          <div style={{ color: "#94a3b8", fontSize: "0.85rem", width: "110px", flexShrink: 0 }}>{label}</div>
+                          <div style={{ flex: 1, backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", border: "1px solid #1e2a3a", overflow: "hidden" }}>
+                            <div style={{ height: "100%", backgroundColor: "#f97316", borderRadius: "999px", width: `${pct}%`, transition: "width 0.4s ease" }} />
+                          </div>
+                          <div style={{ color: "#f97316", fontSize: "0.82rem", fontWeight: "bold", width: "36px", textAlign: "right", flexShrink: 0 }}>{pct}%</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* How your training fixes this */}
+                  <div style={{
+                    backgroundColor: "#0a1520",
+                    border: "1px solid #1e3a5c",
+                    borderRadius: "10px",
+                    padding: "0.85rem 1rem",
+                  }}>
+                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
+                      How your training fixes this
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      {displayPatterns.map(({ pattern }) => {
+                        const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
+                        // Count puzzles in mastery set matching this pattern
+                        const count = masterySet
+                          ? masterySet.puzzles.filter((p) => {
+                              const theme = p.puzzleData?.theme ?? p.puzzleData?.patternTag ?? "";
+                              return typeof theme === "string" && theme.toLowerCase() === pattern.toLowerCase();
+                            }).length
+                          : 0;
+                        return (
+                          <div key={pattern} style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                            Your Set 1 includes{" "}
+                            <span style={{ color: "#4ade80", fontWeight: "bold" }}>{count}</span>{" "}
+                            {label} puzzles weighted to your rating.
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
+
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{
             backgroundColor: "#13132b",
