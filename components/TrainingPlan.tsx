@@ -17,6 +17,9 @@ import {
   getCurrentMasterySet,
   getMasteredCount,
   getDailySessionCompleted,
+  getCCTMode,
+  saveCCTMode,
+  getCCTSessionCount,
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
@@ -450,6 +453,9 @@ export default function TrainingPlan() {
   const [masteredCount, setMasteredCount] = useState(0);
   const [masterySetSize, setMasterySetSize] = useState(20);
   const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
+
+  // CCT upgrade nudge state
+  const [cctUpgradeNudgeDismissed, setCctUpgradeNudgeDismissed] = useState(false);
 
   const loadData = useCallback(() => {
     const uname = localStorage.getItem(CUSTOM_USERNAME_KEY);
@@ -1209,6 +1215,52 @@ export default function TrainingPlan() {
             </div>
           </div>
         )}
+
+        {/* CCT upgrade nudge — shown after 10 sessions if CCT is in "suggested" mode */}
+        {(() => {
+          if (!mounted) return null;
+          if (cctUpgradeNudgeDismissed) return null;
+          if (getCCTMode() !== "suggested") return null;
+          if (getCCTSessionCount() < 10) return null;
+          return (
+            <div style={{
+              backgroundColor: "#0a1520", border: "1px solid #2e75b6",
+              borderRadius: "12px", padding: "1rem 1.25rem",
+              display: "flex", alignItems: "flex-start", gap: "0.75rem",
+            }}>
+              <div style={{ fontSize: "1.1rem", flexShrink: 0, marginTop: "0.1rem" }}>🎯</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#e2e8f0", fontWeight: "700", fontSize: "0.88rem", marginBottom: "0.3rem" }}>
+                  Power up your training
+                </div>
+                <div style={{ color: "#64748b", fontSize: "0.8rem", lineHeight: 1.55, marginBottom: "0.75rem" }}>
+                  Players who scan CCT before every move master patterns 2x faster. Enable Enforced mode in Settings.
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button
+                    onClick={() => { saveCCTMode("enforced"); setCctUpgradeNudgeDismissed(true); }}
+                    style={{
+                      backgroundColor: "#2e75b6", border: "none",
+                      borderRadius: "6px", padding: "0.45rem 0.85rem",
+                      color: "white", fontSize: "0.8rem", fontWeight: "700", cursor: "pointer",
+                    }}
+                  >
+                    Enable Enforced Mode →
+                  </button>
+                  <button
+                    onClick={() => setCctUpgradeNudgeDismissed(true)}
+                    style={{
+                      background: "none", border: "none",
+                      color: "#475569", fontSize: "0.78rem", cursor: "pointer", padding: "0.45rem",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Connect modal */}
         {showConnectModal && (

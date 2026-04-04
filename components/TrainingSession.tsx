@@ -25,7 +25,12 @@ import {
   getStreakData,
   getDailyTargetSettings,
   getCCTMode,
-  setCCTMode,
+  saveCCTMode,
+  getCCTNudgeCount,
+  incrementCCTNudgeCount,
+  getCCTSessionCount,
+  incrementCCTSessionCount,
+  type CCTMode,
   type MasteryPuzzle,
   type MasterySet,
   type MasteryProgress,
@@ -417,17 +422,31 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const retryModeRef = useRef(false);
 
   // CCT Mode — Checks, Captures, Threats
-  const [cctMode] = useState(() => getCCTMode());
+  const [cctMode] = useState<CCTMode>(() => getCCTMode());
   const [cctChecked, setCctChecked] = useState({ checks: false, captures: false, threats: false });
   const [cctUnlocked, setCctUnlocked] = useState(false);
   const [cctNudge, setCctNudge] = useState(false);
-  const cctComplete = !cctMode || cctUnlocked;
+  const [amberBanner, setAmberBanner] = useState(false);
+  // "off" and "suggested" — board always unlocked; "enforced" — locked until all 3 checked
+  const cctComplete = cctMode === "off" || cctMode === "suggested" || cctUnlocked;
   const cctAllChecked = cctChecked.checks && cctChecked.captures && cctChecked.threats;
+  const cctAnyClickedRef = useRef(false); // tracks if user clicked any CCT button before moving
+  const amberShownRef = useRef(false); // only show amber nudge once per puzzle
+
+  // First-session tutorial modal (one-time, not shown in "off" mode)
+  const [showTutorial, setShowTutorial] = useState(() => {
+    if (typeof window === "undefined") return false;
+    if (getCCTMode() === "off") return false;
+    return !localStorage.getItem("ctt_cct_tutorial_seen");
+  });
 
   useEffect(() => {
-    if (cctMode && cctAllChecked && !cctUnlocked) {
+    if (cctMode === "enforced" && cctAllChecked && !cctUnlocked) {
       setCctUnlocked(true);
       onCctUnlocked?.(); // Reset parent timer so 10s countdown starts from now
+    }
+    if (cctMode === "suggested" && cctAllChecked && !cctUnlocked) {
+      setCctUnlocked(true); // visual state: show "✓ Scanned"
     }
   }, [cctAllChecked, cctMode, cctUnlocked, onCctUnlocked]);
 
@@ -455,12 +474,21 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
 
   function handleMove(from: string, to: string): boolean {
     if (status !== "solve") return false;
-    // CCT gate: block moves until all three checked
+    // CCT gate: block moves until all three checked (enforced mode only)
     if (!cctComplete) {
-      // Show nudge to complete CCT first
       setCctNudge(true);
       setTimeout(() => setCctNudge(false), 2000);
       return false;
+    }
+    // Suggested mode: nudge if user skipped CCT scan (first 10 sessions only)
+    if (cctMode === "suggested" && !cctAnyClickedRef.current && !amberShownRef.current) {
+      const nudgeCount = getCCTNudgeCount();
+      if (nudgeCount < 10) {
+        incrementCCTNudgeCount();
+        amberShownRef.current = true;
+        setAmberBanner(true);
+        setTimeout(() => setAmberBanner(false), 3000);
+      }
     }
 
     const expectedUci = puzzleData.solution[moveIndex];
@@ -537,7 +565,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       {isDesktop && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "220px", flexShrink: 0, paddingTop: "0.25rem" }}>
           {/* CCT Panel — fixed min-height so board never jumps */}
-          {cctMode && status === "solve" && (
+          {cctMode !== "off" && status === "solve" && (
             <div style={{
               backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
               borderRadius: "8px", padding: "0.75rem", transition: "border-color 0.2s",
@@ -545,7 +573,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
                 <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ CCT</div>
-                {!cctUnlocked && <div style={{ color: "#334155", fontSize: "0.65rem" }}>Board locked</div>}
+                {cctMode === "enforced" && !cctUnlocked && <div style={{ color: "#334155", fontSize: "0.65rem" }}>Board locked</div>}
               </div>
               {!cctUnlocked && !cctAllChecked && (
                 <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.5rem", lineHeight: 1.4 }}>
@@ -553,7 +581,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                 </div>
               )}
               {cctUnlocked || cctAllChecked ? (
-                <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0" }}>✓ Board unlocked</div>
+                <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0" }}>
+                  {cctMode === "enforced" ? "✓ Board unlocked" : "✓ Scanned"}
+                </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                   {(["checks", "captures", "threats"] as const).map((key) => {
@@ -561,7 +591,12 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                     const label = key.charAt(0).toUpperCase() + key.slice(1);
                     const icons = { checks: "♟", captures: "⚔", threats: "⚠" };
                     return (
-                      <button key={key} onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                      <button key={key} onClick={() => {
+                        if (!checked) {
+                          cctAnyClickedRef.current = true;
+                          setCctChecked((prev) => ({ ...prev, [key]: true }));
+                        }
+                      }}
                         style={{
                           padding: "0.45rem 0.6rem", borderRadius: "6px", fontSize: "0.8rem", fontWeight: 600,
                           cursor: checked ? "default" : "pointer",
@@ -640,6 +675,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                   // Require CCT scan again on retry — missed puzzle = scan again
                   setCctChecked({ checks: false, captures: false, threats: false });
                   setCctUnlocked(false);
+                  cctAnyClickedRef.current = false;
+                  amberShownRef.current = false;
                   onRetry(); // set retryPendingRef to block any queued advance
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
@@ -673,7 +710,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       </div>
 
       {/* CCT Panel — mobile only (desktop uses left column), stacked below board */}
-      {cctMode && status === "solve" && !isDesktop && (
+      {cctMode !== "off" && status === "solve" && !isDesktop && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
           backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
@@ -684,7 +721,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
             <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.65rem" : "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>
               ⚡ CCT — Scan before you move
             </div>
-            {!cctUnlocked && (
+            {cctMode === "enforced" && !cctUnlocked && (
               <div style={{ color: "#334155", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem" }}>Board locked</div>
             )}
           </div>
@@ -695,7 +732,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
           )}
           {cctUnlocked || cctAllChecked ? (
             <div style={{ color: "#4ade80", fontSize: boardWidth < 360 ? "0.78rem" : "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-              <span>✓</span> Board unlocked — make your move
+              <span>✓</span> {cctMode === "enforced" ? "Board unlocked — make your move" : "Scanned"}
             </div>
           ) : (
             <>
@@ -711,7 +748,12 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                   return (
                     <button
                       key={key}
-                      onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                      onClick={() => {
+                        if (!checked) {
+                          cctAnyClickedRef.current = true;
+                          setCctChecked((prev) => ({ ...prev, [key]: true }));
+                        }
+                      }}
                       title={descriptions[key]}
                       style={{
                         flex: 1,
@@ -734,14 +776,14 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
                 })}
               </div>
               <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem", textAlign: "center" }}>
-                Tap each after mentally scanning — board unlocks when all 3 confirmed
+                {cctMode === "enforced" ? "Tap each after mentally scanning — board unlocks when all 3 confirmed" : "Tap each after mentally scanning"}
               </div>
             </>
           )}
         </div>
       )}
 
-      {/* CCT nudge — flashes when they try to move before completing CCT */}
+      {/* CCT nudge — flashes when they try to move before completing CCT (enforced mode) */}
       {cctNudge && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
@@ -750,6 +792,59 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
           color: "#f59e0b", fontSize: "0.82rem", fontWeight: "700",
         }}>
           ⚡ Complete CCT first — tap Checks, Captures, and Threats below
+        </div>
+      )}
+
+      {/* Amber banner — suggested mode, user moved without scanning CCT */}
+      {amberBanner && (
+        <div style={{
+          width: boardWidth, boxSizing: "border-box",
+          backgroundColor: "#1a1200", border: "1px solid #f59e0b",
+          borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
+          color: "#f59e0b", fontSize: "0.8rem", lineHeight: 1.5,
+        }}>
+          💡 Tip: Scan Checks, Captures &amp; Threats before moving — it catches 80% of missed tactics
+        </div>
+      )}
+
+      {/* First-session tutorial modal — one-time overlay */}
+      {showTutorial && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          backgroundColor: "rgba(5,8,20,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: "1.5rem",
+        }}>
+          <div style={{
+            backgroundColor: "#13132b", border: "1px solid #2e75b6",
+            borderRadius: "16px", padding: "2rem", maxWidth: "380px", width: "100%",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+          }}>
+            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>⚡</div>
+            <h3 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "800", margin: "0 0 0.75rem" }}>
+              Meet your secret weapon
+            </h3>
+            <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.65, margin: "0 0 1.5rem" }}>
+              Before every move, top players scan for <span style={{ color: "#e2e8f0" }}>Checks</span>,{" "}
+              <span style={{ color: "#e2e8f0" }}>Captures</span>, and{" "}
+              <span style={{ color: "#e2e8f0" }}>Threats</span>. It takes 3 seconds and catches the tactics most players miss.
+              Try clicking each button before you move.
+            </p>
+            <button
+              onClick={() => {
+                try { localStorage.setItem("ctt_cct_tutorial_seen", "true"); } catch { /* ignore */ }
+                setShowTutorial(false);
+              }}
+              style={{
+                width: "100%", padding: "0.75rem",
+                backgroundColor: "#2e75b6", border: "none",
+                borderRadius: "8px", color: "white",
+                fontSize: "0.9rem", fontWeight: "700", cursor: "pointer",
+              }}
+            >
+              Got it →
+            </button>
+          </div>
         </div>
       )}
 
@@ -970,13 +1065,18 @@ function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHit
 // ── Quick Settings Popup ────────────────────────────────────────────────────
 function QuickSettings() {
   const [open, setOpen] = useState(false);
-  const [cctOn, setCctOn] = useState(() => getCCTMode());
+  const [cctMode, setCctModeState] = useState<CCTMode>(() => getCCTMode());
 
-  function toggleCCT() {
-    const next = !cctOn;
-    setCctOn(next);
-    setCCTMode(next);
+  function handleCCTMode(v: CCTMode) {
+    setCctModeState(v);
+    saveCCTMode(v);
   }
+
+  const cctOptions: Array<{ value: CCTMode; label: string }> = [
+    { value: "off", label: "Off" },
+    { value: "suggested", label: "Suggested" },
+    { value: "enforced", label: "Enforced" },
+  ];
 
   return (
     <div style={{ position: "relative", flexShrink: 0 }}>
@@ -996,32 +1096,33 @@ function QuickSettings() {
             position: "absolute", top: "calc(100% + 6px)", right: 0,
             backgroundColor: "#13132b", border: "1px solid #2e3a5c",
             borderRadius: "10px", padding: "0.85rem 1rem", zIndex: 100,
-            minWidth: "220px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            minWidth: "230px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           }}>
-            <div style={{ color: "#94a3b8", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.65rem" }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.5rem" }}>
               Puzzle Settings
             </div>
-            {/* CCT toggle */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem" }}>
-              <div>
-                <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "600" }}>CCT Mode</div>
-                <div style={{ color: "#475569", fontSize: "0.72rem" }}>Checks · Captures · Threats</div>
+            {/* CCT mode selector */}
+            <div style={{ marginBottom: "0.5rem" }}>
+              <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "600", marginBottom: "0.15rem" }}>CCT Mode</div>
+              <div style={{ color: "#475569", fontSize: "0.72rem", marginBottom: "0.5rem" }}>Checks · Captures · Threats</div>
+              <div style={{ display: "flex", gap: "0.3rem" }}>
+                {cctOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleCCTMode(opt.value)}
+                    style={{
+                      flex: 1, padding: "0.3rem 0.25rem", borderRadius: "5px", fontSize: "0.72rem",
+                      fontWeight: cctMode === opt.value ? 700 : 400,
+                      cursor: "pointer",
+                      backgroundColor: cctMode === opt.value ? (opt.value === "suggested" ? "rgba(74,222,128,0.15)" : "rgba(46,117,182,0.2)") : "transparent",
+                      color: cctMode === opt.value ? (opt.value === "suggested" ? "#4ade80" : "#60a5fa") : "#64748b",
+                      border: `1px solid ${cctMode === opt.value ? (opt.value === "suggested" ? "#4ade80" : "#2e75b6") : "#2e3a5c"}`,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
-              <button
-                onClick={toggleCCT}
-                style={{
-                  width: "40px", height: "22px", borderRadius: "11px", border: "none",
-                  backgroundColor: cctOn ? "#4ade80" : "#2e3a5c",
-                  cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0,
-                }}
-              >
-                <div style={{
-                  width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "white",
-                  position: "absolute", top: "3px",
-                  left: cctOn ? "21px" : "3px",
-                  transition: "left 0.2s",
-                }} />
-              </button>
             </div>
             <div style={{ borderTop: "1px solid #1e2a3a", marginTop: "0.65rem", paddingTop: "0.65rem" }}>
               <a href="/app/settings" style={{ color: "#4ade80", fontSize: "0.78rem", textDecoration: "none" }}>
@@ -1305,6 +1406,9 @@ export default function TrainingSession() {
   const handleResultRef = useRef<(correct: boolean) => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
   const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
+  const consecutiveMissesRef = useRef(0); // tracks consecutive wrong answers for miss-streak nudge
+  const missStreakNudgeShownRef = useRef(false); // show miss-streak nudge at most once per session
+  const [showMissStreakNudge, setShowMissStreakNudge] = useState(false);
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1470,6 +1574,26 @@ export default function TrainingSession() {
     newDailyCount = incrementDailySession();
     setDailyCompleted(newDailyCount);
     recordActivityToday();
+
+    // Miss-streak nudge: track consecutive wrong answers (suggested mode only)
+    if (correct) {
+      consecutiveMissesRef.current = 0;
+    } else {
+      consecutiveMissesRef.current += 1;
+      if (
+        consecutiveMissesRef.current >= 3 &&
+        getCCTMode() === "suggested" &&
+        !missStreakNudgeShownRef.current
+      ) {
+        missStreakNudgeShownRef.current = true;
+        setShowMissStreakNudge(true);
+      }
+    }
+
+    // Track completed sessions for TrainingPlan upgrade nudge
+    if (newDailyCount === getDailyTargetSettings().dailyGoal) {
+      incrementCCTSessionCount();
+    }
     } // end if (!isRetry)
 
     // Show feedback
@@ -1689,6 +1813,25 @@ export default function TrainingSession() {
         {/* Quick Settings popup */}
         <QuickSettings />
       </div>
+
+      {/* Miss-streak nudge — shown when user gets 3+ wrong in a row (suggested mode only) */}
+      {showMissStreakNudge && (
+        <div style={{
+          backgroundColor: "#0d1621", border: "1px solid #f59e0b",
+          borderRadius: "8px", padding: "0.65rem 1rem",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
+        }}>
+          <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5 }}>
+            💡 Try enabling CCT scanning — it helps catch these patterns before you move.
+          </div>
+          <button
+            onClick={() => setShowMissStreakNudge(false)}
+            style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "1rem", flexShrink: 0, padding: "0.1rem" }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
       {/* Correct feedback — solid bar ABOVE the board card, fully visible */}

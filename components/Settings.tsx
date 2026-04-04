@@ -13,7 +13,8 @@ import {
   getDailyTargetSettings,
   saveDailyTargetSettings,
   getCCTMode,
-  setCCTMode,
+  saveCCTMode,
+  type CCTMode,
 } from "@/lib/storage";
 import BoardThemeSettings from "./BoardThemeSettings";
 import DataExport from "./DataExport";
@@ -131,32 +132,67 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean
 // ── Training Options Section ───────────────────────────────────────────────
 
 function TrainingOptionsSection() {
-  const [cctMode, setCctModeState] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
+  const [cctMode, setCctModeState] = useState<CCTMode>(() => {
+    if (typeof window === "undefined") return "suggested";
     return getCCTMode();
   });
 
-  function handleCCTToggle(v: boolean) {
+  function handleCCTChange(v: CCTMode) {
     setCctModeState(v);
-    setCCTMode(v);
+    saveCCTMode(v);
   }
+
+  const modes: Array<{ value: CCTMode; label: string; desc: string }> = [
+    { value: "off", label: "Off", desc: "Hide CCT panel. Train without scanning prompts." },
+    { value: "suggested", label: "Suggested", desc: "CCT visible but optional. Gentle nudge when you skip it." },
+    { value: "enforced", label: "Enforced", desc: "Board locks until you scan all three. Maximum discipline." },
+  ];
 
   return (
     <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.25rem 1.5rem", marginBottom: "1.5rem" }}>
-      <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.5rem" }}>
-        Training Options
+      <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "1rem", marginBottom: "0.25rem" }}>
+        CCT Mode
       </div>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: 500, marginBottom: "0.3rem" }}>
-            CCT Mode — Checks, Captures, Threats
-          </div>
-          <div style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.55 }}>
-            Before each puzzle, confirm you&apos;ve scanned for Checks, Captures, and Threats.
-            Builds the pre-move discipline that prevents blunders.
-          </div>
-        </div>
-        <Toggle enabled={cctMode} onChange={handleCCTToggle} />
+      <div style={{ color: "#64748b", fontSize: "0.82rem", marginBottom: "1rem" }}>
+        Checks, Captures &amp; Threats — your pre-move scanning habit
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {modes.map((m) => {
+          const selected = cctMode === m.value;
+          const accentColor = m.value === "suggested" ? "#4ade80" : "#2e75b6";
+          return (
+            <button
+              key={m.value}
+              onClick={() => handleCCTChange(m.value)}
+              style={{
+                display: "flex", alignItems: "flex-start", gap: "0.75rem",
+                padding: "0.75rem 1rem", borderRadius: "8px", cursor: "pointer",
+                textAlign: "left", width: "100%",
+                backgroundColor: selected ? `rgba(${m.value === "suggested" ? "74,222,128" : "46,117,182"},0.08)` : "#0d1621",
+                border: `1px solid ${selected ? accentColor : "#2e3a5c"}`,
+                transition: "all 0.15s",
+              }}
+            >
+              <div style={{
+                width: "16px", height: "16px", borderRadius: "50%", flexShrink: 0, marginTop: "2px",
+                border: `2px solid ${selected ? accentColor : "#3a4a6a"}`,
+                backgroundColor: "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {selected && <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: accentColor }} />}
+              </div>
+              <div>
+                <div style={{ color: selected ? "#e2e8f0" : "#94a3b8", fontSize: "0.88rem", fontWeight: selected ? 600 : 400, marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  {m.label}
+                  {m.value === "suggested" && <span style={{ color: "#4ade80", fontSize: "0.7rem", backgroundColor: "rgba(74,222,128,0.12)", padding: "0.1rem 0.35rem", borderRadius: "4px" }}>default</span>}
+                </div>
+                <div style={{ color: "#64748b", fontSize: "0.78rem", lineHeight: 1.45 }}>
+                  {m.desc}
+                </div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

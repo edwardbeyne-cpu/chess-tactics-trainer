@@ -3411,16 +3411,52 @@ export function getDailySessionCompleted(): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CCT_MODE_KEY = "ctt_cct_mode";
+const CCT_NUDGE_COUNT_KEY = "ctt_cct_nudge_count";
+const CCT_SESSION_COUNT_KEY = "ctt_session_count";
 
-export function getCCTMode(): boolean {
-  if (typeof window === "undefined") return true; // default on
+export type CCTMode = "off" | "suggested" | "enforced";
+
+export function getCCTMode(): CCTMode {
+  if (typeof window === "undefined") return "suggested";
   try {
     const val = localStorage.getItem(CCT_MODE_KEY);
-    // Default is ON — only off if explicitly set to "false"
-    return val === null ? true : val !== "false";
-  } catch { return true; }
+    if (val === null) return "suggested";
+    // Migrate old boolean values
+    if (val === "true") return "enforced";
+    if (val === "false") return "off";
+    if (val === "off" || val === "suggested" || val === "enforced") return val;
+    return "suggested";
+  } catch { return "suggested"; }
 }
 
-export function setCCTMode(v: boolean): void {
-  try { localStorage.setItem(CCT_MODE_KEY, String(v)); } catch { /* ignore */ }
+export function saveCCTMode(v: CCTMode): void {
+  try { localStorage.setItem(CCT_MODE_KEY, v); } catch { /* ignore */ }
+}
+
+export function getCCTNudgeCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const val = localStorage.getItem(CCT_NUDGE_COUNT_KEY);
+    return val ? parseInt(val, 10) || 0 : 0;
+  } catch { return 0; }
+}
+
+export function incrementCCTNudgeCount(): number {
+  const count = getCCTNudgeCount() + 1;
+  try { localStorage.setItem(CCT_NUDGE_COUNT_KEY, String(count)); } catch { /* ignore */ }
+  return count;
+}
+
+export function getCCTSessionCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const val = localStorage.getItem(CCT_SESSION_COUNT_KEY);
+    return val ? parseInt(val, 10) || 0 : 0;
+  } catch { return 0; }
+}
+
+export function incrementCCTSessionCount(): number {
+  const count = getCCTSessionCount() + 1;
+  try { localStorage.setItem(CCT_SESSION_COUNT_KEY, String(count)); } catch { /* ignore */ }
+  return count;
 }
