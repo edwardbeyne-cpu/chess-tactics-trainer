@@ -6,6 +6,7 @@ import { Chess } from "chess.js";
 import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
 import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import { saveDailyTargetSettings, saveGameSnapshot } from "@/lib/storage";
+import { runGameAnalysis, fetchRecentGames as fetchRecentGamesShared } from "@/lib/game-analysis";
 
 const ChessBoard = dynamic(() => import("@/components/ChessBoard"), { ssr: false });
 
@@ -493,16 +494,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   // Connect handler (used in reveal screen)
   const runBackgroundAnalysis = useCallback(async (plat: Platform, uname: string) => {
     try {
-      const games = await fetchRecentGames(plat, uname);
+      const games = await fetchRecentGamesShared(uname, plat);
+      await runGameAnalysis(uname, plat);
       if (games.length > 0) {
-        const missed = analyzeGamesForQueue(games);
-        if (missed.length > 0) {
-          localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify({
-            missedTactics: missed, platform: plat, username: uname, analyzedAt: new Date().toISOString(),
-          }));
-          const queue = missed.map((m, i) => ({ id: `custom_${i}`, fen: m.fen, theme: m.pattern, source: `${plat}:${uname}` }));
-          localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(queue));
-        }
         // Save snapshot AFTER analysis so pattern data is available
         saveGameSnapshot(games);
       }

@@ -23,6 +23,7 @@ import {
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
+import { runGameAnalysis } from "@/lib/game-analysis";
 
 // ── Sprint 31: Pattern Mastery Tier helper ────────────────────────────────
 interface PatternMasteryTiers {
@@ -763,11 +764,13 @@ export default function TrainingPlan() {
 
   const milestone = getNextMilestone();
 
-  function handleConnected(ratings: PlatformRatings, uname: string) {
+  async function handleConnected(ratings: PlatformRatings, uname: string) {
     setUsername(uname);
     setPlatformRatings(ratings);
     setShowConnectModal(false);
     loadData();
+    const plat = (localStorage.getItem("ctt_custom_platform") as "chesscom" | "lichess") ?? "chesscom";
+    runGameAnalysis(uname, plat).then(() => loadData());
   }
 
   // ── Section header style ──────────────────────────────────────────────────
@@ -1053,8 +1056,21 @@ export default function TrainingPlan() {
             fontSize: "0.82rem",
             lineHeight: 1.65,
           }}>
-            <div style={{ color: "#4ade80", fontWeight: "700", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem" }}>
-              Coach Analysis
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+              <div style={{ color: "#4ade80", fontWeight: "700", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Coach Analysis
+              </div>
+              {username && (
+                <button
+                  onClick={() => {
+                    const plat = (localStorage.getItem("ctt_custom_platform") as "chesscom" | "lichess") ?? "chesscom";
+                    runGameAnalysis(username, plat).then(() => loadData());
+                  }}
+                  style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.72rem", cursor: "pointer", padding: 0 }}
+                >
+                  Refresh game analysis →
+                </button>
+              )}
             </div>
             {(() => {
               // Check for Chess.com game analysis data
