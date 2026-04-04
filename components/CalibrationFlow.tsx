@@ -618,7 +618,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           </div>
 
           <button
-            onClick={() => setRevealStep("connect")}
+            onClick={() => setRevealStep("daily_goal")}
             style={{
               backgroundColor: "#4ade80",
               color: "#0f1a0a",
@@ -644,7 +644,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       function commitGoal(goal: number) {
         setSelectedGoal(goal);
         saveDailyTargetSettings({ dailyGoal: goal });
-        onComplete(finalElo);
+        setRevealStep("connect");
       }
 
       function handleCustomCommit() {
@@ -979,9 +979,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           )}
         </div>
 
-        {/* Continue to daily goal CTA */}
+        {/* Continue → complete calibration */}
         <button
-          onClick={() => setRevealStep("daily_goal")}
+          onClick={() => onComplete(finalElo)}
           style={{
             backgroundColor: "#4ade80",
             color: "#0f1a0a",
@@ -1000,7 +1000,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         {!connected && (
           <div style={{ textAlign: "center", marginTop: "0.5rem" }}>
             <button
-              onClick={() => setRevealStep("daily_goal")}
+              onClick={() => onComplete(finalElo)}
               style={{
                 background: "none",
                 border: "none",

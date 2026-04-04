@@ -600,89 +600,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
         </div>
       )}
 
-      {/* CCT Panel — mobile only (desktop uses left column) */}
-      {cctMode && status === "solve" && !isDesktop && (
-        <div style={{
-          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
-          backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
-          borderRadius: "8px", padding: "0.75rem 1rem",
-          transition: "border-color 0.2s",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-            <div style={{ color: "#475569", fontSize: "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-              ⚡ CCT — Scan before you move
-            </div>
-            {!cctUnlocked && (
-              <div style={{ color: "#334155", fontSize: "0.7rem" }}>Board locked until done</div>
-            )}
-          </div>
-          {!cctUnlocked && !cctAllChecked && (
-            <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "0.6rem", lineHeight: 1.5 }}>
-              Before moving, mentally scan for: <span style={{ color: "#94a3b8" }}>Checks</span> your opponent can give, <span style={{ color: "#94a3b8" }}>Captures</span> available, and <span style={{ color: "#94a3b8" }}>Threats</span> they have. Confirm each below.
-            </div>
-          )}
-          {cctUnlocked || cctAllChecked ? (
-            <div style={{ color: "#4ade80", fontSize: "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.4rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-              <span style={{ fontSize: "1rem" }}>✓</span> Board unlocked — make your move
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.4rem" }}>
-                {(["checks", "captures", "threats"] as const).map((key) => {
-                  const checked = cctChecked[key];
-                  const label = key.charAt(0).toUpperCase() + key.slice(1);
-                  const descriptions: Record<string, string> = {
-                    checks: "Can opponent check me?",
-                    captures: "What can be captured?",
-                    threats: "What are they threatening?",
-                  };
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
-                      title={descriptions[key]}
-                      style={{
-                        flex: 1,
-                        padding: "0.5rem 0.4rem",
-                        borderRadius: "6px",
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        cursor: checked ? "default" : "pointer",
-                        backgroundColor: checked ? "rgba(74,222,128,0.12)" : "#13132b",
-                        color: checked ? "#4ade80" : "#e2e8f0",
-                        border: `1px solid ${checked ? "#4ade80" : "#3a4a6a"}`,
-                        transition: "all 0.15s",
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem",
-                      }}
-                    >
-                      <span style={{ fontSize: "1.1rem" }}>{checked ? "✓" : key === "checks" ? "♟" : key === "captures" ? "⚔" : "⚠"}</span>
-                      <span>{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ color: "#475569", fontSize: "0.7rem", textAlign: "center" }}>
-                Tap each after mentally scanning — board unlocks when all 3 are confirmed
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* CCT nudge — flashes when they try to move before completing CCT */}
-      {cctNudge && (
-        <div style={{
-          width: boardWidth, boxSizing: "border-box",
-          backgroundColor: "#1a1000", border: "2px solid #f59e0b",
-          borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
-          color: "#f59e0b", fontSize: "0.82rem", fontWeight: "700",
-        }}>
-          ⚡ Complete CCT first — tap Checks, Captures, and Threats on the left
-        </div>
-      )}
-
       {/* Board with overlay */}
-      <div style={{ position: "relative", width: boardWidth, height: boardWidth }}>
+      <div style={{ position: "relative", width: boardWidth, height: boardWidth, overflow: "hidden" }}>
         <ChessBoard
           fen={fen}
           onMove={handleMove}
@@ -752,6 +671,87 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
         </div>
       )}
       </div>
+
+      {/* CCT Panel — mobile only (desktop uses left column), stacked below board */}
+      {cctMode && status === "solve" && !isDesktop && (
+        <div style={{
+          width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
+          backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
+          borderRadius: "8px", padding: boardWidth < 360 ? "0.5rem 0.75rem" : "0.75rem 1rem",
+          transition: "border-color 0.2s",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+            <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.65rem" : "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              ⚡ CCT — Scan before you move
+            </div>
+            {!cctUnlocked && (
+              <div style={{ color: "#334155", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem" }}>Board locked</div>
+            )}
+          </div>
+          {!cctUnlocked && !cctAllChecked && (
+            <div style={{ color: "#64748b", fontSize: boardWidth < 360 ? "0.68rem" : "0.75rem", marginBottom: "0.5rem", lineHeight: 1.45 }}>
+              Scan for: <span style={{ color: "#94a3b8" }}>Checks</span>, <span style={{ color: "#94a3b8" }}>Captures</span>, <span style={{ color: "#94a3b8" }}>Threats</span>. Confirm each below.
+            </div>
+          )}
+          {cctUnlocked || cctAllChecked ? (
+            <div style={{ color: "#4ade80", fontSize: boardWidth < 360 ? "0.78rem" : "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+              <span>✓</span> Board unlocked — make your move
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: boardWidth < 360 ? "0.4rem" : "0.6rem", marginBottom: "0.35rem" }}>
+                {(["checks", "captures", "threats"] as const).map((key) => {
+                  const checked = cctChecked[key];
+                  const label = key.charAt(0).toUpperCase() + key.slice(1);
+                  const descriptions: Record<string, string> = {
+                    checks: "Can opponent check me?",
+                    captures: "What can be captured?",
+                    threats: "What are they threatening?",
+                  };
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => !checked && setCctChecked((prev) => ({ ...prev, [key]: true }))}
+                      title={descriptions[key]}
+                      style={{
+                        flex: 1,
+                        padding: boardWidth < 360 ? "0.35rem 0.25rem" : "0.5rem 0.4rem",
+                        borderRadius: "6px",
+                        fontSize: boardWidth < 360 ? "0.7rem" : "0.8rem",
+                        fontWeight: 600,
+                        cursor: checked ? "default" : "pointer",
+                        backgroundColor: checked ? "rgba(74,222,128,0.12)" : "#13132b",
+                        color: checked ? "#4ade80" : "#e2e8f0",
+                        border: `1px solid ${checked ? "#4ade80" : "#3a4a6a"}`,
+                        transition: "all 0.15s",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem",
+                      }}
+                    >
+                      <span style={{ fontSize: boardWidth < 360 ? "0.9rem" : "1.1rem" }}>{checked ? "✓" : key === "checks" ? "♟" : key === "captures" ? "⚔" : "⚠"}</span>
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem", textAlign: "center" }}>
+                Tap each after mentally scanning — board unlocks when all 3 confirmed
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* CCT nudge — flashes when they try to move before completing CCT */}
+      {cctNudge && (
+        <div style={{
+          width: boardWidth, boxSizing: "border-box",
+          backgroundColor: "#1a1000", border: "2px solid #f59e0b",
+          borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
+          color: "#f59e0b", fontSize: "0.82rem", fontWeight: "700",
+        }}>
+          ⚡ Complete CCT first — tap Checks, Captures, and Threats below
+        </div>
+      )}
 
       {/* Mobile only: puzzle info below board */}
       {!isDesktop && (
@@ -1046,6 +1046,7 @@ interface SessionCompleteProps {
   sessionUnder10s: number;
   sessionNewMastered: number;
   missedCount: number;
+  streak: number;
   onContinue: () => void;
   onReviewMissed: () => void;
 }
@@ -1059,34 +1060,62 @@ function SessionCompleteScreen({
   sessionUnder10s,
   sessionNewMastered,
   missedCount,
+  streak,
   onContinue,
   onReviewMissed,
 }: SessionCompleteProps) {
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {/* Summary card — celebratory */}
       <div style={{
-        backgroundColor: "#13132b", border: "1px solid #4ade80",
+        backgroundColor: "#0d2218", border: "1px solid #4ade80",
         borderRadius: "16px", padding: "2rem", textAlign: "center",
       }}>
-        <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>✓</div>
-        <h2 style={{ color: "#4ade80", fontSize: "1.3rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
-          Session complete!
+        <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>✓</div>
+        <h2 style={{ color: "#4ade80", fontSize: "1.4rem", fontWeight: "900", margin: "0 0 1.25rem" }}>
+          Session Complete!
         </h2>
-        <p style={{ color: "#94a3b8", fontSize: "0.9rem", margin: 0 }}>
-          {dailyCompleted}/{dailyGoal} puzzles today
-        </p>
+        {/* Big stats row */}
+        <div style={{ display: "flex", justifyContent: "center", gap: "1.75rem", marginBottom: "1rem" }}>
+          <div>
+            <div style={{ color: "#e2e8f0", fontSize: "2.25rem", fontWeight: "900", lineHeight: 1 }}>{sessionTotal}</div>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.25rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>puzzles</div>
+          </div>
+          <div style={{ width: "1px", backgroundColor: "#1a3a2a", alignSelf: "stretch" }} />
+          <div>
+            <div style={{ color: accuracy >= 70 ? "#4ade80" : accuracy >= 50 ? "#f59e0b" : "#ef4444", fontSize: "2.25rem", fontWeight: "900", lineHeight: 1 }}>{accuracy}%</div>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.25rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>accuracy</div>
+          </div>
+          <div style={{ width: "1px", backgroundColor: "#1a3a2a", alignSelf: "stretch" }} />
+          <div>
+            <div style={{ color: "#4ade80", fontSize: "2.25rem", fontWeight: "900", lineHeight: 1 }}>+{sessionNewMastered}</div>
+            <div style={{ color: "#64748b", fontSize: "0.72rem", marginTop: "0.25rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>mastered</div>
+          </div>
+        </div>
+        <div style={{ color: "#475569", fontSize: "0.82rem", marginBottom: streak > 1 ? "0.75rem" : 0 }}>
+          {sessionCorrect}/{sessionTotal} correct · {dailyCompleted}/{dailyGoal} daily goal
+        </div>
+        {streak > 1 && (
+          <div style={{
+            display: "inline-block",
+            backgroundColor: "#1a1000",
+            border: "1px solid #f97316",
+            borderRadius: "20px",
+            padding: "0.3rem 1rem",
+            color: "#f97316",
+            fontSize: "0.88rem",
+            fontWeight: "700",
+          }}>
+            🔥 Day {streak} streak
+          </div>
+        )}
       </div>
 
-      {/* Stats grid */}
-      <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "16px", padding: "1.5rem" }}>
-        <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "1rem" }}>
-          Session Stats
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.75rem" }}>
+      {/* Secondary stats */}
+      <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "16px", padding: "1.25rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.65rem" }}>
           {[
-            { label: "Mastered today", value: `+${sessionNewMastered}`, color: "#4ade80" },
-            { label: "Accuracy", value: `${accuracy}%`, color: accuracy >= 70 ? "#4ade80" : accuracy >= 50 ? "#f59e0b" : "#ef4444" },
             { label: "Under 10s", value: `${sessionUnder10s}/${sessionTotal}`, color: "#60a5fa" },
             { label: "Set progress", value: `${masteredCount}/100`, color: "#e2e8f0" },
           ].map(({ label, value, color }) => (
@@ -1095,7 +1124,7 @@ function SessionCompleteScreen({
               borderRadius: "10px", padding: "0.75rem", textAlign: "center",
             }}>
               <div style={{ color: "#475569", fontSize: "0.7rem", textTransform: "uppercase", marginBottom: "0.3rem" }}>{label}</div>
-              <div style={{ color, fontSize: "1.3rem", fontWeight: "bold" }}>{value}</div>
+              <div style={{ color, fontSize: "1.2rem", fontWeight: "bold" }}>{value}</div>
             </div>
           ))}
         </div>
@@ -1580,6 +1609,7 @@ export default function TrainingSession() {
         sessionUnder10s={sessionUnder10s}
         sessionNewMastered={sessionNewMastered}
         missedCount={sessionMissedPuzzles.length}
+        streak={streak}
         onContinue={handleContinue}
         onReviewMissed={() => {
           if (sessionMissedPuzzles.length === 0) return;

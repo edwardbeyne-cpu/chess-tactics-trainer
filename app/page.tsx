@@ -1,6 +1,7 @@
 import Link from "next/link";
 import MarketingNav from "@/components/MarketingNav";
 import PricingCard from "@/components/PricingCard";
+import TryAPuzzle from "@/components/TryAPuzzle";
 
 const features = [
   {
@@ -152,6 +153,9 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* Try a puzzle */}
+      <TryAPuzzle />
 
       {/* Feature cards */}
       <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "5rem 2rem" }}>
