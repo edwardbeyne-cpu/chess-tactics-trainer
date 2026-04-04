@@ -374,20 +374,24 @@ export default function HomePage() {
         <p style={{ color: "#94a3b8", marginBottom: "2rem" }}>
           Join thousands of players training smarter with spaced repetition.
         </p>
-        <Link
-          href="/app/calibration"
-          style={{
-            backgroundColor: "#4ade80",
-            color: "#0f0f1a",
-            padding: "1rem 2.5rem",
-            borderRadius: "10px",
-            textDecoration: "none",
-            fontWeight: "bold",
-            fontSize: "1.1rem",
-          }}
-        >
-          Start Free — No credit card required
-        </Link>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
+          <Link
+            href="/app/calibration"
+            style={{
+              backgroundColor: "#4ade80",
+              color: "#0f0f1a",
+              padding: "1rem 2.5rem",
+              borderRadius: "10px",
+              textDecoration: "none",
+              fontWeight: "bold",
+              fontSize: "1.1rem",
+              display: "inline-block",
+            }}
+          >
+            Start Free →
+          </Link>
+          <span style={{ color: "#64748b", fontSize: "0.82rem" }}>No credit card required</span>
+        </div>
       </section>
 
       {/* Footer */}
