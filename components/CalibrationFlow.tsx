@@ -1143,9 +1143,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     );
   }
 
-  // Orientation is fixed at puzzle load time — never recompute from currentFen mid-puzzle
-  // (prevents board flip when wrong move changes whose turn it is)
-  const orientation = getOrientation(currentPuzzle?.fen || currentFen);
+  // Orientation: player is the side AFTER opponent's first move (moves[0])
+  // Use getPlayerOrientation on the original puzzle FEN — never recompute mid-puzzle
+  const orientation = currentPuzzle ? getPlayerOrientation(currentPuzzle) : getOrientation(currentFen);
   const bw = boardWidth;
 
   // ── Solving screen ─────────────────────────────────────────────────────────
