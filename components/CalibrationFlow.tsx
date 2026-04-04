@@ -633,7 +633,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
     // ── Sub-step: daily goal commitment ────────────────────────────────────
     if (revealStep === "daily_goal") {
-      const PRESET_GOALS = [5, 10, 20];
+      const PRESET_GOALS = [10, 20, 30];
 
       function commitGoal(goal: number) {
         setSelectedGoal(goal);
@@ -644,7 +644,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       function handleCustomCommit() {
         const val = parseInt(customGoalInput, 10);
         if (!isNaN(val) && val >= 1) {
-          commitGoal(Math.min(20, val));
+          commitGoal(Math.min(30, val));
         }
       }
 
@@ -661,9 +661,9 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
           {(() => {
             const TIER_LABELS: Record<number, { label: string; sub: string }> = {
-              5:  { label: "Casual",     sub: "5 puzzles / day" },
-              10: { label: "Serious",    sub: "10 puzzles / day" },
-              20: { label: "Aggressive", sub: "20 puzzles / day" },
+              10: { label: "Casual",     sub: "10 puzzles / day" },
+              20: { label: "Serious",    sub: "20 puzzles / day" },
+              30: { label: "Aggressive", sub: "30 puzzles / day" },
             };
             return (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem", marginBottom: "1rem" }}>

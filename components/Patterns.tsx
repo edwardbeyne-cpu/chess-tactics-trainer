@@ -532,34 +532,54 @@ export default function Patterns() {
       {/* Empty state — shown when no patterns have been started yet */}
       {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
         <div style={{
-          backgroundColor: "#1a1a2e",
-          border: "1px solid #2e3a5c",
+          backgroundColor: "#1a1508",
+          border: "2px solid #f59e0b",
           borderRadius: "16px",
-          padding: "3rem 2rem",
+          padding: "2.5rem 2rem",
           textAlign: "center",
           marginBottom: "2rem",
+          boxShadow: "0 4px 12px rgba(245, 158, 11, 0.1)",
         }}>
-          <div style={{ color: "#e2e8f0", fontSize: "1.2rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
-            No patterns unlocked yet
+          <div style={{ color: "#f59e0b", fontSize: "1.4rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+            👆 Pick any pattern below to start drilling
           </div>
-          <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: "420px", margin: "0 auto 1.75rem" }}>
-            Complete your first training session to start tracking your pattern mastery. Your weakest patterns will appear here so you can drill them specifically.
+          <p style={{ color: "#94a3b8", fontSize: "0.95rem", lineHeight: 1.7, maxWidth: "480px", margin: "0 auto 1.5rem" }}>
+            Start with Fork or Pin — the most common tactical themes. Choose any pattern to begin building your tactical intuition.
           </p>
-          <a
-            href="/app/training"
-            style={{
-              display: "inline-block",
-              backgroundColor: "#f97316",
-              color: "#0f0f1a",
-              borderRadius: "10px",
-              padding: "0.75rem 1.75rem",
-              fontWeight: "bold",
-              fontSize: "0.95rem",
-              textDecoration: "none",
-            }}
-          >
-            Start Training →
-          </a>
+          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <a
+              href="/app/patterns/fork"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#f59e0b",
+                color: "#0f0f1a",
+                borderRadius: "10px",
+                padding: "0.75rem 1.5rem",
+                fontWeight: "bold",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+                border: "1px solid #d97706",
+              }}
+            >
+              Start with Fork →
+            </a>
+            <a
+              href="/app/patterns/pin"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#2e3a5c",
+                color: "#e2e8f0",
+                borderRadius: "10px",
+                padding: "0.75rem 1.5rem",
+                fontWeight: "bold",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+                border: "1px solid #475569",
+              }}
+            >
+              Try Pin →
+            </a>
+          </div>
         </div>
       )}
 

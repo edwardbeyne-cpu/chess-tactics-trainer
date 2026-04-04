@@ -17,11 +17,20 @@ export default function TryAPuzzle() {
   const [status, setStatus] = useState<"idle" | "solved" | "wrong">("idle");
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
   const [showHint, setShowHint] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
-    if (status !== "idle") { setShowHint(false); return; }
-    const t = setTimeout(() => setShowHint(true), 3000);
-    return () => clearTimeout(t);
+    if (status !== "idle") { 
+      setShowHint(false); 
+      setShowTooltip(false);
+      return; 
+    }
+    const hintTimer = setTimeout(() => setShowHint(true), 2000);
+    const tooltipTimer = setTimeout(() => setShowTooltip(true), 2000);
+    return () => {
+      clearTimeout(hintTimer);
+      clearTimeout(tooltipTimer);
+    };
   }, [status]);
 
   function handleMove(from: string, to: string): boolean {
@@ -38,6 +47,13 @@ export default function TryAPuzzle() {
 
   return (
     <section style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 2rem 5rem" }}>
+      <style jsx>{`
+        @keyframes pulseGlow {
+          0% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0.7); }
+          70% { box-shadow: inset 0 0 0 4px rgba(245, 158, 11, 0); }
+          100% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+      `}</style>
       <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
           Try a puzzle right now
@@ -53,6 +69,31 @@ export default function TryAPuzzle() {
         alignItems: "center",
         gap: "1.5rem",
       }}>
+        {/* Tooltip */}
+        {showTooltip && status === "idle" && (
+          <div style={{
+            backgroundColor: "#1a1508",
+            border: "1px solid #f59e0b",
+            borderRadius: "8px",
+            padding: "0.75rem 1rem",
+            color: "#f59e0b",
+            fontSize: "0.85rem",
+            fontWeight: "600",
+            opacity: 0,
+            animation: "fadeIn 0.3s ease forwards",
+            position: "relative",
+            marginBottom: "0.5rem",
+          }}>
+            💡 Try moving the Rook
+            <style jsx>{`
+              @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+              }
+            `}</style>
+          </div>
+        )}
+
         {/* Board */}
         <div style={{
           backgroundColor: "#13132b",
@@ -60,16 +101,47 @@ export default function TryAPuzzle() {
           borderRadius: "16px",
           padding: "1rem",
           transition: "border-color 0.2s",
+          position: "relative",
         }}>
-          <ChessBoard
-            fen={DEMO_PUZZLE.fen}
-            onMove={handleMove}
-            lastMove={lastMove}
-            draggable={status !== "solved"}
-            boardWidth={Math.min(380, typeof window !== "undefined" ? window.innerWidth - 64 : 380)}
-            orientation={DEMO_PUZZLE.orientation}
-            showCoordinates={false}
-          />
+          <div style={{
+            position: "relative",
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}>
+            {showHint && status === "idle" && (
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}>
+                {/* Calculate position for e1 square (assuming standard board layout) */}
+                <div style={{
+                  position: "absolute",
+                  width: "12.5%",  // 1/8 of board
+                  height: "12.5%", // 1/8 of board
+                  top: "87.5%",    // e1 is on 1st rank (bottom for white)
+                  left: "62.5%",   // e file is 5th file (0-indexed 4/7 = 57.14%, but using 62.5% for visual centering)
+                  border: "2px solid #f59e0b",
+                  borderRadius: "2px",
+                  animation: "pulseGlow 1.5s infinite",
+                  boxShadow: "inset 0 0 0 2px #f59e0b",
+                }} />
+              </div>
+            )}
+            <ChessBoard
+              fen={DEMO_PUZZLE.fen}
+              onMove={handleMove}
+              lastMove={lastMove}
+              draggable={status !== "solved" && status !== "wrong"}
+              boardWidth={Math.min(380, typeof window !== "undefined" ? window.innerWidth - 64 : 380)}
+              orientation={DEMO_PUZZLE.orientation}
+              showCoordinates={false}
+            />
+          </div>
         </div>
 
         {/* Feedback */}

@@ -212,7 +212,7 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   const targetELO = calibrationRating + (setNumber - 1) * 50;
   // Blunder puzzles removed from training set — standalone feature only
   const blunderCount = 0;
-  const SET_SIZE = Math.min(20, Math.max(5, getDailyTargetSettings().dailyGoal));
+  const SET_SIZE = Math.min(30, Math.max(5, getDailyTargetSettings().dailyGoal));
   const newTacticCount = Math.max(0, SET_SIZE - carriedPuzzles.length);
 
   const usedIds = new Set<string>();
