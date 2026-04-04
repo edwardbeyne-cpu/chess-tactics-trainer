@@ -27,14 +27,50 @@ function parsePgnMoves(pgn: string): string[] {
 }
 
 function detectMissedTacticSimple(fen: string): string | null {
-  const c = new Chess(fen);
-  const moves = c.moves({ verbose: true });
-  for (const m of moves) {
-    const clone = new Chess(fen);
-    clone.move(m);
-    const attacks = clone.moves({ verbose: true }).filter(x => x.captured);
-    if (attacks.length >= 2) return "fork";
-  }
+  try {
+    const c = new Chess(fen);
+    const moves = c.moves({ verbose: true });
+
+    for (const m of moves) {
+      const clone = new Chess(fen);
+      clone.move(m);
+      const responses = clone.moves({ verbose: true });
+
+      // Fork: a single piece attacks 2+ opponent pieces after moving
+      const attacks = responses.filter(x => x.captured);
+      if (attacks.length >= 2) return "fork";
+
+      // Capture available (missed tactic opportunity)
+      if (m.captured) {
+        // Check if it's a winning capture (captures higher value piece)
+        const pieceValues: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+        const capturedVal = pieceValues[m.captured] ?? 0;
+        const attackerVal = pieceValues[m.piece] ?? 0;
+        if (capturedVal > attackerVal) return "winning capture";
+        if (capturedVal === attackerVal) return "exchange";
+      }
+
+      // Check if move gives check
+      if (clone.inCheck()) {
+        // Is it also capturing? Discovered attack
+        if (m.captured) return "discovered attack";
+        return "check";
+      }
+
+      // Back rank weakness: king on back rank with no escape
+      const oppKingPos = responses.find(r => r.piece === "k");
+      if (!oppKingPos && clone.inCheck()) return "back rank mate";
+    }
+
+    // Pin: a piece is pinned (can't move without exposing king)
+    const pinCandidates = moves.filter(m => {
+      const clone = new Chess(fen);
+      try { clone.move(m); } catch { return false; }
+      return clone.inCheck();
+    });
+    if (pinCandidates.length > 0) return "pin";
+
+  } catch { /* skip */ }
   return null;
 }
 

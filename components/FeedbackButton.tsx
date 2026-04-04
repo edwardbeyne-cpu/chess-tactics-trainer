@@ -122,8 +122,8 @@ export default function FeedbackButton() {
         onClick={() => setOpen(true)}
         style={{
           position: "fixed",
-          bottom: "1.5rem",
-          right: "1.5rem",
+          bottom: "5rem",
+          right: "1rem",
           backgroundColor: "#1a1a2e",
           border: "1px solid #2e3a5c",
           borderRadius: "24px",
