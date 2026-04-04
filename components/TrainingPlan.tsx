@@ -193,16 +193,185 @@ function formatDate(dateStr: string): string {
   }
 }
 
+// ── Session stats ──────────────────────────────────────────────────────────
+interface SessionStats {
+  correct: number;
+  total: number;
+  mastered: number;
+  date: string;
+  timestamp?: string;
+}
+
+function getSessionStats(): SessionStats | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("ctt_session_stats");
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionStats;
+  } catch {
+    return null;
+  }
+}
+
+function isSessionWithin4Hours(stats: SessionStats): boolean {
+  if (stats.timestamp) {
+    const sessionTime = new Date(stats.timestamp).getTime();
+    return Date.now() - sessionTime < 4 * 60 * 60 * 1000;
+  }
+  // No timestamp — treat as recent if date is today
+  return stats.date === getTodayKey();
+}
+
 // ── Check if trained today ─────────────────────────────────────────────────
 function hasTrainedToday(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const today = getTodayKey();
     const log = JSON.parse(localStorage.getItem(ACTIVITY_LOG_KEY) || "[]") as string[];
-    return log.includes(today);
+    if (log.includes(today)) return true;
+    const stats = getSessionStats();
+    if (stats?.date === today) return true;
+    return false;
   } catch {
     return false;
   }
+}
+
+// ── Status Banner ──────────────────────────────────────────────────────────
+function StatusBanner({
+  streak,
+  trainedToday,
+  masteryDailyCompleted,
+  dailyGoal,
+  masterySetSize,
+}: {
+  streak: number;
+  trainedToday: boolean;
+  masteryDailyCompleted: number;
+  dailyGoal: number;
+  masterySetSize: number;
+}) {
+  const today = getTodayKey();
+  const sessionStats = getSessionStats();
+  const goalMet = masteryDailyCompleted >= dailyGoal && dailyGoal > 0;
+  const sessionIsRecent = sessionStats && isSessionWithin4Hours(sessionStats);
+  const sessionWasToday = sessionStats?.date === today;
+
+  // STATE 1 — Streak at risk
+  if (streak >= 2 && !trainedToday) {
+    return (
+      <div style={{
+        backgroundColor: "#1c0f00",
+        border: "2px solid #f97316",
+        borderRadius: "14px",
+        padding: "1.25rem 1.5rem",
+      }}>
+        <div style={{ color: "#fb923c", fontWeight: 700, fontSize: "1rem", marginBottom: "0.35rem" }}>
+          🔥 Day {streak} streak — train today to keep it alive
+        </div>
+        <div style={{ color: "#92400e", fontSize: "0.82rem", marginBottom: "1rem" }}>
+          Your {streak}-day streak resets at midnight. 10 puzzles, ~15 min.
+        </div>
+        <a
+          href="/app/training"
+          style={{
+            display: "inline-block",
+            backgroundColor: "#f97316",
+            color: "#fff",
+            fontWeight: 700,
+            fontSize: "0.9rem",
+            padding: "0.65rem 1.4rem",
+            borderRadius: "8px",
+            textDecoration: "none",
+          }}
+        >
+          Start Training Now →
+        </a>
+      </div>
+    );
+  }
+
+  // STATE 2 — Daily goal complete
+  if (goalMet) {
+    return (
+      <div style={{
+        backgroundColor: "#0a1a0f",
+        border: "1px solid #4ade80",
+        borderRadius: "12px",
+        padding: "0.85rem 1.25rem",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: "0.5rem",
+      }}>
+        <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "0.88rem" }}>
+          ✅ Daily goal complete — {dailyGoal} puzzles done
+        </div>
+        <a
+          href="/app/training"
+          style={{ color: "#4ade80", fontSize: "0.8rem", textDecoration: "none" }}
+        >
+          Want more? Keep going →
+        </a>
+      </div>
+    );
+  }
+
+  // STATE 3 — Post-session celebration (trained today, within 4 hours)
+  if (trainedToday && (sessionIsRecent || sessionWasToday) && sessionStats) {
+    const accuracy = Math.round((sessionStats.correct / Math.max(1, sessionStats.total)) * 100);
+    return (
+      <div style={{
+        backgroundColor: "#0a1a0f",
+        border: "1px solid #22c55e",
+        borderRadius: "12px",
+        padding: "1rem 1.25rem",
+      }}>
+        <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.3rem" }}>
+          ✅ Great session — Day {streak} 🔥
+        </div>
+        <div style={{ color: "#64748b", fontSize: "0.82rem", marginBottom: "0.4rem" }}>
+          {sessionStats.total} puzzles | {accuracy}% accuracy | {sessionStats.mastered} mastered today
+        </div>
+        <div style={{ color: "#475569", fontSize: "0.78rem" }}>
+          Come back tomorrow to keep your streak going.
+        </div>
+      </div>
+    );
+  }
+
+  // STATE 4 — Call to action (default)
+  return (
+    <div style={{
+      backgroundColor: "#13132b",
+      border: "1px solid #2e3a5c",
+      borderRadius: "14px",
+      padding: "1.25rem 1.5rem",
+    }}>
+      <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.3rem" }}>
+        ♟️ Ready to train?
+      </div>
+      <div style={{ color: "#64748b", fontSize: "0.82rem", marginBottom: "1rem" }}>
+        Your {masterySetSize}-puzzle set is waiting. ~15 minutes.
+      </div>
+      <a
+        href="/app/training"
+        style={{
+          display: "inline-block",
+          backgroundColor: "#f97316",
+          color: "#fff",
+          fontWeight: 700,
+          fontSize: "0.88rem",
+          padding: "0.6rem 1.25rem",
+          borderRadius: "8px",
+          textDecoration: "none",
+        }}
+      >
+        Start Training →
+      </a>
+    </div>
+  );
 }
 
 // ── Progress Bar ───────────────────────────────────────────────────────────
@@ -454,6 +623,9 @@ export default function TrainingPlan() {
   const [masterySetSize, setMasterySetSize] = useState(20);
   const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
 
+  // Session stats (for post-session banner)
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+
   // CCT upgrade nudge state
   const [cctUpgradeNudgeDismissed, setCctUpgradeNudgeDismissed] = useState(false);
 
@@ -490,6 +662,7 @@ export default function TrainingPlan() {
     setTrainedToday(hasTrainedToday());
     setDailyGoal(getDailyTargetSettings().dailyGoal);
     setTodaySolved(getTodaySolvedCount());
+    setSessionStats(getSessionStats());
 
     // Sprint 36: Mastery set stats
     const masterySet = getCurrentMasterySet();
@@ -614,6 +787,17 @@ export default function TrainingPlan() {
       `}</style>
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* ── Status Banner ─────────────────────────────────────────────────── */}
+        {masterySetNumber !== null && (
+          <StatusBanner
+            streak={streakDays}
+            trainedToday={trainedToday}
+            masteryDailyCompleted={masteryDailyCompleted}
+            dailyGoal={dailyGoal}
+            masterySetSize={masterySetSize}
+          />
+        )}
 
         {/* ── Review Day Nudge ───────────────────────────────────────────────── */}
         {reviewDueCount >= 15 && !reviewNudgeDismissed && (
@@ -1090,6 +1274,20 @@ export default function TrainingPlan() {
                   transition: "width 0.4s ease",
                 }} />
               </div>
+              {/* Pace estimate */}
+              {(() => {
+                const daysLeft = Math.ceil((masterySetSize - masteredCount) / Math.max(1, dailyGoal));
+                const paceText = daysLeft === 0
+                  ? "Set complete! 🎉"
+                  : daysLeft === 1
+                    ? "Almost done — 1 day left"
+                    : `At ${dailyGoal} puzzles/day — you finish this set in ${daysLeft} days`;
+                return (
+                  <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.4rem" }}>
+                    {paceText}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Daily goal */}
