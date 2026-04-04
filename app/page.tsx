@@ -149,7 +149,7 @@ export default function HomePage() {
           {[
             { val: "3M+", label: "Puzzles, 800–2800" },
             { val: "28", label: "Tactical patterns" },
-            { val: "🧠", label: "Adaptive learning" },
+            { val: "Adaptive", label: "Learning engine" },
           ].map((s) => (
             <div key={s.val} style={{ textAlign: "center" }}>
               <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{s.val}</div>
