@@ -18,6 +18,7 @@ interface ChessBoardProps {
   boardWidth?: number;
   orientation?: "white" | "black";
   disableAnimation?: boolean;
+  showCoordinates?: boolean;
 }
 
 function getMovable(fen: string, draggable: boolean) {
@@ -78,6 +79,7 @@ export default function ChessBoard({
   boardWidth = 480,
   orientation = "white",
   disableAnimation = false,
+  showCoordinates = true,
 }: ChessBoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cgRef = useRef<Api | null>(null);
@@ -148,6 +150,7 @@ export default function ChessBoard({
       fen: fenRef.current,
       orientation: orientationRef.current,
       turnColor: movable.turnColor,
+      coordinates: showCoordinates,
       movable: {
         free: false,
         color: movable.color,

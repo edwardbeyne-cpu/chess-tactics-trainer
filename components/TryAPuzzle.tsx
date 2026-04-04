@@ -68,6 +68,7 @@ export default function TryAPuzzle() {
             draggable={status !== "solved"}
             boardWidth={Math.min(380, typeof window !== "undefined" ? window.innerWidth - 64 : 380)}
             orientation={DEMO_PUZZLE.orientation}
+            showCoordinates={false}
           />
         </div>
 
