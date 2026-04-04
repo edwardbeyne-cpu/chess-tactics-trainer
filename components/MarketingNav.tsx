@@ -59,6 +59,18 @@ export default function MarketingNav() {
           Pricing
         </Link>
         <Link
+          href="/blog"
+          style={{
+            color: pathname === "/blog" || pathname.startsWith("/blog/") ? "#e2e8f0" : "#94a3b8",
+            textDecoration: "none",
+            fontSize: "0.9rem",
+            fontWeight: pathname === "/blog" || pathname.startsWith("/blog/") ? "600" : "normal",
+            padding: "0.5rem 0.85rem",
+          }}
+        >
+          Blog
+        </Link>
+        <Link
           href="/app/calibration"
           style={{
             backgroundColor: "#4ade80",
