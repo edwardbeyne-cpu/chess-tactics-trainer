@@ -146,37 +146,102 @@ function GameStatsSection() {
   if (!username) {
     return (
       <>
-        <div style={{
-          backgroundColor: "#1a1a2e",
-          border: "1px solid #2e3a5c",
-          borderRadius: "12px",
-          padding: "2rem",
-          marginBottom: "1.5rem",
-          textAlign: "center",
-        }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>📊</div>
-          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
-            Connect Chess.com to unlock your Game Stats
-          </h2>
-          <p style={{ color: "#64748b", fontSize: "0.88rem", lineHeight: 1.7, maxWidth: "480px", margin: "0 auto 1.5rem" }}>
-            We analyze your last 50 games to find your tactical blind spots. Once connected, this section shows your win rate, weak patterns, and which phase of the game costs you the most rating points.
-          </p>
-          <button
-            onClick={() => setShowConnectModal(true)}
-            style={{
-              backgroundColor: "#4ade80",
-              color: "#0f0f1a",
-              border: "none",
-              borderRadius: "10px",
-              padding: "0.75rem 1.75rem",
-              fontWeight: "bold",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-            }}
-          >
-            Connect Chess.com →
-          </button>
+        <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+          {/* Mock data preview — blurred */}
+          <div style={{
+            backgroundColor: "#1a1a2e",
+            border: "1px solid #2e3a5c",
+            borderRadius: "12px",
+            padding: "1.5rem",
+            filter: "blur(4px)",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}>
+            <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 1.25rem" }}>
+              Game Stats
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
+              {/* Win Rate card */}
+              <div style={{ backgroundColor: "#0f0f1a", border: "1px solid #2e3a5c", borderRadius: "10px", padding: "1rem" }}>
+                <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.4rem" }}>Win Rate</div>
+                <div style={{ color: "#4ade80", fontSize: "1.6rem", fontWeight: "bold", marginBottom: "0.5rem" }}>68%</div>
+                <div style={{ display: "flex", gap: "3px", alignItems: "flex-end", height: "28px" }}>
+                  {[14, 10, 16, 12, 18, 14, 20].map((h, i) => (
+                    <div key={i} style={{ flex: 1, backgroundColor: i === 6 ? "#4ade80" : "#22543d", borderRadius: "2px", height: `${h}px` }} />
+                  ))}
+                </div>
+              </div>
+              {/* Top Weak Pattern card */}
+              <div style={{ backgroundColor: "#0f0f1a", border: "1px solid #2e3a5c", borderRadius: "10px", padding: "1rem" }}>
+                <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.4rem" }}>Top Weak Pattern</div>
+                <div style={{ color: "#fb923c", fontSize: "1.2rem", fontWeight: "bold", marginBottom: "0.6rem" }}>Fork</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ flex: 1, height: "8px", borderRadius: "4px", backgroundColor: "#1e293b", overflow: "hidden" }}>
+                    <div style={{ width: "72%", height: "100%", backgroundColor: "#fb923c", borderRadius: "4px" }} />
+                  </div>
+                  <div style={{ color: "#fb923c", fontSize: "0.75rem", minWidth: "2rem" }}>72%</div>
+                </div>
+              </div>
+              {/* Most Errors In card */}
+              <div style={{ backgroundColor: "#0f0f1a", border: "1px solid #2e3a5c", borderRadius: "10px", padding: "1rem" }}>
+                <div style={{ color: "#94a3b8", fontSize: "0.75rem", marginBottom: "0.4rem" }}>Most Errors In</div>
+                <div style={{ color: "#f87171", fontSize: "1.2rem", fontWeight: "bold", marginBottom: "0.6rem" }}>Middlegame</div>
+                <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                  {[{ label: "Open", w: "20%", color: "#475569" }, { label: "Mid", w: "55%", color: "#f87171" }, { label: "End", w: "25%", color: "#475569" }].map(({ label, w, color }) => (
+                    <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "3px", flex: label === "Mid" ? 2 : 1 }}>
+                      <div style={{ width: "100%", height: "8px", backgroundColor: color, borderRadius: "3px" }} />
+                      <div style={{ color: "#64748b", fontSize: "0.65rem" }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Frosted glass unlock overlay */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "12px",
+          }}>
+            <div style={{
+              backgroundColor: "rgba(15, 15, 26, 0.85)",
+              backdropFilter: "blur(2px)",
+              border: "1px solid #2e3a5c",
+              borderRadius: "12px",
+              padding: "1.5rem 2rem",
+              textAlign: "center",
+              maxWidth: "340px",
+            }}>
+              <div style={{ fontSize: "1.8rem", marginBottom: "0.6rem" }}>🔒</div>
+              <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+                Connect Chess.com to unlock your Game Stats
+              </h2>
+              <p style={{ color: "#64748b", fontSize: "0.82rem", lineHeight: 1.6, margin: "0 0 1.1rem" }}>
+                See your win rate, weak patterns, and where you lose rating points.
+              </p>
+              <button
+                onClick={() => setShowConnectModal(true)}
+                style={{
+                  backgroundColor: "#4ade80",
+                  color: "#0f0f1a",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "0.65rem 1.5rem",
+                  fontWeight: "bold",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                }}
+              >
+                Connect Chess.com →
+              </button>
+            </div>
+          </div>
         </div>
+
         {showConnectModal && (
           <ConnectModal
             onClose={() => setShowConnectModal(false)}
