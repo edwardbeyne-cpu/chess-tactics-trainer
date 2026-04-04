@@ -37,6 +37,9 @@ export default function AppNav() {
     };
   }, []);
 
+  // Hide nav on calibration page — it's a full-screen flow
+  if (pathname === "/app/calibration") return null;
+
   return (
     <nav
       style={{

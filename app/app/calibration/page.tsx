@@ -63,7 +63,8 @@ export default function CalibrationPage() {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          padding: "1rem 1rem",
+          padding: "0 1rem",
+          marginTop: "-2rem", // cancel app layout padding
         }}
       >
         <div
@@ -73,7 +74,7 @@ export default function CalibrationPage() {
             textAlign: "center",
           }}
         >
-          <div style={{ fontSize: "clamp(7rem, 15vw, 12rem)", marginBottom: "1.5rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
+          <div style={{ fontSize: "clamp(4rem, 15vw, 8rem)", marginBottom: "1rem", color: "#4ade80", lineHeight: 1 }}>♔</div>
           <h1
             style={{
               color: "#e2e8f0",
