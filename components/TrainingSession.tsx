@@ -433,12 +433,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const cctAnyClickedRef = useRef(false); // tracks if user clicked any CCT button before moving
   const amberShownRef = useRef(false); // only show amber nudge once per puzzle
 
-  // First-session tutorial modal (one-time, not shown in "off" mode)
-  const [showTutorial, setShowTutorial] = useState(() => {
-    if (typeof window === "undefined") return false;
-    if (getCCTMode() === "off") return false;
-    return !localStorage.getItem("ctt_cct_tutorial_seen");
-  });
+  // First-wrong-move CCT slide-up tip (one-time, not shown in "off" mode)
+  const [showCCTSlideUp, setShowCCTSlideUp] = useState(false);
 
   useEffect(() => {
     if (cctMode === "enforced" && cctAllChecked && !cctUnlocked) {
@@ -505,6 +501,14 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
           resultCalledRef.current = true;
           onResult(false);
         }
+      }
+      // Show CCT slide-up tip on first wrong move if tutorial not yet seen
+      if (cctMode !== "off") {
+        try {
+          if (!localStorage.getItem("ctt_cct_tutorial_seen")) {
+            setShowCCTSlideUp(true);
+          }
+        } catch { /* ignore */ }
       }
       return false;
     }
@@ -807,44 +811,36 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
         </div>
       )}
 
-      {/* First-session tutorial modal — one-time overlay */}
-      {showTutorial && (
+      {/* CCT slide-up tip — shown after first wrong move, non-blocking */}
+      {showCCTSlideUp && (
         <div style={{
-          position: "fixed", inset: 0, zIndex: 200,
-          backgroundColor: "rgba(5,8,20,0.85)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          padding: "1.5rem",
+          width: boardWidth, boxSizing: "border-box",
+          backgroundColor: "#0d1a2a", border: "1px solid #2e75b6",
+          borderRadius: "10px", padding: "0.85rem 1rem",
+          display: "flex", alignItems: "flex-start", gap: "0.75rem",
         }}>
-          <div style={{
-            backgroundColor: "#13132b", border: "1px solid #2e75b6",
-            borderRadius: "16px", padding: "2rem", maxWidth: "380px", width: "100%",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
-          }}>
-            <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>⚡</div>
-            <h3 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "800", margin: "0 0 0.75rem" }}>
-              Meet your secret weapon
-            </h3>
-            <p style={{ color: "#94a3b8", fontSize: "0.88rem", lineHeight: 1.65, margin: "0 0 1.5rem" }}>
-              Before every move, top players scan for <span style={{ color: "#e2e8f0" }}>Checks</span>,{" "}
-              <span style={{ color: "#e2e8f0" }}>Captures</span>, and{" "}
-              <span style={{ color: "#e2e8f0" }}>Threats</span>. It takes 3 seconds and catches the tactics most players miss.
-              Try clicking each button before you move.
-            </p>
-            <button
-              onClick={() => {
-                try { localStorage.setItem("ctt_cct_tutorial_seen", "true"); } catch { /* ignore */ }
-                setShowTutorial(false);
-              }}
-              style={{
-                width: "100%", padding: "0.75rem",
-                backgroundColor: "#2e75b6", border: "none",
-                borderRadius: "8px", color: "white",
-                fontSize: "0.9rem", fontWeight: "700", cursor: "pointer",
-              }}
-            >
-              Got it →
-            </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: "#93c5fd", fontSize: "0.82rem", lineHeight: 1.6 }}>
+              💡 Top players scan <span style={{ color: "#e2e8f0" }}>Checks</span>,{" "}
+              <span style={{ color: "#e2e8f0" }}>Captures</span> &amp;{" "}
+              <span style={{ color: "#e2e8f0" }}>Threats</span> before moving — it catches patterns like this one.
+              Try the CCT buttons above before your next move.
+            </div>
           </div>
+          <button
+            onClick={() => {
+              try { localStorage.setItem("ctt_cct_tutorial_seen", "true"); } catch { /* ignore */ }
+              setShowCCTSlideUp(false);
+            }}
+            style={{
+              backgroundColor: "transparent", border: "none",
+              color: "#475569", fontSize: "1.1rem", cursor: "pointer",
+              padding: "0", lineHeight: 1, flexShrink: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 

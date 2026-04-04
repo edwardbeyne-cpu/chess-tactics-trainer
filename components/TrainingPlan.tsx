@@ -629,6 +629,9 @@ export default function TrainingPlan() {
   // CCT upgrade nudge state
   const [cctUpgradeNudgeDismissed, setCctUpgradeNudgeDismissed] = useState(false);
 
+  // Chess.com connect prompt dismissed state
+  const [chesscomPromptDismissed, setChesscomPromptDismissed] = useState(false);
+
   const loadData = useCallback(() => {
     const uname = localStorage.getItem(CUSTOM_USERNAME_KEY);
     const plat = (localStorage.getItem(CUSTOM_PLATFORM_KEY) as Platform) ?? "chesscom";
@@ -688,6 +691,7 @@ export default function TrainingPlan() {
   useEffect(() => {
     setMounted(true);
     loadData();
+    setChesscomPromptDismissed(!!localStorage.getItem("ctt_chesscom_prompt_dismissed"));
     window.addEventListener("focus", loadData);
     const iv = setInterval(loadData, 15000);
     return () => {
@@ -787,6 +791,49 @@ export default function TrainingPlan() {
       `}</style>
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+        {/* ── FIX 2: Session Summary Hero — shown first when trained today ──── */}
+        {trainedToday && sessionStats && (() => {
+          const accuracy = Math.round((sessionStats.correct / Math.max(1, sessionStats.total)) * 100);
+          const goalMet = masteryDailyCompleted >= dailyGoal && dailyGoal > 0;
+          return (
+            <div style={{
+              backgroundColor: "#071a0f",
+              border: "2px solid #22c55e",
+              borderRadius: "16px",
+              padding: "1.5rem",
+              width: "100%",
+              boxSizing: "border-box",
+            }}>
+              <div style={{ color: "#4ade80", fontWeight: 800, fontSize: "1.1rem", marginBottom: "0.5rem" }}>
+                Well done — session complete ✅
+              </div>
+              <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Solved today</div>
+                  <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "1.2rem" }}>{sessionStats.total}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Accuracy</div>
+                  <div style={{ color: accuracy >= 70 ? "#4ade80" : "#f59e0b", fontWeight: 700, fontSize: "1.2rem" }}>{accuracy}%</div>
+                </div>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Mastered</div>
+                  <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "1.2rem" }}>{sessionStats.mastered}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Streak</div>
+                  <div style={{ color: "#f97316", fontWeight: 700, fontSize: "1.2rem" }}>{streakDays} 🔥</div>
+                </div>
+              </div>
+              {goalMet && (
+                <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
+                  Come back tomorrow to keep your streak 🔥
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Status Banner ─────────────────────────────────────────────────── */}
         {masterySetNumber !== null && (
@@ -1129,14 +1176,60 @@ export default function TrainingPlan() {
               return (
                 <>
                   <div style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "0.88rem", marginBottom: "0.5rem" }}>{msg.headline}</div>
-                  <div style={{ color: "#94a3b8", marginBottom: "0.5rem", lineHeight: 1.7 }}>{msg.body}</div>
-                  <div style={{ color: "#64748b", fontStyle: "italic", marginBottom: "0" }}>{msg.cta}</div>
-
+                  <div style={{ color: "#94a3b8", lineHeight: 1.7 }}>{msg.body}</div>
                 </>
               );
             })()}
           </div>
         </div>
+
+        {/* ── FIX 1: Chess.com connect banner — single location ─────────────── */}
+        {!username && !chesscomPromptDismissed && (
+          <div style={{
+            backgroundColor: "#0d1a2a",
+            border: "1px solid #1e3a5c",
+            borderRadius: "12px",
+            padding: "0.9rem 1.25rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}>
+            <div style={{ flex: 1, minWidth: "200px" }}>
+              <div style={{ color: "#94a3b8", fontSize: "0.88rem" }}>
+                Connect Chess.com to see where you&apos;re losing rating points and personalize your puzzles.
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
+              <button
+                onClick={() => setShowConnectModal(true)}
+                style={{
+                  backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
+                  borderRadius: "8px", color: "#4ade80", fontSize: "0.82rem",
+                  fontWeight: "bold", padding: "0.45rem 0.9rem", cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Connect Chess.com →
+              </button>
+              <button
+                onClick={() => {
+                  try { localStorage.setItem("ctt_chesscom_prompt_dismissed", "1"); } catch { /* ignore */ }
+                  setChesscomPromptDismissed(true);
+                }}
+                style={{
+                  backgroundColor: "transparent", border: "none",
+                  color: "#475569", fontSize: "1.1rem", cursor: "pointer",
+                  padding: "0.2rem", lineHeight: 1,
+                }}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── Where You Are Losing ─────────────────────────────────────────── */}
         {(() => {
@@ -1181,7 +1274,7 @@ export default function TrainingPlan() {
 
               {displayPatterns.length === 0 ? (
                 <div style={{ color: "#475569", fontSize: "0.88rem", textAlign: "center", padding: "0.75rem 0" }}>
-                  Connect Chess.com to see where you&apos;re losing rating points
+                  Solve more puzzles to unlock your pattern breakdown.
                 </div>
               ) : (
                 <>
