@@ -12,7 +12,7 @@ const features = [
   {
     icon: "🧠",
     title: "Spaced Repetition",
-    desc: "The SM-2 algorithm shows you the right puzzle at the right time. Nail a pattern and it fades from your queue. Miss it and it comes back tomorrow.",
+    desc: "Adaptive learning tracks what you know and what you forget. Nail a pattern and it fades from your queue. Miss it and it comes back at exactly the right moment — before you would have forgotten it permanently.",
   },
   {
     icon: "📊",
@@ -37,7 +37,7 @@ const faqs = [
   },
   {
     q: "What is spaced repetition?",
-    a: "It's a learning technique backed by cognitive science. You review material at increasing intervals — right before you'd forget it. The SM-2 algorithm (used by Anki) optimizes this timing automatically.",
+    a: "It's called spaced repetition — a technique backed by decades of memory research. You review material right before you'd forget it. The system tracks every puzzle and schedules your next review automatically.",
   },
   {
     q: "Do I need a Chess.com account?",
@@ -147,9 +147,9 @@ export default function HomePage() {
           }}
         >
           {[
-            { val: "3M+", label: "Lichess puzzles" },
+            { val: "3M+", label: "Puzzles, 800–2800" },
             { val: "28", label: "Tactical patterns" },
-            { val: "SM-2", label: "Science-backed algorithm" },
+            { val: "🧠", label: "Adaptive learning" },
           ].map((s) => (
             <div key={s.val} style={{ textAlign: "center" }}>
               <div style={{ color: "#4ade80", fontSize: "1.5rem", fontWeight: "bold" }}>{s.val}</div>
