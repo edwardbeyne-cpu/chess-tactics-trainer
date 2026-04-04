@@ -838,8 +838,8 @@ export default function TrainingPlan() {
           );
         })()}
 
-        {/* ── Status Banner ─────────────────────────────────────────────────── */}
-        {masterySetNumber !== null && (
+        {/* ── Status Banner — only show if streak at risk or trained today (not the default CTA — Today's Training has its own Start button) */}
+        {masterySetNumber !== null && (streakDays >= 2 || trainedToday) && (
           <StatusBanner
             streak={streakDays}
             trainedToday={trainedToday}
@@ -1472,7 +1472,7 @@ export default function TrainingPlan() {
                 <span style={{ color: "#94a3b8" }}>Your set:</span> {masterySetSize} puzzles weighted toward your weakest patterns at your calibration level.
               </div>
               <div>
-                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))))} days.
+                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal)))} {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))) === 1 ? "day" : "days"}.
               </div>
             </div>
             </>)}
