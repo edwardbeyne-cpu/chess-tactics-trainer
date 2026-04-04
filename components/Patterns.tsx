@@ -529,6 +529,40 @@ export default function Patterns() {
         </div>
       </div>
 
+      {/* Empty state — shown when no patterns have been started yet */}
+      {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
+        <div style={{
+          backgroundColor: "#1a1a2e",
+          border: "1px solid #2e3a5c",
+          borderRadius: "16px",
+          padding: "3rem 2rem",
+          textAlign: "center",
+          marginBottom: "2rem",
+        }}>
+          <div style={{ color: "#e2e8f0", fontSize: "1.2rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+            No patterns unlocked yet
+          </div>
+          <p style={{ color: "#64748b", fontSize: "0.9rem", lineHeight: 1.7, maxWidth: "420px", margin: "0 auto 1.75rem" }}>
+            Complete your first training session to start tracking your pattern mastery. Your weakest patterns will appear here so you can drill them specifically.
+          </p>
+          <a
+            href="/app/training"
+            style={{
+              display: "inline-block",
+              backgroundColor: "#f97316",
+              color: "#0f0f1a",
+              borderRadius: "10px",
+              padding: "0.75rem 1.75rem",
+              fontWeight: "bold",
+              fontSize: "0.95rem",
+              textDecoration: "none",
+            }}
+          >
+            Start Training →
+          </a>
+        </div>
+      )}
+
       {/* Pattern sections by tier — clean list, no lockout gates */}
       {[1, 2, 3].map((tier) => {
         const tierColors = TIER_COLORS[tier];

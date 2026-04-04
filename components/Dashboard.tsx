@@ -40,6 +40,7 @@ import {
 } from "@/lib/storage";
 import { hasActiveSubscription } from "@/lib/trial";
 import patterns from "@/data/patterns";
+import { ConnectModal, type PlatformRatings } from "@/components/TrainingPlan";
 
 // Dynamically import recharts-based chart (avoids SSR issues)
 const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
@@ -129,18 +130,67 @@ function GameStatsSection() {
   const [snapshots, setSnapshots] = useState<GameSnapshot[]>([]);
   const [reconnecting, setReconnecting] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  const [platform, setPlatform] = useState("chesscom");
+  const [showConnectModal, setShowConnectModal] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     setSnapshots(getGameSnapshots());
+    setUsername(localStorage.getItem("ctt_custom_username"));
+    setPlatform(localStorage.getItem("ctt_custom_platform") ?? "chesscom");
   }, []);
 
   if (!mounted) return null;
 
-  const username = typeof window !== "undefined" ? localStorage.getItem("ctt_custom_username") : null;
-  const platform = typeof window !== "undefined" ? (localStorage.getItem("ctt_custom_platform") ?? "chesscom") : "chesscom";
-
-  if (snapshots.length === 0 && !username) return null;
+  if (!username) {
+    return (
+      <>
+        <div style={{
+          backgroundColor: "#1a1a2e",
+          border: "1px solid #2e3a5c",
+          borderRadius: "12px",
+          padding: "2rem",
+          marginBottom: "1.5rem",
+          textAlign: "center",
+        }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>📊</div>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", margin: "0 0 0.75rem" }}>
+            Connect Chess.com to unlock your Game Stats
+          </h2>
+          <p style={{ color: "#64748b", fontSize: "0.88rem", lineHeight: 1.7, maxWidth: "480px", margin: "0 auto 1.5rem" }}>
+            We analyze your last 50 games to find your tactical blind spots. Once connected, this section shows your win rate, weak patterns, and which phase of the game costs you the most rating points.
+          </p>
+          <button
+            onClick={() => setShowConnectModal(true)}
+            style={{
+              backgroundColor: "#4ade80",
+              color: "#0f0f1a",
+              border: "none",
+              borderRadius: "10px",
+              padding: "0.75rem 1.75rem",
+              fontWeight: "bold",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+            }}
+          >
+            Connect Chess.com →
+          </button>
+        </div>
+        {showConnectModal && (
+          <ConnectModal
+            onClose={() => setShowConnectModal(false)}
+            onConnected={(_ratings: PlatformRatings, uname: string) => {
+              setUsername(uname);
+              setPlatform("chesscom");
+              setShowConnectModal(false);
+              setSnapshots(getGameSnapshots());
+            }}
+          />
+        )}
+      </>
+    );
+  }
 
   const latest = snapshots[snapshots.length - 1] ?? null;
   const recent3 = snapshots.slice(-3);

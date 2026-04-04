@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const ChessBoard = dynamic(() => import("@/components/ChessBoard"), { ssr: false });
 
@@ -16,6 +16,13 @@ const DEMO_PUZZLE = {
 export default function TryAPuzzle() {
   const [status, setStatus] = useState<"idle" | "solved" | "wrong">("idle");
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
+  const [showHint, setShowHint] = useState(false);
+
+  useEffect(() => {
+    if (status !== "idle") { setShowHint(false); return; }
+    const t = setTimeout(() => setShowHint(true), 3000);
+    return () => clearTimeout(t);
+  }, [status]);
 
   function handleMove(from: string, to: string): boolean {
     if (status === "solved") return false;
@@ -35,8 +42,8 @@ export default function TryAPuzzle() {
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
           Try a puzzle right now
         </h2>
-        <p style={{ color: "#64748b", fontSize: "0.95rem", margin: 0 }}>
-          No account needed. White to move — find the fork.
+        <p style={{ color: "#94a3b8", fontSize: "0.95rem", margin: 0 }}>
+          No sign-up needed — just find the best move
         </p>
       </div>
 
@@ -115,8 +122,14 @@ export default function TryAPuzzle() {
         )}
 
         {status === "idle" && (
-          <div style={{ color: "#475569", fontSize: "0.85rem", textAlign: "center" }}>
-            Drag a white piece to make your move
+          <div style={{
+            color: showHint ? "#94a3b8" : "#475569",
+            fontSize: showHint ? "0.95rem" : "0.85rem",
+            textAlign: "center",
+            fontWeight: showHint ? "600" : "normal",
+            transition: "all 0.4s ease",
+          }}>
+            {showHint ? "← Drag a piece to solve" : "White to move — find the fork"}
           </div>
         )}
       </div>

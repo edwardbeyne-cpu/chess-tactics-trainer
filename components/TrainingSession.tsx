@@ -1405,6 +1405,17 @@ export default function TrainingSession() {
   const consecutiveMissesRef = useRef(0); // tracks consecutive wrong answers for miss-streak nudge
   const missStreakNudgeShownRef = useRef(false); // show miss-streak nudge at most once per session
   const [showMissStreakNudge, setShowMissStreakNudge] = useState(false);
+  const milestone5ShownRef = useRef(false); // show 5-puzzle milestone once per session
+  const [showMilestone5, setShowMilestone5] = useState(false);
+
+  // ── 5-puzzle milestone ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (sessionTotal === 5 && !milestone5ShownRef.current) {
+      milestone5ShownRef.current = true;
+      setShowMilestone5(true);
+      setTimeout(() => setShowMilestone5(false), 2000);
+    }
+  }, [sessionTotal]);
 
   // ── Mount & Init ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1756,8 +1767,28 @@ export default function TrainingSession() {
   const setNumber = currentSet.setNumber;
   const totalPuzzles = currentSet.puzzles.length;
 
+  const milestone5Accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
+
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+      {/* 5-puzzle milestone overlay */}
+      {showMilestone5 && (
+        <div style={{
+          position: "fixed", top: "1.5rem", left: "50%", transform: "translateX(-50%)",
+          zIndex: 9999, backgroundColor: "#0d2218", border: "2px solid #4ade80",
+          borderRadius: "12px", padding: "0.85rem 1.75rem",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem",
+          boxShadow: "0 4px 24px rgba(74, 222, 128, 0.25)",
+          animation: "slideDown 0.3s ease",
+        }}>
+          <div style={{ color: "#4ade80", fontSize: "1.1rem", fontWeight: "bold" }}>
+            🔥 5 puzzles in a row
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: "0.85rem" }}>
+            {milestone5Accuracy}% accuracy
+          </div>
+        </div>
+      )}
       {/* Feedback overlay — rendered inside puzzle card below */}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}

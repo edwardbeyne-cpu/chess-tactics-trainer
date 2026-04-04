@@ -104,7 +104,7 @@ const ACTIVITY_LOG_KEY = "ctt_activity_log";
 type Platform = "chesscom" | "lichess";
 type TimeControl = "bullet" | "blitz" | "rapid";
 
-interface PlatformRatings {
+export interface PlatformRatings {
   bullet: number | null;
   blitz: number | null;
   rapid: number | null;
@@ -409,7 +409,7 @@ function ProgressBar({
 }
 
 // ── Connect Chess.com Modal ────────────────────────────────────────────────
-function ConnectModal({ onClose, onConnected }: {
+export function ConnectModal({ onClose, onConnected }: {
   onClose: () => void;
   onConnected: (ratings: PlatformRatings, username: string) => void;
 }) {
