@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { saveFeedbackResponse, type FeedbackResponse } from "@/lib/feedback";
 
 const FORMSPREE_ENDPOINT = process.env.NEXT_PUBLIC_FORMSPREE_ID
@@ -18,6 +19,7 @@ const defaultForm = {
 };
 
 export default function FeedbackButton() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [submitted, setSubmitted] = useState(false);
@@ -109,6 +111,9 @@ export default function FeedbackButton() {
     marginBottom: "0.4rem",
     marginTop: "1rem",
   };
+
+  // Hide on calibration — it's a focused full-screen flow
+  if (pathname === "/app/calibration") return null;
 
   return (
     <>
