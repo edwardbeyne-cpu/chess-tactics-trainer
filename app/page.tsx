@@ -19,6 +19,11 @@ const features = [
     title: "Pattern Tracking",
     desc: "28 tactical patterns across 3 tiers — from forks and pins to windmills and zugzwang. Track your weakness per pattern, not just your overall score.",
   },
+  {
+    icon: "📈",
+    title: "Beginner to Master — Never Outgrow It",
+    desc: "Puzzles range from 800 to 2800+ rating. Your training set calibrates to your level and gets harder as you improve. Whether you're 600 or 1900, the challenge scales with you.",
+  },
 ];
 
 const faqs = [
@@ -186,6 +191,36 @@ export default function HomePage() {
               <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: 1.65, margin: 0 }}>{f.desc}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Rating progression bar */}
+      <section style={{ maxWidth: "800px", margin: "0 auto", padding: "0 2rem 4rem" }}>
+        <h2 style={{ color: "#e2e8f0", fontSize: "1.4rem", fontWeight: "bold", textAlign: "center", marginBottom: "0.5rem" }}>
+          Puzzles from 800 to 2800 — calibrated to your level
+        </h2>
+        <p style={{ color: "#64748b", textAlign: "center", fontSize: "0.9rem", marginBottom: "2rem" }}>
+          Your training set starts at your calibration rating and scales harder as you improve. You&apos;ll never outgrow it.
+        </p>
+        <div style={{ position: "relative", padding: "0 0.5rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+            {[
+              { label: "Beginner", range: "800–1200", color: "#4ade80" },
+              { label: "Intermediate", range: "1200–1600", color: "#60a5fa" },
+              { label: "Advanced", range: "1600–2000", color: "#a78bfa" },
+              { label: "Expert", range: "2000–2400", color: "#f59e0b" },
+              { label: "Master", range: "2400+", color: "#ef4444" },
+            ].map((tier) => (
+              <div key={tier.label} style={{ textAlign: "center", flex: 1 }}>
+                <div style={{ color: tier.color, fontSize: "0.72rem", fontWeight: 700, marginBottom: "0.2rem" }}>{tier.label}</div>
+                <div style={{ color: "#475569", fontSize: "0.65rem" }}>{tier.range}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ height: "8px", borderRadius: "999px", background: "linear-gradient(to right, #4ade80, #60a5fa, #a78bfa, #f59e0b, #ef4444)", width: "100%" }} />
+          <div style={{ textAlign: "center", marginTop: "1rem", color: "#475569", fontSize: "0.8rem" }}>
+            All puzzle ratings sourced from Lichess — 3M+ positions rated by millions of players worldwide
+          </div>
         </div>
       </section>
 
