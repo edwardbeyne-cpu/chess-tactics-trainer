@@ -85,12 +85,6 @@ export default function TryAPuzzle() {
             marginBottom: "0.5rem",
           }}>
             💡 Try moving the Rook
-            <style jsx>{`
-              @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-            `}</style>
           </div>
         )}
 
