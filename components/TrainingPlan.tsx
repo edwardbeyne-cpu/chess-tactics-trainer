@@ -1378,9 +1378,11 @@ export default function TrainingPlan() {
                 const daysLeft = Math.ceil((masterySetSize - masteredCount) / Math.max(1, dailyGoal));
                 const paceText = daysLeft === 0
                   ? "Set complete! 🎉"
-                  : daysLeft === 1
-                    ? "Almost done — 1 day left"
-                    : `At ${dailyGoal} puzzles/day — you finish this set in ${daysLeft} days`;
+                  : masteredCount === 0
+                    ? `Start training to begin mastering your set`
+                    : daysLeft === 1
+                      ? "Almost done — 1 day left"
+                      : `At ${dailyGoal} puzzles/day — you finish this set in ${daysLeft} days`;
                 return (
                   <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.4rem" }}>
                     {paceText}
@@ -1425,7 +1427,7 @@ export default function TrainingPlan() {
                 fontSize: "0.95rem", fontWeight: "bold", cursor: "pointer", width: "100%",
               }}
             >
-              {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : "Continue Training →"}
+              {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : masteryDailyCompleted === 0 ? "Start Training →" : "Continue Training →"}
             </button>
 
             {/* 100-puzzle dot grid */}
