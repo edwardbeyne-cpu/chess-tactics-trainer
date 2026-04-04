@@ -1003,7 +1003,7 @@ export default function TrainingPlan() {
             </>
           ) : (
             <>
-              {/* No Chess.com connected */}
+              {/* No Chess.com connected — show empty avatar only, CTA is in the banner above */}
               <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start", marginBottom: "1.25rem" }}>
                 <div style={{
                   width: "52px", height: "52px", borderRadius: "50%", flexShrink: 0,
@@ -1014,19 +1014,9 @@ export default function TrainingPlan() {
                   ♟
                 </div>
                 <div>
-                  <div style={{ color: "#94a3b8", fontSize: "0.92rem", marginBottom: "0.5rem" }}>
-                    Connect Chess.com to see your full profile with Bullet, Blitz, and Rapid ratings.
+                  <div style={{ color: "#94a3b8", fontSize: "0.92rem" }}>
+                    Connect Chess.com to see your ratings and personalize your training.
                   </div>
-                  <button
-                    onClick={() => setShowConnectModal(true)}
-                    style={{
-                      backgroundColor: "#1e3a5c", border: "1px solid #4ade80",
-                      borderRadius: "8px", color: "#4ade80", fontSize: "0.85rem",
-                      fontWeight: "bold", padding: "0.5rem 1rem", cursor: "pointer",
-                    }}
-                  >
-                    Connect Chess.com →
-                  </button>
                 </div>
               </div>
 
