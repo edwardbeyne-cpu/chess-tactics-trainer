@@ -205,10 +205,10 @@ export default function HomePage() {
         <div style={{ position: "relative", padding: "0 0.5rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
             {[
-              { label: "Beginner", range: "800–1200", color: "#4ade80" },
-              { label: "Intermediate", range: "1200–1600", color: "#60a5fa" },
-              { label: "Advanced", range: "1600–2000", color: "#a78bfa" },
-              { label: "Expert", range: "2000–2400", color: "#f59e0b" },
+              { label: "Beginner", range: "800+", color: "#4ade80" },
+              { label: "Intermediate", range: "1200+", color: "#60a5fa" },
+              { label: "Advanced", range: "1600+", color: "#a78bfa" },
+              { label: "Expert", range: "2000+", color: "#f59e0b" },
               { label: "Master", range: "2400+", color: "#ef4444" },
             ].map((tier) => (
               <div key={tier.label} style={{ textAlign: "center", flex: 1 }}>
