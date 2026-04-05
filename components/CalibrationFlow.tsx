@@ -450,23 +450,27 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       }
 
       const oppMove = currentPuzzle.moves[nextMoveIdx];
-      try {
-        chess.move({
-          from: oppMove.slice(0, 2),
-          to: oppMove.slice(2, 4),
-          ...(oppMove.length > 4 ? { promotion: oppMove[4] } : {}),
-        });
-      } catch {
-        setCurrentFen(afterPlayer);
-        setLastMove([from, to]);
-        const secs = elapsedRef.current;
-        setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 500);
-        return true;
-      }
-      const afterOpp = chess.fen();
-      setLastMove([oppMove.slice(0, 2) as string, oppMove.slice(2, 4) as string]);
-      setCurrentFen(afterOpp);
-      setMoveIndex(nextMoveIdx + 1);
+      // Show player's move for 900ms before opponent responds
+      setTimeout(() => {
+        const chessForOpponent = new Chess(afterPlayer);
+        try {
+          chessForOpponent.move({
+            from: oppMove.slice(0, 2),
+            to: oppMove.slice(2, 4),
+            ...(oppMove.length > 4 ? { promotion: oppMove[4] } : {}),
+          });
+        } catch {
+          setCurrentFen(afterPlayer);
+          setLastMove([from, to]);
+          const secs = elapsedRef.current;
+          setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 500);
+          return;
+        }
+        const afterOpp = chessForOpponent.fen();
+        setLastMove([oppMove.slice(0, 2) as string, oppMove.slice(2, 4) as string]);
+        setCurrentFen(afterOpp);
+        setMoveIndex(nextMoveIdx + 1);
+      }, 900);
       return true;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1149,14 +1153,14 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       <div style={{ textAlign: "center", marginBottom: "1rem" }}>
         <p style={{
           color: "#475569",
-          fontSize: "0.72rem",
+          fontSize: "0.9rem",
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           margin: "0 0 0.2rem",
         }}>
           Let&apos;s find your level
         </p>
-        <p style={{ color: "#94a3b8", fontSize: "0.88rem", fontWeight: "600", margin: 0 }}>
+        <p style={{ color: "#94a3b8", fontSize: "1.3rem", fontWeight: "700", margin: 0 }}>
           Puzzle {Math.min(puzzleIndex + 1, TOTAL_PUZZLES)} of {TOTAL_PUZZLES}
         </p>
 
@@ -1193,10 +1197,11 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         </div>
       </div>
       <p style={{
-        fontSize: "0.85rem",
+        fontSize: "1.1rem",
         color: "#94a3b8",
         textAlign: "center",
         margin: "0 0 0.5rem",
+        fontWeight: "600",
       }}>
           Find the best move for {orientation === "white" ? "White ♔" : "Black ♚"}
         </p>
