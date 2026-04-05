@@ -454,10 +454,13 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const maxFromHeight = Math.floor((vh - 220) * 0.88);
-      // Container is max 900px. On desktop: 900 - 220(CCT) - 16(gap) - 64(page padding) = 600, cap at 500
-      const containerW = Math.min(900, vw - 64); // 64px page padding
-      const maxFromWidth = vw < 700 ? vw - 56 : Math.min(500, containerW - 220 - 16);
-      return Math.max(300, Math.min(maxFromWidth, maxFromHeight));
+      if (vw < 700) {
+        // Mobile: board fills available width minus page padding (clamp 0.5rem 4vw 2rem) × 2 sides
+        const pagePad = Math.min(32, Math.max(8, vw * 0.04)) * 2;
+        return Math.max(280, Math.min(vw - pagePad - 4, maxFromHeight));
+      }
+      const containerW = Math.min(900, vw - 64);
+      return Math.max(300, Math.min(500, containerW - 220 - 16, maxFromHeight));
     }
     setBoardWidth(getWidth());
     setIsDesktop(window.innerWidth >= 700);
