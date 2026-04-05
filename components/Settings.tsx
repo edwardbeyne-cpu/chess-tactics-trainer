@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Chess } from "chess.js";
+import { BETA_CODE, getUserProfile, saveUserProfile, applyBetaCode } from "@/lib/auth";
 import {
   getPGNs,
   savePGN,
@@ -480,6 +481,37 @@ function AggregateDataSettings({
 
 // ── Main Settings Component ────────────────────────────────────────────────
 
+function BetaCodeSection() {
+  const [betaInput, setBetaInput] = useState("");
+  const [betaResult, setBetaResult] = useState<"success" | "error" | null>(null);
+  const profile = typeof window !== "undefined" ? getUserProfile() : null;
+  const alreadyUnlocked = profile?.betaCodeEntered;
+  return (
+    <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+      <h2 style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "bold", marginBottom: "0.5rem" }}>Beta Access Code</h2>
+      {alreadyUnlocked ? (
+        <div style={{ color: "#4ade80", fontSize: "0.9rem" }}>✅ Pro tier unlocked via beta code</div>
+      ) : (
+        <>
+          <p style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "0.75rem" }}>Have a beta code? Enter it here to unlock Pro features instantly.</p>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <input type="text" value={betaInput} onChange={e => setBetaInput(e.target.value.toUpperCase())} placeholder="Enter code (e.g. BETA2026)"
+              style={{ flex: 1, backgroundColor: "#0d1621", border: "1px solid #2e3a5c", borderRadius: "8px", color: "#e2e8f0", padding: "0.5rem 0.75rem", fontSize: "0.9rem", outline: "none" }} />
+            <button onClick={() => {
+              if (applyBetaCode(betaInput.trim())) setBetaResult("success");
+              else setBetaResult("error");
+            }} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", border: "none", borderRadius: "8px", padding: "0.5rem 1rem", fontWeight: "bold", cursor: "pointer", fontSize: "0.9rem" }}>
+              Unlock
+            </button>
+          </div>
+          {betaResult === "success" && <div style={{ color: "#4ade80", fontSize: "0.85rem", marginTop: "0.5rem" }}>✅ Unlocked! Refresh the page to activate Pro features.</div>}
+          {betaResult === "error" && <div style={{ color: "#ef4444", fontSize: "0.85rem", marginTop: "0.5rem" }}>❌ Invalid code.</div>}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Settings() {
   const [pgns, setPGNs] = useState<StoredPGN[]>(() => getPGNs());
   const [parseResult, setParseResult] = useState<ParsedPGN | null>(null);
@@ -747,6 +779,9 @@ export default function Settings() {
           </div>
         </div>
       )}
+
+      {/* Beta access code */}
+      <BetaCodeSection />
 
       {/* localStorage info */}
       <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.5rem" }}>
