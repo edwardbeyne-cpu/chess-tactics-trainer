@@ -75,7 +75,19 @@ export default function CCTTrainer() {
 
   const handleMove = useCallback((from: string, to: string): boolean => {
     const moveUci = `${from}${to}`;
-    const move = chess.move({ from, to, promotion: "q" });
+    
+    // Try move without promotion first (for non-pawn moves)
+    let move;
+    try {
+      move = chess.move({ from, to });
+    } catch {
+      // If that fails, try with queen promotion (for pawn promotion moves)
+      try {
+        move = chess.move({ from, to, promotion: "q" });
+      } catch {
+        return false;
+      }
+    }
     
     if (!move) return false;
 
@@ -360,7 +372,6 @@ export default function CCTTrainer() {
             transition: "opacity 0.3s",
             pointerEvents: "none",
             borderRadius: "8px",
-            zIndex: 1,
           }}
         />
         <ChessBoard

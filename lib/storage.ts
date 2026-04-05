@@ -991,8 +991,9 @@ export async function fetchAndSaveRatings(): Promise<void> {
 
   if (fetchChesscom) {
     try {
+      const username = settings.chesscomUsername.toLowerCase().trim();
       const res = await fetch(
-        `https://api.chess.com/pub/player/${settings.chesscomUsername.toLowerCase()}/stats`,
+        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`,
         { headers: { Accept: "application/json" } }
       );
       if (res.ok) {
@@ -1088,8 +1089,9 @@ export async function fetchAndSavePlatformRatings(): Promise<void> {
 
   if (settings.trackChesscom && settings.chesscomUsername) {
     try {
+      const username = settings.chesscomUsername.toLowerCase().trim();
       const res = await fetch(
-        `https://api.chess.com/pub/player/${settings.chesscomUsername.toLowerCase()}/stats`,
+        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`,
         { headers: { Accept: "application/json" } }
       );
       if (res.ok) {

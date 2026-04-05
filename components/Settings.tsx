@@ -241,17 +241,30 @@ function RatingTrackingSection() {
     setTesting("chesscom");
     setTestResult(null);
     try {
-      const res = await fetch(`https://api.chess.com/pub/player/${settings.chesscomUsername.toLowerCase()}/stats`);
+      const username = settings.chesscomUsername.toLowerCase().trim();
+      const url = `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`;
+      const res = await fetch(url);
+      
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = await res.json();
         const blitz = data?.chess_blitz?.last?.rating ?? "N/A";
         setTestResult({ platform: "Chess.com", success: true, message: `✅ Connected! Blitz rating: ${blitz}` });
       } else {
-        setTestResult({ platform: "Chess.com", success: false, message: `❌ User not found: ${settings.chesscomUsername}` });
+        console.warn(`Chess.com API returned ${res.status} for username: ${username}`);
+        setTestResult({ 
+          platform: "Chess.com", 
+          success: false, 
+          message: `❌ User not found: ${settings.chesscomUsername}` 
+        });
       }
-    } catch {
-      setTestResult({ platform: "Chess.com", success: false, message: "❌ Could not reach Chess.com API" });
+    } catch (error) {
+      console.error("Chess.com API error:", error);
+      setTestResult({ 
+        platform: "Chess.com", 
+        success: false, 
+        message: "❌ Could not reach Chess.com API" 
+      });
     } finally {
       setTesting(null);
     }
