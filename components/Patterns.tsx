@@ -532,54 +532,19 @@ export default function Patterns() {
       {/* Empty state — shown when no patterns have been started yet */}
       {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
         <div style={{
-          backgroundColor: "#1a1508",
-          border: "2px solid #f59e0b",
-          borderRadius: "16px",
-          padding: "2.5rem 2rem",
-          textAlign: "center",
-          marginBottom: "2rem",
-          boxShadow: "0 4px 12px rgba(245, 158, 11, 0.1)",
+          backgroundColor: "#0d1621",
+          border: "1px solid #f59e0b40",
+          borderRadius: "10px",
+          padding: "0.75rem 1rem",
+          marginBottom: "1.25rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.5rem",
+          color: "#f59e0b",
+          fontSize: "0.85rem",
         }}>
-          <div style={{ color: "#f59e0b", fontSize: "1.4rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
-            👆 Pick any pattern below to start drilling
-          </div>
-          <p style={{ color: "#94a3b8", fontSize: "0.95rem", lineHeight: 1.7, maxWidth: "480px", margin: "0 auto 1.5rem" }}>
-            Start with Fork or Pin — the most common tactical themes. Choose any pattern to begin building your tactical intuition.
-          </p>
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <a
-              href="/app/patterns/fork"
-              style={{
-                display: "inline-block",
-                backgroundColor: "#f59e0b",
-                color: "#0f0f1a",
-                borderRadius: "10px",
-                padding: "0.75rem 1.5rem",
-                fontWeight: "bold",
-                fontSize: "0.9rem",
-                textDecoration: "none",
-                border: "1px solid #d97706",
-              }}
-            >
-              Start with Fork →
-            </a>
-            <a
-              href="/app/patterns/pin"
-              style={{
-                display: "inline-block",
-                backgroundColor: "#2e3a5c",
-                color: "#e2e8f0",
-                borderRadius: "10px",
-                padding: "0.75rem 1.5rem",
-                fontWeight: "bold",
-                fontSize: "0.9rem",
-                textDecoration: "none",
-                border: "1px solid #475569",
-              }}
-            >
-              Try Pin →
-            </a>
-          </div>
+          <span>👆</span>
+          <span>Pick any pattern below to start drilling — <strong>Fork</strong> and <strong>Pin</strong> are the best starting points.</span>
         </div>
       )}
 
