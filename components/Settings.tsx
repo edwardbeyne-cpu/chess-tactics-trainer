@@ -241,7 +241,7 @@ function RatingTrackingSection() {
     setTesting("chesscom");
     setTestResult(null);
     try {
-      const res = await fetch(`https://api.chess.com/pub/player/${settings.chesscomUsername}/stats`);
+      const res = await fetch(`https://api.chess.com/pub/player/${settings.chesscomUsername.toLowerCase()}/stats`);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = await res.json();
