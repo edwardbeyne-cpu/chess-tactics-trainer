@@ -455,8 +455,8 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       const vh = window.innerHeight;
       const maxFromHeight = Math.floor((vh - 220) * 0.88);
       if (vw < 700) {
-        // Mobile: be very conservative — use 90% of viewport width, max 350
-        return Math.max(280, Math.min(Math.floor(vw * 0.88), 350, maxFromHeight));
+        // Mobile: page padding ~16px each side = 32px total. Card padding now removed (0 horizontal).
+        return Math.max(280, Math.min(vw - 36, maxFromHeight));
       }
       const containerW = Math.min(900, vw - 64);
       return Math.max(300, Math.min(500, containerW - 220 - 16, maxFromHeight));
@@ -1874,7 +1874,7 @@ export default function TrainingSession() {
 
       <div style={{
         backgroundColor: "#13132b", border: "1px solid #2e3a5c",
-        borderRadius: "12px", padding: "1.25rem", position: "relative", overflow: "hidden",
+        borderRadius: "12px", padding: "1.25rem 0", position: "relative", overflow: "hidden",
       }}>
         {puzzle.type === "tactic" ? (
           <TacticBoard
