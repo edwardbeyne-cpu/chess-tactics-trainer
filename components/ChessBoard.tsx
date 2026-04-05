@@ -19,6 +19,7 @@ interface ChessBoardProps {
   orientation?: "white" | "black";
   disableAnimation?: boolean;
   showCoordinates?: boolean;
+  animateMove?: boolean;  // Whether to animate piece movement
 }
 
 function getMovable(fen: string, draggable: boolean) {
@@ -80,6 +81,7 @@ export default function ChessBoard({
   orientation = "white",
   disableAnimation = false,
   showCoordinates = true,
+  animateMove = true,
 }: ChessBoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cgRef = useRef<Api | null>(null);
@@ -159,10 +161,9 @@ export default function ChessBoard({
           after: (orig: Key, dest: Key) => {
             if (onMoveRef.current) {
               const accepted = onMoveRef.current(orig, dest);
-              if (accepted) {
-                clearAnnotations();
-              } else if (cgRef.current) {
-                // Reset board to current position
+              // Always reset board to original position after move attempt
+              // (CCT Trainer is about identifying moves, not actually making them)
+              if (cgRef.current) {
                 const currentMovable = getMovable(fenRef.current, draggableRef.current);
                 cgRef.current.set({
                   fen: fenRef.current,
@@ -174,12 +175,15 @@ export default function ChessBoard({
                   },
                 });
               }
+              if (accepted) {
+                clearAnnotations();
+              }
             }
           },
         },
       },
       lastMove: lastMove as [Key, Key] | undefined,
-      animation: { enabled: true, duration: 250 },
+      animation: { enabled: animateMove, duration: 250 },
       draggable: { enabled: draggableRef.current },
       highlight: { lastMove: true, check: true },
       premovable: { enabled: false },

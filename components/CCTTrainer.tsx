@@ -85,6 +85,7 @@ export default function CCTTrainer() {
       try {
         move = chess.move({ from, to, promotion: "q" });
       } catch {
+        console.log(`CCT: Illegal move ${moveUci}`);
         return false;
       }
     }
