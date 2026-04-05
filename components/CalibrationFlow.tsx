@@ -463,7 +463,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
           setCurrentFen(afterPlayer);
           setLastMove([from, to]);
           const secs = elapsedRef.current;
-          setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 500);
+          setTimeout(() => advancePuzzle(!madeErrorRef.current, false, secs), 900);
           return;
         }
         const afterOpp = chessForOpponent.fen();
@@ -542,10 +542,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     }
   }
 
-  // Timer bar — animates from full to empty over 90 seconds
-  const barPct = Math.max(0, ((SKIP_VISIBLE_AT - elapsed) / SKIP_VISIBLE_AT) * 100);
-  const barColor =
-    elapsed < 30 ? "#4ade80" : elapsed < 60 ? "#fbbf24" : "#ef4444";
+
 
   // ── Percentile from Lichess public puzzle rating distribution ──────────────
   function getPercentile(elo: number): string {
@@ -1205,24 +1202,6 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       }}>
           Find the best move for {orientation === "white" ? "White ♔" : "Black ♚"}
         </p>
-
-      {/* Animated timer bar — green→yellow→red over 90 seconds */}
-      <div style={{
-        height: "4px",
-        backgroundColor: "#0d1621",
-        borderRadius: "2px",
-        overflow: "hidden",
-        marginTop: "0.75rem",
-        marginBottom: "0.25rem",
-      }}>
-        <div style={{
-          height: "100%",
-          width: `${barPct}%`,
-          backgroundColor: barColor,
-          borderRadius: "2px",
-          transition: "width 0.5s linear, background-color 0.5s ease",
-        }} />
-      </div>
 
       {/* Skip hint */}
       <div style={{
