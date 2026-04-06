@@ -520,8 +520,14 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       const promotion = expectedUci.length === 5 ? expectedUci[4] : undefined;
       chess.move({ from, to, promotion });
       const newFen = chess.fen();
-      setFen(newFen);
+      // Update lastMove immediately for visual highlighting
       setLastMove([from, to]);
+      // Delay FEN update to let drag animation complete (300ms)
+      // Prevents flicker: piece animates to destination, then FEN update
+      // might cause Chessground to reset during animation
+      setTimeout(() => {
+        setFen(newFen);
+      }, 300);
 
       const nextIndex = moveIndex + 1;
       if (nextIndex >= puzzleData.solution.length) {

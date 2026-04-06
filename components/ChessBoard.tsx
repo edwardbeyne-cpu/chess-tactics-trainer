@@ -20,6 +20,7 @@ interface ChessBoardProps {
   disableAnimation?: boolean;
   showCoordinates?: boolean;
   animateMove?: boolean;  // Whether to animate piece movement
+  mode?: "training" | "identification";  // training: moves stay moved; identification: snaps back (CCT)
 }
 
 function getMovable(fen: string, draggable: boolean) {
@@ -82,6 +83,7 @@ export default function ChessBoard({
   disableAnimation = false,
   showCoordinates = true,
   animateMove = true,
+  mode = "training",  // "training": moves stay moved; "identification": snaps back (CCT)
 }: ChessBoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cgRef = useRef<Api | null>(null);
@@ -97,6 +99,8 @@ export default function ChessBoard({
   draggableRef.current = draggable;
   const orientationRef = useRef(orientation);
   orientationRef.current = orientation;
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
 
   // Convert file/rank to square key from mouse position
   const getSquareFromEvent = useCallback((e: MouseEvent): Key | null => {
@@ -161,22 +165,43 @@ export default function ChessBoard({
           after: (orig: Key, dest: Key) => {
             if (onMoveRef.current) {
               const accepted = onMoveRef.current(orig, dest);
-              // Always reset board to original position after move attempt
-              // (CCT Trainer is about identifying moves, not actually making them)
-              if (cgRef.current) {
-                const currentMovable = getMovable(fenRef.current, draggableRef.current);
-                cgRef.current.set({
-                  fen: fenRef.current,
-                  turnColor: currentMovable.turnColor,
-                  movable: {
-                    free: false,
-                    color: currentMovable.color,
-                    dests: currentMovable.dests,
-                  },
-                });
-              }
-              if (accepted) {
-                clearAnnotations();
+              
+              // CCT identification mode: always reset board after move attempt
+              // Training mode: only reset if move was rejected
+              if (modeRef.current === "identification") {
+                // Identification (CCT Trainer): snap back after every attempt
+                if (cgRef.current) {
+                  const currentMovable = getMovable(fenRef.current, draggableRef.current);
+                  cgRef.current.set({
+                    fen: fenRef.current,
+                    turnColor: currentMovable.turnColor,
+                    movable: {
+                      free: false,
+                      color: currentMovable.color,
+                      dests: currentMovable.dests,
+                    },
+                  });
+                }
+                if (accepted) {
+                  clearAnnotations();
+                }
+              } else {
+                // Training mode: only reset if move was rejected
+                if (!accepted && cgRef.current) {
+                  const currentMovable = getMovable(fenRef.current, draggableRef.current);
+                  cgRef.current.set({
+                    fen: fenRef.current,
+                    turnColor: currentMovable.turnColor,
+                    movable: {
+                      free: false,
+                      color: currentMovable.color,
+                      dests: currentMovable.dests,
+                    },
+                  });
+                }
+                if (accepted) {
+                  clearAnnotations();
+                }
               }
             }
           },

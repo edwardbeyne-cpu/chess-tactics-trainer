@@ -381,6 +381,7 @@ export default function CCTTrainer() {
           draggable={phase !== "threats"}
           boardWidth={boardWidth}
           highlightSquares={getHighlightSquares()}
+          mode="identification"
         />
         {phase === "threats" && (
           <div
