@@ -216,71 +216,203 @@ export default function CCTTrainer() {
 
   const renderCompletionScreen = () => (
     <div style={{
-      textAlign: "center",
-      padding: "2rem",
       maxWidth: "600px",
       margin: "0 auto",
+      padding: "2rem 1rem",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
     }}>
-      <h2 style={{ fontSize: "2rem", marginBottom: "1rem", color: "#f97316" }}>
-        Training Complete! 🎉
-      </h2>
       <div style={{
-        backgroundColor: "#1a1f2e",
-        borderRadius: "12px",
-        padding: "2rem",
+        backgroundColor: "#0f172a",
+        borderRadius: "16px",
+        padding: "2.5rem",
+        border: "1px solid #1e293b",
+        width: "100%",
         marginBottom: "2rem",
+        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
       }}>
-        <h3 style={{ fontSize: "1.5rem", marginBottom: "1.5rem" }}>Your Stats</h3>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem",
+          marginBottom: "1.5rem",
+        }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "50%",
+            backgroundColor: "#f97316",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "white",
+            fontSize: "1.5rem",
+            fontWeight: "600",
+          }}>
+            ✓
+          </div>
+          <div>
+            <h2 style={{ 
+              fontSize: "1.75rem", 
+              fontWeight: "700", 
+              color: "#f1f5f9",
+              marginBottom: "0.25rem",
+              letterSpacing: "-0.025em"
+            }}>
+              Training Complete
+            </h2>
+            <p style={{ 
+              color: "#94a3b8", 
+              fontSize: "0.95rem"
+            }}>
+              You've practiced the CCT scanning habit
+            </p>
+          </div>
+        </div>
+
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-          textAlign: "left",
+          gridTemplateColumns: "repeat(2, 1fr)",
+          gap: "1.5rem",
+          marginBottom: "2rem",
         }}>
-          <div>
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>Checks Found</div>
-            <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#4ade80" }}>
+          <div style={{
+            backgroundColor: "#1a1f2e",
+            borderRadius: "12px",
+            padding: "1.25rem",
+            border: "1px solid #2e3a5c",
+          }}>
+            <div style={{ 
+              color: "#94a3b8", 
+              fontSize: "0.85rem",
+              fontWeight: "500",
+              marginBottom: "0.5rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Checks Found
+            </div>
+            <div style={{ 
+              fontSize: "2rem", 
+              fontWeight: "700", 
+              color: "#4ade80",
+              lineHeight: 1
+            }}>
               {stats.checksFound}
             </div>
           </div>
-          <div>
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>Captures Found</div>
-            <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#4ade80" }}>
+          
+          <div style={{
+            backgroundColor: "#1a1f2e",
+            borderRadius: "12px",
+            padding: "1.25rem",
+            border: "1px solid #2e3a5c",
+          }}>
+            <div style={{ 
+              color: "#94a3b8", 
+              fontSize: "0.85rem",
+              fontWeight: "500",
+              marginBottom: "0.5rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Captures Found
+            </div>
+            <div style={{ 
+              fontSize: "2rem", 
+              fontWeight: "700", 
+              color: "#4ade80",
+              lineHeight: 1
+            }}>
               {stats.capturesFound}
             </div>
           </div>
-          <div>
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>Threats Identified</div>
-            <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#4ade80" }}>
+          
+          <div style={{
+            backgroundColor: "#1a1f2e",
+            borderRadius: "12px",
+            padding: "1.25rem",
+            border: "1px solid #2e3a5c",
+          }}>
+            <div style={{ 
+              color: "#94a3b8", 
+              fontSize: "0.85rem",
+              fontWeight: "500",
+              marginBottom: "0.5rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Threats Identified
+            </div>
+            <div style={{ 
+              fontSize: "2rem", 
+              fontWeight: "700", 
+              color: "#4ade80",
+              lineHeight: 1
+            }}>
               {stats.threatsFound}
             </div>
           </div>
-          <div>
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>Puzzles Solved</div>
-            <div style={{ fontSize: "2rem", fontWeight: "bold", color: "#4ade80" }}>
-              {stats.puzzlesSolved}/3
+          
+          <div style={{
+            backgroundColor: "#1a1f2e",
+            borderRadius: "12px",
+            padding: "1.25rem",
+            border: "1px solid #2e3a5c",
+          }}>
+            <div style={{ 
+              color: "#94a3b8", 
+              fontSize: "0.85rem",
+              fontWeight: "500",
+              marginBottom: "0.5rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Puzzles Solved
+            </div>
+            <div style={{ 
+              fontSize: "2rem", 
+              fontWeight: "700", 
+              color: "#4ade80",
+              lineHeight: 1
+            }}>
+              {stats.puzzlesSolved}<span style={{ fontSize: "1rem", color: "#64748b", marginLeft: "0.25rem" }}>/3</span>
             </div>
           </div>
         </div>
+
+        <a
+          href="/app/training"
+          style={{
+            display: "inline-block",
+            backgroundColor: "#f97316",
+            color: "white",
+            padding: "0.875rem 2rem",
+            borderRadius: "10px",
+            textDecoration: "none",
+            fontWeight: "600",
+            fontSize: "1rem",
+            transition: "all 0.2s",
+            width: "100%",
+            textAlign: "center",
+            boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = "#ea580c";
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = "0 6px 16px rgba(249, 115, 22, 0.4)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = "#f97316";
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
+          }}
+        >
+          Continue to Training →
+        </a>
       </div>
-      <a
-        href="/app/training"
-        style={{
-          display: "inline-block",
-          backgroundColor: "#f97316",
-          color: "white",
-          padding: "0.75rem 1.5rem",
-          borderRadius: "8px",
-          textDecoration: "none",
-          fontWeight: "bold",
-          fontSize: "1.1rem",
-          transition: "background-color 0.2s",
-        }}
-        onMouseEnter={e => e.currentTarget.style.backgroundColor = "#ea580c"}
-        onMouseLeave={e => e.currentTarget.style.backgroundColor = "#f97316"}
-      >
-        Start Training →
-      </a>
     </div>
   );
 
@@ -293,41 +425,55 @@ export default function CCTTrainer() {
       maxWidth: "800px",
       margin: "0 auto",
       padding: "1rem",
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100vh",
     }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "1.5rem",
-        flexWrap: "wrap",
-        gap: "1rem",
-      }}>
-        <div>
-          <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-            CCT Trainer
-          </h1>
-          <p style={{ color: "#94a3b8" }}>
-            Practice the Checks, Captures, Threats scanning habit
-          </p>
-        </div>
+      {/* Header */}
+      <div style={{ marginBottom: "1.5rem" }}>
+        <h1 style={{ 
+          fontSize: "1.75rem", 
+          fontWeight: "800", 
+          marginBottom: "0.25rem",
+          color: "#f1f5f9",
+          letterSpacing: "-0.025em"
+        }}>
+          CCT Trainer
+        </h1>
+        <p style={{ 
+          color: "#94a3b8", 
+          fontSize: "0.95rem",
+          marginBottom: "1rem"
+        }}>
+          Build the Checks, Captures, Threats scanning habit
+        </p>
+        
+        {/* Premium segmented control for mode selector (visual indicator only) */}
         <div style={{
           display: "flex",
-          gap: "0.5rem",
           backgroundColor: "#1a1f2e",
-          padding: "0.5rem",
-          borderRadius: "8px",
+          padding: "0.25rem",
+          borderRadius: "10px",
+          border: "1px solid #2e3a5c",
+          overflow: "hidden",
+          maxWidth: "100%",
         }}>
           {(["checks", "captures", "threats", "solve"] as Phase[]).map(p => (
             <div
               key={p}
               style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
+                padding: "0.5rem 0.75rem",
+                borderRadius: "8px",
                 backgroundColor: phase === p ? "#f97316" : "transparent",
                 color: phase === p ? "white" : "#94a3b8",
-                fontWeight: phase === p ? "bold" : "normal",
+                fontWeight: phase === p ? "600" : "400",
                 textTransform: "capitalize",
-                fontSize: "0.9rem",
+                fontSize: "0.85rem",
+                transition: "all 0.2s",
+                flex: 1,
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                minWidth: 0, // Allows text truncation on small screens
               }}
             >
               {p}
@@ -336,30 +482,41 @@ export default function CCTTrainer() {
         </div>
       </div>
 
-      <div style={{
-        backgroundColor: "#1a1f2e",
-        padding: "1.5rem",
-        borderRadius: "12px",
-        marginBottom: "1.5rem",
+      {/* Coaching cue / instruction area */}
+      <div style={{ 
+        marginBottom: "1rem",
+        padding: "0.75rem",
+        backgroundColor: "#0f172a",
+        borderRadius: "8px",
+        borderLeft: "3px solid #f97316",
       }}>
         <div style={{
-          fontSize: "1.1rem",
-          fontWeight: "bold",
-          marginBottom: "0.5rem",
-          color: "#e2e8f0",
+          fontSize: "0.8rem",
+          fontWeight: "600",
+          color: "#f97316",
+          marginBottom: "0.25rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em"
         }}>
-          Puzzle {puzzleIdx + 1} of {POSITIONS.length}
+          Puzzle {puzzleIdx + 1} of {POSITIONS.length} • {phase.charAt(0).toUpperCase() + phase.slice(1)}
         </div>
-        <div style={{ color: "#94a3b8" }}>
+        <div style={{ 
+          color: "#e2e8f0", 
+          fontSize: "1rem",
+          fontWeight: "500",
+          lineHeight: 1.4
+        }}>
           {getPhaseInstructions()}
         </div>
       </div>
 
+      {/* Board as hero */}
       <div style={{
         position: "relative",
         marginBottom: "1.5rem",
         display: "flex",
         justifyContent: "center",
+        flex: 1,
       }}>
         <div
           style={{
@@ -408,97 +565,123 @@ export default function CCTTrainer() {
         )}
       </div>
 
+      {/* Integrated bottom strip */}
       <div style={{
-        backgroundColor: "#1a1f2e",
-        padding: "1.5rem",
+        backgroundColor: "#0f172a",
+        padding: "1rem",
         borderRadius: "12px",
-        marginBottom: "1.5rem",
+        border: "1px solid #1e293b",
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "1rem",
+        marginTop: "auto",
       }}>
-        <div style={{
+        {/* Left: Progress and status */}
+        <div style={{ 
           display: "flex",
-          justifyContent: "space-between",
           alignItems: "center",
-          flexWrap: "wrap",
           gap: "1rem",
+          flex: "1 1 200px", // Grow, shrink, min width 200px
         }}>
-          <div>
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem", marginBottom: "0.25rem" }}>
-              Progress
-            </div>
-            <div style={{ display: "flex", gap: "0.25rem" }}>
-              {POSITIONS.map((_, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    width: "12px",
-                    height: "12px",
-                    borderRadius: "50%",
-                    backgroundColor: idx === puzzleIdx ? "#f97316" : 
-                                   idx < puzzleIdx ? "#4ade80" : "#2e3a5c",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {phase !== "solve" && (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {phase === "checks" && (
-                <div style={{ color: "#94a3b8" }}>
-                  Found {foundMoves.length} of {allChecks.length} checks
-                </div>
-              )}
-              {phase === "captures" && (
-                <div style={{ color: "#94a3b8" }}>
-                  Found {foundMoves.length} of {allCaptures.length} captures
-                </div>
-              )}
-              {phase === "threats" && (
-                <div style={{ color: "#94a3b8" }}>
-                  Identified {threatSquares.length} threats
-                </div>
-              )}
-              <button
-                onClick={handleAdvancePhase}
+          {/* Progress dots */}
+          <div style={{ display: "flex", gap: "0.375rem", flexShrink: 0 }}>
+            {POSITIONS.map((_, idx) => (
+              <div
+                key={idx}
                 style={{
-                  backgroundColor: "#f97316",
-                  color: "white",
-                  border: "none",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "6px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  backgroundColor: idx === puzzleIdx ? "#f97316" : 
+                                 idx < puzzleIdx ? "#4ade80" : "#334155",
                   transition: "background-color 0.2s",
                 }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = "#ea580c"}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = "#f97316"}
-              >
-                {phase === "checks" ? "No more checks" :
-                 phase === "captures" ? "No more captures" :
-                 "Done with threats"}
-              </button>
+              />
+            ))}
+          </div>
+          
+          {/* Status */}
+          {phase !== "solve" && (
+            <div style={{ 
+              color: "#e2e8f0", 
+              fontSize: "0.95rem",
+              fontWeight: "500",
+              minWidth: "140px",
+            }}>
+              {phase === "checks" && (
+                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> of {allChecks.length} checks</>
+              )}
+              {phase === "captures" && (
+                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> of {allCaptures.length} captures</>
+              )}
+              {phase === "threats" && (
+                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{threatSquares.length}</span> threats</>
+              )}
             </div>
           )}
-
           {phase === "solve" && (
-            <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.95rem", minWidth: "140px" }}>
               {showMissed ? currentPuzzle.solutionNote : "Find the best move"}
             </div>
           )}
         </div>
+
+        {/* Right: Action button */}
+        {phase !== "solve" && (
+          <button
+            onClick={handleAdvancePhase}
+            style={{
+              backgroundColor: "#f97316",
+              color: "white",
+              border: "none",
+              padding: "0.75rem 1.5rem",
+              borderRadius: "8px",
+              fontWeight: "600",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+              transition: "all 0.2s",
+              flexShrink: 0,
+              minWidth: "140px",
+              boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = "#ea580c";
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.boxShadow = "0 4px 8px rgba(249, 115, 22, 0.3)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = "#f97316";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 2px 4px rgba(249, 115, 22, 0.2)";
+            }}
+          >
+            {phase === "checks" ? "No more checks" :
+             phase === "captures" ? "No more captures" :
+             "Done with threats"}
+          </button>
+        )}
       </div>
 
+      {/* Solution box (when showMissed is true) */}
       {phase === "solve" && showMissed && (
         <div style={{
-          backgroundColor: "#1a1f2e",
+          marginTop: "1rem",
           padding: "1rem",
-          borderRadius: "12px",
-          borderLeft: "4px solid #f97316",
+          backgroundColor: "#0f172a",
+          borderRadius: "8px",
+          border: "1px solid #1e293b",
         }}>
-          <div style={{ fontWeight: "bold", color: "#f97316", marginBottom: "0.5rem" }}>
+          <div style={{ 
+            fontWeight: "600", 
+            color: "#f97316", 
+            marginBottom: "0.5rem",
+            fontSize: "0.95rem"
+          }}>
             Solution: {currentPuzzle.solution}
           </div>
-          <div style={{ color: "#94a3b8" }}>
+          <div style={{ color: "#94a3b8", fontSize: "0.9rem" }}>
             {currentPuzzle.solutionNote}
           </div>
         </div>
