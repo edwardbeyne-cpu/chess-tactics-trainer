@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Chess } from "chess.js";
+import { saveCCTFirstSessionComplete } from "@/lib/storage";
 import ChessBoard from "./ChessBoard";
 
 const POSITIONS = [
@@ -72,6 +73,12 @@ export default function CCTTrainer() {
     window.addEventListener("resize", updateBoardWidth);
     return () => window.removeEventListener("resize", updateBoardWidth);
   }, [resetForNewPuzzle]);
+
+  useEffect(() => {
+    if (phase === "complete") {
+      saveCCTFirstSessionComplete(true);
+    }
+  }, [phase]);
 
   const handleMove = useCallback((from: string, to: string): boolean => {
     const moveUci = `${from}${to}`;

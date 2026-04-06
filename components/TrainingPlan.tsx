@@ -20,6 +20,9 @@ import {
   getCCTMode,
   saveCCTMode,
   getCCTSessionCount,
+  getCCTFamiliarity,
+  getCCTFirstSessionComplete,
+  saveCCTFirstSessionComplete,
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
@@ -629,6 +632,8 @@ export default function TrainingPlan() {
 
   // CCT upgrade nudge state
   const [cctUpgradeNudgeDismissed, setCctUpgradeNudgeDismissed] = useState(false);
+  // CCT training card state (for new/inconsistent users)
+  const [cctTrainingCardDismissed, setCCTTrainingCardDismissed] = useState(false);
 
   // Chess.com connect prompt dismissed state
   const [chesscomPromptDismissed, setChesscomPromptDismissed] = useState(false);
@@ -1514,6 +1519,72 @@ export default function TrainingPlan() {
             </div>
           </div>
         )}
+
+        {/* CCT Training Card — shown for new_to_cct and cct_inconsistent users who haven't completed first session */}
+        {(() => {
+          if (!mounted) return null;
+          if (cctTrainingCardDismissed) return null;
+          const familiarity = getCCTFamiliarity();
+          const firstSessionComplete = getCCTFirstSessionComplete();
+          // Show for new_to_cct and cct_inconsistent, and only if first session not complete
+          if (familiarity !== "new_to_cct" && familiarity !== "cct_inconsistent") return null;
+          if (firstSessionComplete) return null;
+          return (
+            <div style={{
+              backgroundColor: "#0a1520",
+              border: "1px solid #f97316",
+              borderRadius: "12px",
+              padding: "1rem 1.25rem",
+              marginBottom: "1rem",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.75rem",
+            }}>
+              <div style={{ fontSize: "1.1rem", flexShrink: 0, marginTop: "0.1rem" }}>🧠</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#e2e8f0", fontWeight: "700", fontSize: "0.88rem", marginBottom: "0.3rem" }}>
+                  Train Your Calculation
+                </div>
+                <div style={{ color: "#64748b", fontSize: "0.8rem", lineHeight: 1.55, marginBottom: "0.75rem" }}>
+                  Build the habit of scanning checks, captures, and threats before every move.
+                  <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginTop: "0.25rem" }}>
+                    Practice the process strong players use to find forcing moves faster.
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <button
+                    onClick={() => router.push("/app/cct-trainer")}
+                    style={{
+                      backgroundColor: "#f97316",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "0.45rem 0.85rem",
+                      color: "white",
+                      fontSize: "0.8rem",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Start CCT Trainer →
+                  </button>
+                  <button
+                    onClick={() => setCCTTrainingCardDismissed(true)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#475569",
+                      fontSize: "0.78rem",
+                      cursor: "pointer",
+                      padding: "0.45rem",
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* CCT upgrade nudge — shown after 10 sessions if CCT is in "suggested" mode */}
         {(() => {

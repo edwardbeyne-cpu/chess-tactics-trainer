@@ -3462,3 +3462,52 @@ export function incrementCCTSessionCount(): number {
   try { localStorage.setItem(CCT_SESSION_COUNT_KEY, String(count)); } catch { /* ignore */ }
   return count;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CCT Familiarity / Onboarding State
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CCT_FAMILIARITY_KEY = "ctt_cct_familiarity";
+const CCT_ONBOARDING_COMPLETE_KEY = "ctt_cct_onboarding_complete";
+const CCT_FIRST_SESSION_COMPLETE_KEY = "ctt_cct_first_session_complete";
+
+export type CCTFamiliarity = "new_to_cct" | "cct_inconsistent" | "cct_confident";
+
+export function getCCTFamiliarity(): CCTFamiliarity | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const val = localStorage.getItem(CCT_FAMILIARITY_KEY);
+    if (val === "new_to_cct" || val === "cct_inconsistent" || val === "cct_confident") {
+      return val;
+    }
+    return null;
+  } catch { return null; }
+}
+
+export function saveCCTFamiliarity(v: CCTFamiliarity): void {
+  try { localStorage.setItem(CCT_FAMILIARITY_KEY, v); } catch { /* ignore */ }
+}
+
+export function getCCTOnboardingComplete(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const val = localStorage.getItem(CCT_ONBOARDING_COMPLETE_KEY);
+    return val === "true";
+  } catch { return false; }
+}
+
+export function saveCCTOnboardingComplete(complete: boolean): void {
+  try { localStorage.setItem(CCT_ONBOARDING_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
+}
+
+export function getCCTFirstSessionComplete(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const val = localStorage.getItem(CCT_FIRST_SESSION_COMPLETE_KEY);
+    return val === "true";
+  } catch { return false; }
+}
+
+export function saveCCTFirstSessionComplete(complete: boolean): void {
+  try { localStorage.setItem(CCT_FIRST_SESSION_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
+}
