@@ -443,8 +443,8 @@ export default function CCTOnboardingBridge() {
   if (isLaunch || isRefresher) {
     const title = isLaunch ? "Now build the habit" : "Turn CCT into a habit";
     const body = isLaunch 
-      ? "You'll practice each part of CCT one step at a time: Checks, Captures, Threats, Then full solve. This teaches you how to scan before you commit to a move."
-      : "You already know the idea. Now the goal is consistency. The CCT Trainer helps you practice checks, captures, and threats in order so the process becomes automatic during real games.";
+      ? "You'll practice each part of CCT one step at a time: Checks, Captures, Threats, Then full solve. This teaches you how to scan before you commit to a move. After training, you'll start with Fork — the most common tactical pattern."
+      : "You already know the idea. Now the goal is consistency. The CCT Trainer helps you practice checks, captures, and threats in order so the process becomes automatic during real games. After training, you'll start with Fork — the most common tactical pattern.";
     const cta = "Start CCT Training";
 
     return (

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Chess } from "chess.js";
 import { saveCCTFirstSessionComplete } from "@/lib/storage";
 import ChessBoard from "./ChessBoard";
+import Link from "next/link";
 
 const POSITIONS = [
   { 
@@ -390,35 +391,67 @@ export default function CCTTrainer() {
           </div>
         </div>
 
-        <a
-          href="/app/training"
-          style={{
-            display: "inline-block",
-            backgroundColor: "#f97316",
-            color: "white",
-            padding: "0.875rem 2rem",
-            borderRadius: "10px",
-            textDecoration: "none",
-            fontWeight: "600",
-            fontSize: "1rem",
-            transition: "all 0.2s",
-            width: "100%",
-            textAlign: "center",
-            boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor = "#ea580c";
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 6px 16px rgba(249, 115, 22, 0.4)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor = "#f97316";
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
-          }}
-        >
-          Continue to Training →
-        </a>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "1.25rem" }}>
+          <div style={{ color: "#64748b", fontSize: "0.85rem", textAlign: "center", marginBottom: "0.5rem" }}>
+            Ready to apply CCT to real tactics?
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link
+              href="/app/patterns/fork"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#f97316",
+                color: "white",
+                padding: "0.875rem 1.5rem",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                transition: "all 0.2s",
+                boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#ea580c";
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 6px 16px rgba(249, 115, 22, 0.4)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#f97316";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
+              }}
+            >
+              Start with Fork →
+            </Link>
+            <Link
+              href="/app/patterns"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#1a1a2e",
+                color: "#94a3b8",
+                border: "1px solid #2e3a5c",
+                padding: "0.875rem 1.5rem",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#1f2040";
+                e.currentTarget.style.borderColor = "#f97316";
+                e.currentTarget.style.color = "#e2e8f0";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#1a1a2e";
+                e.currentTarget.style.borderColor = "#2e3a5c";
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+            >
+              Browse All Patterns
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

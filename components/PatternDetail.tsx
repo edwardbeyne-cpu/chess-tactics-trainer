@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import patterns from "@/data/patterns";
 import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import {
@@ -96,17 +97,76 @@ export default function PatternDetail() {
 
   if (!pattern || puzzles.length === 0) {
     return (
-      <div style={{ maxWidth: "800px", margin: "0 auto", textAlign: "center", padding: "4rem 1rem" }}>
-        <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔍</div>
-        <div style={{ color: "#94a3b8", fontSize: "1.1rem", marginBottom: "1.5rem" }}>
-          Pattern &ldquo;{themeKey}&rdquo; not found or has no puzzles loaded yet.
+      <div style={{ maxWidth: "800px", margin: "0 auto", padding: "3rem 1rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔍</div>
+          <div style={{ color: "#94a3b8", fontSize: "1.1rem", marginBottom: "0.5rem" }}>
+            Pattern &ldquo;{themeKey}&rdquo; not found or has no puzzles loaded yet.
+          </div>
+          <div style={{ color: "#64748b", fontSize: "0.9rem", marginBottom: "2rem" }}>
+            Try one of these recommended starting patterns instead:
+          </div>
         </div>
-        <button
-          onClick={() => router.push("/app/patterns")}
-          style={{ backgroundColor: "#2e75b6", color: "white", border: "none", borderRadius: "8px", padding: "0.7rem 1.5rem", cursor: "pointer" }}
-        >
-          ← Back to Patterns
-        </button>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
+          {[
+            { name: "Fork", description: "Attack two pieces at once", href: "/app/patterns/fork", color: "#2e75b6" },
+            { name: "Pin", description: "Immobilize a piece to win material", href: "/app/patterns/pin", color: "#2e75b6" },
+            { name: "Skewer", description: "Attack a valuable piece through a less valuable one", href: "/app/patterns/skewer", color: "#2e75b6" },
+          ].map((recommended) => (
+            <Link
+              key={recommended.name}
+              href={recommended.href}
+              style={{
+                backgroundColor: "#1a1a2e",
+                border: `1px solid ${recommended.color}`,
+                borderRadius: "10px",
+                padding: "1rem",
+                textDecoration: "none",
+                transition: "all 0.2s",
+                display: "block",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#1f2040";
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = `0 4px 12px ${recommended.color}40`;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#1a1a2e";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            >
+              <div style={{ color: recommended.color, fontWeight: "bold", fontSize: "1rem", marginBottom: "0.25rem" }}>
+                {recommended.name}
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+                {recommended.description}
+              </div>
+            </Link>
+          ))}
+        </div>
+        
+        <div style={{ textAlign: "center" }}>
+          <button
+            onClick={() => router.push("/app/patterns")}
+            style={{ 
+              backgroundColor: "#2e75b6", 
+              color: "white", 
+              border: "none", 
+              borderRadius: "8px", 
+              padding: "0.7rem 1.5rem", 
+              cursor: "pointer",
+              fontSize: "0.9rem",
+              fontWeight: "600",
+              transition: "background-color 0.2s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = "#1e5a96"}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "#2e75b6"}
+          >
+            ← Browse All Patterns
+          </button>
+        </div>
       </div>
     );
   }

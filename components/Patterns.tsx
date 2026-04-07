@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import patterns, { type Pattern } from "@/data/patterns";
 import PuzzlePage from "@/components/Puzzle";
 import {
@@ -529,22 +530,96 @@ export default function Patterns() {
         </div>
       </div>
 
-      {/* Empty state — shown when no patterns have been started yet */}
+      {/* Motivational onboarding empty state — shown when no patterns have been started yet */}
       {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
         <div style={{
-          backgroundColor: "#0d1621",
-          border: "1px solid #f59e0b40",
-          borderRadius: "10px",
-          padding: "0.75rem 1rem",
-          marginBottom: "1.25rem",
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          color: "#f59e0b",
-          fontSize: "0.85rem",
+          backgroundColor: "#0d1a2a",
+          border: "2px solid #2e75b6",
+          borderRadius: "12px",
+          padding: "1.5rem",
+          marginBottom: "1.75rem",
+          textAlign: "center",
         }}>
-          <span>👆</span>
-          <span>Pick any pattern below to start drilling — <strong>Fork</strong> and <strong>Pin</strong> are the best starting points.</span>
+          <div style={{ 
+            color: "#2e75b6", 
+            fontSize: "1.1rem", 
+            fontWeight: "700",
+            marginBottom: "0.5rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem"
+          }}>
+            <span>🎯</span>
+            <span>Start Building Your Tactical Instincts</span>
+          </div>
+          <div style={{ 
+            color: "#94a3b8", 
+            fontSize: "0.9rem", 
+            marginBottom: "1.25rem",
+            lineHeight: 1.6,
+            maxWidth: "500px",
+            margin: "0 auto"
+          }}>
+            Begin with <strong>Fork</strong> or <strong>Pin</strong> — the most common tactical patterns in chess. 
+            Each puzzle you solve builds pattern recognition that works in real games.
+          </div>
+          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <Link
+              href="/app/patterns/fork"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#2e75b6",
+                color: "white",
+                padding: "0.6rem 1.25rem",
+                borderRadius: "8px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                textDecoration: "none",
+                transition: "background-color 0.2s, transform 0.2s",
+                boxShadow: "0 2px 8px rgba(46, 117, 182, 0.3)",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#1e5a96";
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 4px 12px rgba(46, 117, 182, 0.4)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#2e75b6";
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 2px 8px rgba(46, 117, 182, 0.3)";
+              }}
+            >
+              Start with Fork →
+            </Link>
+            <Link
+              href="/app/patterns/pin"
+              style={{
+                display: "inline-block",
+                backgroundColor: "#0d1621",
+                color: "#94a3b8",
+                border: "1px solid #2e3a5c",
+                padding: "0.6rem 1.25rem",
+                borderRadius: "8px",
+                fontSize: "0.85rem",
+                fontWeight: "600",
+                textDecoration: "none",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#1a1f2e";
+                e.currentTarget.style.borderColor = "#2e75b6";
+                e.currentTarget.style.color = "#e2e8f0";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#0d1621";
+                e.currentTarget.style.borderColor = "#2e3a5c";
+                e.currentTarget.style.color = "#94a3b8";
+              }}
+            >
+              Try Pin Instead
+            </Link>
+          </div>
         </div>
       )}
 

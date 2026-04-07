@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   getTacticsRatingData,
   getAllPatternStats,
@@ -59,9 +60,46 @@ function getPatternMasteryTiers(): PatternMasteryTiers {
 // ── Sprint 31: Pattern Mastery Tier Display Component ─────────────────────
 function PatternMasteryTierDisplay() {
   const tiers = getPatternMasteryTiers();
-  // Hide if no pattern mastery data yet
   const totalMastered = tiers.beginner + tiers.intermediate + tiers.advanced + tiers.elite;
-  if (totalMastered === 0) return null;
+  
+  // Show motivational onboarding prompt for new users instead of hiding
+  if (totalMastered === 0) {
+    return (
+      <div style={{
+        backgroundColor: "#0d1a2a",
+        border: "1px solid #2e75b6",
+        borderRadius: "10px",
+        padding: "0.9rem 1rem",
+        marginTop: "0.75rem",
+      }}>
+        <div style={{ color: "#2e75b6", fontWeight: "600", fontSize: "0.82rem", marginBottom: "0.4rem" }}>
+          🎯 Start Your Pattern Journey
+        </div>
+        <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginBottom: "0.75rem", lineHeight: 1.5 }}>
+          Begin with <strong>Fork</strong> or <strong>Pin</strong> — the most common tactical patterns. 
+          Each pattern you master builds your tactical instincts.
+        </div>
+        <Link
+          href="/app/patterns/fork"
+          style={{
+            display: "inline-block",
+            backgroundColor: "#2e75b6",
+            color: "white",
+            padding: "0.4rem 0.9rem",
+            borderRadius: "6px",
+            fontSize: "0.75rem",
+            fontWeight: "600",
+            textDecoration: "none",
+            transition: "background-color 0.2s",
+          }}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = "#1e5a96"}
+          onMouseLeave={e => e.currentTarget.style.backgroundColor = "#2e75b6"}
+        >
+          Start with Fork →
+        </Link>
+      </div>
+    );
+  }
   const tierItems = [
     { label: "Beginner", count: tiers.beginner, color: "#94a3b8", dot: "#94a3b8" },
     { label: "Intermediate", count: tiers.intermediate, color: "#60a5fa", dot: "#60a5fa" },
