@@ -151,12 +151,14 @@ function CurriculumPatternCard({
   metStandard,
   timeStandard,
   onClick,
+  isRecommended = false,
 }: {
   pattern: Pattern;
   summary: PatternCurriculumSummary;
   metStandard: number;
   timeStandard: number;
   onClick: () => void;
+  isRecommended?: boolean;
 }) {
   const colors = TIER_COLORS[pattern.tier];
   const progressPct = summary.totalPuzzles > 0
@@ -167,21 +169,52 @@ function CurriculumPatternCard({
   // Sprint 33: Use short display name; title attr for full name
   const displayName = getDisplayName(pattern.name);
 
+  const isFork = pattern.name === "Fork";
+  
   return (
     <div
       onClick={onClick}
       title={pattern.name}
       style={{
-        backgroundColor: "#1a1a2e",
-        border: `1px solid ${isMastered ? colors.accent : "#2e3a5c"}`,
+        backgroundColor: isRecommended ? "#1a0f1a" : "#1a1a2e",
+        border: isRecommended ? "2px solid #f97316" : `1px solid ${isMastered ? colors.accent : "#2e3a5c"}`,
         borderRadius: "10px",
         padding: "0.9rem 1rem",
         cursor: "pointer",
         transition: "border-color 0.2s, background 0.15s",
+        position: "relative",
+        ...(isRecommended && {
+          boxShadow: "0 0 0 1px rgba(249, 115, 22, 0.3)",
+        }),
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = colors.accent; e.currentTarget.style.backgroundColor = "#1f2040"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = isMastered ? colors.accent : "#2e3a5c"; e.currentTarget.style.backgroundColor = "#1a1a2e"; }}
+      onMouseEnter={(e) => { 
+        e.currentTarget.style.borderColor = isRecommended ? "#f97316" : colors.accent; 
+        e.currentTarget.style.backgroundColor = isRecommended ? "#241224" : "#1f2040"; 
+      }}
+      onMouseLeave={(e) => { 
+        e.currentTarget.style.borderColor = isRecommended ? "#f97316" : (isMastered ? colors.accent : "#2e3a5c"); 
+        e.currentTarget.style.backgroundColor = isRecommended ? "#1a0f1a" : "#1a1a2e"; 
+      }}
     >
+      {/* Recommended badge */}
+      {isRecommended && (
+        <div style={{
+          position: "absolute",
+          top: "-10px",
+          right: "10px",
+          backgroundColor: "#f97316",
+          color: "white",
+          fontSize: "0.65rem",
+          fontWeight: "bold",
+          padding: "0.2rem 0.5rem",
+          borderRadius: "12px",
+          border: "2px solid #0a1520",
+          zIndex: 10,
+          boxShadow: "0 2px 8px rgba(249, 115, 22, 0.4)",
+        }}>
+          🔥 Recommended
+        </div>
+      )}
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginBottom: "0.5rem" }}>
         {/* Sprint 33: No emoji icon prefix — just the name */}
@@ -530,6 +563,82 @@ export default function Patterns() {
         </div>
       </div>
 
+      {/* ABOVE-THE-FOLD ACTIVATION: Prominent "Start with Fork" recommendation */}
+      <div style={{
+        backgroundColor: "#0a1520",
+        border: "3px solid #f97316",
+        borderRadius: "16px",
+        padding: "1.75rem",
+        marginBottom: "2rem",
+        textAlign: "center",
+        boxShadow: "0 4px 20px rgba(249, 115, 22, 0.15)",
+      }}>
+        <div style={{ 
+          color: "#f97316", 
+          fontSize: "1.3rem", 
+          fontWeight: "800",
+          marginBottom: "0.75rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "0.75rem"
+        }}>
+          <span>🔥</span>
+          <span>Recommended First Pattern</span>
+        </div>
+        <div style={{ 
+          color: "#e2e8f0", 
+          fontSize: "1.1rem", 
+          fontWeight: "700",
+          marginBottom: "0.5rem"
+        }}>
+          Start with <span style={{color: "#f97316"}}>Fork</span> — The Most Common Chess Tactic
+        </div>
+        <div style={{ 
+          color: "#94a3b8", 
+          fontSize: "0.9rem", 
+          marginBottom: "1.5rem",
+          lineHeight: 1.6,
+          maxWidth: "500px",
+          margin: "0 auto"
+        }}>
+          <strong>Fork</strong> attacks two pieces at once. It appears in 1 out of 4 tactical puzzles.
+          Master this first to build your pattern recognition foundation.
+        </div>
+        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+          <Link
+            href="/app/patterns/fork"
+            style={{
+              display: "inline-block",
+              backgroundColor: "#f97316",
+              color: "white",
+              padding: "0.85rem 2rem",
+              borderRadius: "10px",
+              fontSize: "1rem",
+              fontWeight: "700",
+              textDecoration: "none",
+              transition: "all 0.2s",
+              boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.backgroundColor = "#ea580c";
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 6px 20px rgba(249, 115, 22, 0.4)";
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.backgroundColor = "#f97316";
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
+            }}
+          >
+            Start with Fork →
+          </Link>
+          <div style={{ color: "#64748b", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
+            Or explore 27 other patterns below
+          </div>
+        </div>
+      </div>
+
       {/* Motivational onboarding empty state — shown when no patterns have been started yet */}
       {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
         <div style={{
@@ -649,6 +758,7 @@ export default function Patterns() {
               {tierPatterns.map((p) => {
                 const summary = summaries[p.name];
                 const themeKey = getThemeKey(p.name);
+                const isRecommended = p.name === "Fork";
                 return (
                   <CurriculumPatternCard
                     key={p.name}
@@ -659,6 +769,7 @@ export default function Patterns() {
                     onClick={() => {
                       router.push(`/app/patterns/${themeKey}`);
                     }}
+                    isRecommended={isRecommended}
                   />
                 );
               })}
