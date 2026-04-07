@@ -165,15 +165,20 @@ piece.black.pawn    { background-image: url("/pieces/cburnett/bP.svg"); }
 }
 
 @keyframes pulse {
-  0%   { transform: scale(0.9); }
-  50%  { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
+   0%   { transform: scale(0.9); }
+   50%  { transform: scale(1.05); }
+   100% { transform: scale(1); }
+ }
 
-@keyframes bossGlow {
-  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
-  50%       { box-shadow: 0 0 30px rgba(239, 68, 68, 0.9); }
-}
+ @keyframes bossGlow {
+   0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
+   50%       { box-shadow: 0 0 30px rgba(239, 68, 68, 0.9); }
+ }
+
+ @keyframes glowPulse {
+   0%, 100% { box-shadow: 0 0 12px rgba(249, 115, 22, 0.3), 0 0 0 1px rgba(249, 115, 22, 0.3); }
+   50%      { box-shadow: 0 0 20px rgba(249, 115, 22, 0.5), 0 0 0 1px rgba(249, 115, 22, 0.5); }
+ }
 
 /* Chessground drawable brushes */
 .cg-wrap svg.cg-shapes circle,
