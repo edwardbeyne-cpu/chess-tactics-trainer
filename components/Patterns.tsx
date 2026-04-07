@@ -456,281 +456,198 @@ export default function Patterns() {
         )
       )}
 
-      {/* Header + pattern grid — only shown in "Drill One Pattern" mode */}
-      {drillMode === "one" && (<>
-      <div style={{ marginBottom: "2rem" }}>
-        <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
-          <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
-            Drill Tactics
-          </h1>
-          <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 1.25rem", maxWidth: "540px", lineHeight: 1.6 }}>
-            Choose a pattern to drill, or drill all 28 at random above.
-          </p>
-        </div>
+{/* Header + pattern grid — only shown in "Drill One Pattern" mode */}
+       {drillMode === "one" && (<>
+       <div style={{ marginBottom: "2rem" }}>
+         <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
+           <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: "0 0 0.4rem" }}>
+             Drill Tactics
+           </h1>
+           <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto 1.25rem", maxWidth: "540px", lineHeight: 1.6 }}>
+             Choose a pattern to drill, or drill all 28 at random above.
+           </p>
+         </div>
 
-        {/* Sprint 12: Global Time Standard selector */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.75rem",
-          justifyContent: "center",
-          marginBottom: showExplainer ? "1rem" : "1.25rem",
-          flexWrap: "wrap",
-        }}>
-          <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600" }}>Time Standard:</span>
-          <div style={{ display: "flex", gap: "0.4rem" }}>
-            {timeStandardOptions.map((opt) => {
-              const isActive = activeTimeStandard === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  onClick={() => handleTimeStandardSelect(opt.value)}
-                  style={{
-                    backgroundColor: isActive ? "#2e75b6" : "#1a1a2e",
-                    color: isActive ? "white" : "#64748b",
-                    border: `1px solid ${isActive ? "#2e75b6" : "#2e3a5c"}`,
-                    borderRadius: "20px",
-                    padding: "0.35rem 0.9rem",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: isActive ? "bold" : "normal",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = "#4a7aac";
-                      e.currentTarget.style.color = "#94a3b8";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = "#2e3a5c";
-                      e.currentTarget.style.color = "#64748b";
-                    }
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+         {/* ACTION-FIRST: Prominent "Start with Fork" recommendation - MOVED TO TOP */}
+         <div style={{
+           backgroundColor: "#0a1520",
+           border: "3px solid #f97316",
+           borderRadius: "16px",
+           padding: "1.75rem",
+           marginBottom: "1.75rem",
+           textAlign: "center",
+           boxShadow: "0 4px 20px rgba(249, 115, 22, 0.15)",
+         }}>
+           <div style={{ 
+             color: "#f97316", 
+             fontSize: "1.3rem", 
+             fontWeight: "800",
+             marginBottom: "0.75rem",
+             display: "flex",
+             alignItems: "center",
+             justifyContent: "center",
+             gap: "0.75rem"
+           }}>
+             <span>🔥</span>
+             <span>Recommended First Pattern</span>
+           </div>
+           <div style={{ 
+             color: "#e2e8f0", 
+             fontSize: "1.1rem", 
+             fontWeight: "700",
+             marginBottom: "0.5rem"
+           }}>
+             Start with <span style={{color: "#f97316"}}>Fork</span> — The Most Common Chess Tactic
+           </div>
+           <div style={{ 
+             color: "#94a3b8", 
+             fontSize: "0.9rem", 
+             marginBottom: "1.5rem",
+             lineHeight: 1.6,
+             maxWidth: "500px",
+             margin: "0 auto"
+           }}>
+             <strong>Fork</strong> attacks two pieces at once. It appears in 1 out of 4 tactical puzzles.
+             Master this first to build your pattern recognition foundation.
+           </div>
+           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+             <Link
+               href="/app/patterns/fork"
+               style={{
+                 display: "inline-block",
+                 backgroundColor: "#f97316",
+                 color: "white",
+                 padding: "0.85rem 2rem",
+                 borderRadius: "10px",
+                 fontSize: "1rem",
+                 fontWeight: "700",
+                 textDecoration: "none",
+                 transition: "all 0.2s",
+                 boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+               }}
+               onMouseEnter={e => {
+                 e.currentTarget.style.backgroundColor = "#ea580c";
+                 e.currentTarget.style.transform = "translateY(-2px)";
+                 e.currentTarget.style.boxShadow = "0 6px 20px rgba(249, 115, 22, 0.4)";
+               }}
+               onMouseLeave={e => {
+                 e.currentTarget.style.backgroundColor = "#f97316";
+                 e.currentTarget.style.transform = "translateY(0)";
+                 e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
+               }}
+             >
+               Start with Fork →
+             </Link>
+             <div style={{ color: "#64748b", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
+               Or explore 27 other patterns below
+             </div>
+           </div>
+         </div>
 
-        {/* Sprint 33: Explainer card — dismissable, removed from DOM when dismissed */}
-        {mounted && showExplainer && (
-          <div style={{
-            backgroundColor: "#13132b",
-            border: "1px solid #2e3a5c",
-            borderRadius: "12px",
-            padding: "1rem 1.25rem",
-            marginBottom: "1.25rem",
-            position: "relative",
-          }}>
-            <button
-              onClick={handleDismissExplainer}
-              aria-label="Dismiss"
-              style={{
-                position: "absolute", top: "0.75rem", right: "0.75rem",
-                background: "none", border: "none", color: "#475569",
-                fontSize: "1.1rem", cursor: "pointer", lineHeight: 1, padding: "0.2rem",
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = "#475569"; }}
-            >×</button>
-            <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
-              How Drill Tactics Works
-            </div>
-            <ul style={{ margin: 0, paddingLeft: "1.1rem", color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.7, display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-              <li>Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)</li>
-              <li>Work through up to 200 puzzles per pattern, starting easy and getting harder</li>
-              <li>Your rating for that specific pattern updates as you solve puzzles</li>
-              <li>Missed puzzles go into your Review queue automatically</li>
-              <li>Work one pattern at a time until it becomes instinct</li>
-            </ul>
-          </div>
-        )}
+         {/* Sprint 12: Global Time Standard selector - MADE MORE SUBTLE */}
+         <div style={{
+           display: "flex",
+           alignItems: "center",
+           gap: "0.75rem",
+           justifyContent: "center",
+           marginBottom: showExplainer ? "0.75rem" : "1rem",
+           flexWrap: "wrap",
+         }}>
+           <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600" }}>Time Standard:</span>
+           <div style={{ display: "flex", gap: "0.4rem" }}>
+             {timeStandardOptions.map((opt) => {
+               const isActive = activeTimeStandard === opt.value;
+               return (
+                 <button
+                   key={opt.value}
+                   onClick={() => handleTimeStandardSelect(opt.value)}
+                   style={{
+                     backgroundColor: isActive ? "#2e75b6" : "#1a1a2e",
+                     color: isActive ? "white" : "#64748b",
+                     border: `1px solid ${isActive ? "#2e75b6" : "#2e3a5c"}`,
+                     borderRadius: "20px",
+                     padding: "0.35rem 0.9rem",
+                     cursor: "pointer",
+                     fontSize: "0.82rem",
+                     fontWeight: isActive ? "bold" : "normal",
+                     transition: "all 0.15s",
+                   }}
+                   onMouseEnter={(e) => {
+                     if (!isActive) {
+                       e.currentTarget.style.borderColor = "#4a7aac";
+                       e.currentTarget.style.color = "#94a3b8";
+                     }
+                   }}
+                   onMouseLeave={(e) => {
+                     if (!isActive) {
+                       e.currentTarget.style.borderColor = "#2e3a5c";
+                       e.currentTarget.style.color = "#64748b";
+                     }
+                   }}
+                 >
+                   {opt.label}
+                 </button>
+               );
+             })}
+           </div>
+         </div>
 
-        {/* Pattern mastery tier breakdown */}
-        <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.25rem" }}>
-          <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
-            Pattern Mastery
-          </div>
-          {mounted ? (
-            <PatternMasteryTierDisplay />
-          ) : (
-            <div style={{ color: "#334155", fontSize: "0.82rem" }}>Loading…</div>
-          )}
-        </div>
-      </div>
+         {/* Sprint 33: Explainer card — made less prominent, smaller, lower visual weight */}
+         {mounted && showExplainer && (
+           <div style={{
+             backgroundColor: "#13132b",
+             border: "1px solid #334155",
+             borderRadius: "10px",
+             padding: "0.85rem 1.1rem",
+             marginBottom: "1rem",
+             position: "relative",
+           }}>
+             <button
+               onClick={handleDismissExplainer}
+               aria-label="Dismiss"
+               style={{
+                 position: "absolute", top: "0.6rem", right: "0.6rem",
+                 background: "none", border: "none", color: "#475569",
+                 fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: "0.2rem",
+               }}
+               onMouseEnter={(e) => { e.currentTarget.style.color = "#94a3b8"; }}
+               onMouseLeave={(e) => { e.currentTarget.style.color = "#475569"; }}
+             >×</button>
+             <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem" }}>
+               How Drill Tactics Works
+             </div>
+             <ul style={{ margin: 0, paddingLeft: "1rem", color: "#94a3b8", fontSize: "0.78rem", lineHeight: 1.6, display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+               <li>Choose a tactical pattern to focus on (Fork, Pin, Skewer, etc.)</li>
+               <li>Work through up to 200 puzzles per pattern, starting easy and getting harder</li>
+               <li>Your rating for that specific pattern updates as you solve puzzles</li>
+               <li>Missed puzzles go into your Review queue automatically</li>
+               <li>Work one pattern at a time until it becomes instinct</li>
+             </ul>
+           </div>
+         )
 
-      {/* ABOVE-THE-FOLD ACTIVATION: Prominent "Start with Fork" recommendation */}
-      <div style={{
-        backgroundColor: "#0a1520",
-        border: "3px solid #f97316",
-        borderRadius: "16px",
-        padding: "1.75rem",
-        marginBottom: "2rem",
-        textAlign: "center",
-        boxShadow: "0 4px 20px rgba(249, 115, 22, 0.15)",
-      }}>
-        <div style={{ 
-          color: "#f97316", 
-          fontSize: "1.3rem", 
-          fontWeight: "800",
-          marginBottom: "0.75rem",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: "0.75rem"
-        }}>
-          <span>🔥</span>
-          <span>Recommended First Pattern</span>
-        </div>
-        <div style={{ 
-          color: "#e2e8f0", 
-          fontSize: "1.1rem", 
-          fontWeight: "700",
-          marginBottom: "0.5rem"
-        }}>
-          Start with <span style={{color: "#f97316"}}>Fork</span> — The Most Common Chess Tactic
-        </div>
-        <div style={{ 
-          color: "#94a3b8", 
-          fontSize: "0.9rem", 
-          marginBottom: "1.5rem",
-          lineHeight: 1.6,
-          maxWidth: "500px",
-          margin: "0 auto"
-        }}>
-          <strong>Fork</strong> attacks two pieces at once. It appears in 1 out of 4 tactical puzzles.
-          Master this first to build your pattern recognition foundation.
-        </div>
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-          <Link
-            href="/app/patterns/fork"
-            style={{
-              display: "inline-block",
-              backgroundColor: "#f97316",
-              color: "white",
-              padding: "0.85rem 2rem",
-              borderRadius: "10px",
-              fontSize: "1rem",
-              fontWeight: "700",
-              textDecoration: "none",
-              transition: "all 0.2s",
-              boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor = "#ea580c";
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 6px 20px rgba(249, 115, 22, 0.4)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor = "#f97316";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
-            }}
-          >
-            Start with Fork →
-          </Link>
-          <div style={{ color: "#64748b", fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-            Or explore 27 other patterns below
-          </div>
-        </div>
-      </div>
+         }
 
-      {/* Motivational onboarding empty state — shown when no patterns have been started yet */}
-      {mounted && Object.values(summaries).every((s) => s.completed === 0) && (
-        <div style={{
-          backgroundColor: "#0d1a2a",
-          border: "2px solid #2e75b6",
-          borderRadius: "12px",
-          padding: "1.5rem",
-          marginBottom: "1.75rem",
-          textAlign: "center",
-        }}>
-          <div style={{ 
-            color: "#2e75b6", 
-            fontSize: "1.1rem", 
-            fontWeight: "700",
-            marginBottom: "0.5rem",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.5rem"
-          }}>
-            <span>🎯</span>
-            <span>Start Building Your Tactical Instincts</span>
-          </div>
-          <div style={{ 
-            color: "#94a3b8", 
-            fontSize: "0.9rem", 
-            marginBottom: "1.25rem",
-            lineHeight: 1.6,
-            maxWidth: "500px",
-            margin: "0 auto"
-          }}>
-            Begin with <strong>Fork</strong> or <strong>Pin</strong> — the most common tactical patterns in chess. 
-            Each puzzle you solve builds pattern recognition that works in real games.
-          </div>
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link
-              href="/app/patterns/fork"
-              style={{
-                display: "inline-block",
-                backgroundColor: "#2e75b6",
-                color: "white",
-                padding: "0.6rem 1.25rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: "600",
-                textDecoration: "none",
-                transition: "background-color 0.2s, transform 0.2s",
-                boxShadow: "0 2px 8px rgba(46, 117, 182, 0.3)",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.backgroundColor = "#1e5a96";
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(46, 117, 182, 0.4)";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.backgroundColor = "#2e75b6";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 2px 8px rgba(46, 117, 182, 0.3)";
-              }}
-            >
-              Start with Fork →
-            </Link>
-            <Link
-              href="/app/patterns/pin"
-              style={{
-                display: "inline-block",
-                backgroundColor: "#0d1621",
-                color: "#94a3b8",
-                border: "1px solid #2e3a5c",
-                padding: "0.6rem 1.25rem",
-                borderRadius: "8px",
-                fontSize: "0.85rem",
-                fontWeight: "600",
-                textDecoration: "none",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.backgroundColor = "#1a1f2e";
-                e.currentTarget.style.borderColor = "#2e75b6";
-                e.currentTarget.style.color = "#e2e8f0";
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.backgroundColor = "#0d1621";
-                e.currentTarget.style.borderColor = "#2e3a5c";
-                e.currentTarget.style.color = "#94a3b8";
-              }}
-            >
-              Try Pin Instead
-            </Link>
-          </div>
-        </div>
-      )}
+         {/* Pattern mastery tier breakdown - ONLY SHOW IF USER HAS PROGRESS */}
+         {mounted && (() => {
+           const tiers = getPatternMasteryTiers();
+           const hasProgress = tiers.beginner > 0 || tiers.intermediate > 0 || tiers.advanced > 0 || tiers.elite > 0;
+           
+           if (hasProgress) {
+             return (
+               <div style={{ backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
+                 <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.6rem" }}>
+                   Pattern Mastery
+                 </div>
+                 <PatternMasteryTierDisplay />
+               </div>
+             );
+           }
+           return null;
+         })()}
+       </div>
+
+
 
       {/* Pattern sections by tier — clean list, no lockout gates */}
       {[1, 2, 3].map((tier) => {
