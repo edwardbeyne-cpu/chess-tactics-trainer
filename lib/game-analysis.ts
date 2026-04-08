@@ -303,7 +303,7 @@ function detectMissedTactic(fen: string, actualPlayerMove?: string): TacticLabel
     const normalize = (u: string) => u.replace(/undefined$/, "").toLowerCase();
     const playerNorm = normalize(actualPlayerMove);
 
-    for (const ucis of tactics.values()) {
+    for (const ucis of Array.from(tactics.values())) {
       if (ucis.some((u) => normalize(u) === playerNorm)) {
         return null; // Player executed a tactic — not missed
       }
