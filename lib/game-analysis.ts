@@ -43,7 +43,9 @@ function normalizePatternLabel(raw: string): string {
 }
 
 function parsePgnMoves(pgn: string): string[] {
-  const cleaned = pgn
+  // Strip PGN headers (lines starting with [)
+  const headerless = pgn.replace(/\[[^\]]*\]\s*/g, "");
+  const cleaned = headerless
     .replace(/\{[^}]*\}/g, "")
     .replace(/\([^)]*\)/g, "")
     .replace(/\$\d+/g, "")
@@ -58,7 +60,8 @@ function parsePgnMoves(pgn: string): string[] {
       const m = c.move(tok);
       if (m) uci.push(m.from + m.to + (m.promotion ?? ""));
     } catch {
-      break;
+      // Skip unrecognized tokens but don't break — try the next one
+      continue;
     }
   }
   return uci;
@@ -318,8 +321,12 @@ function analyzeGamesForQueue(
   const results: Array<{ pattern: string; fen: string; moveNumber?: number }> = [];
   let playerMoveIndex = 0;
 
+  let totalParsedMoves = 0;
+  let totalPlayerMoves = 0;
+
   for (const { pgn, playerColor } of games) {
     const moves = parsePgnMoves(pgn);
+    totalParsedMoves += moves.length;
     const isWhite = playerColor.toLowerCase().startsWith("w");
     const c = new Chess();
     let moveNum = 0;
@@ -347,6 +354,7 @@ function analyzeGamesForQueue(
         : fen.split(" ")[1] === "b";
 
       if (wasPlayerTurn) {
+        totalPlayerMoves++;
         // Pass the actual move played so we only flag genuinely missed tactics
         const pattern = detectMissedTactic(fen, uci);
         if (pattern) {
@@ -360,6 +368,7 @@ function analyzeGamesForQueue(
     }
   }
 
+  console.log(`[CTT] Parsed ${totalParsedMoves} total moves, analyzed ${totalPlayerMoves} player moves, found ${results.length} missed tactics`);
   return results.slice(0, 150);
 }
 
