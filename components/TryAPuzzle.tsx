@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { Chess } from "chess.js";
 
 const ChessBoard = dynamic(() => import("@/components/ChessBoard"), { ssr: false });
 
@@ -16,6 +17,7 @@ const DEMO_PUZZLE = {
 export default function TryAPuzzle() {
   const [status, setStatus] = useState<"idle" | "solved" | "wrong">("idle");
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
+  const [currentFen, setCurrentFen] = useState(DEMO_PUZZLE.fen);
   const [showHint, setShowHint] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -36,6 +38,9 @@ export default function TryAPuzzle() {
   function handleMove(from: string, to: string): boolean {
     if (status === "solved") return false;
     if (from === DEMO_PUZZLE.correctFrom && to === DEMO_PUZZLE.correctTo) {
+      const chess = new Chess(DEMO_PUZZLE.fen);
+      chess.move({ from, to });
+      setCurrentFen(chess.fen());
       setLastMove([from, to]);
       setStatus("solved");
       return true;
@@ -46,7 +51,7 @@ export default function TryAPuzzle() {
   }
 
   return (
-    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 2rem 5rem" }}>
+    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 2rem 4rem" }}>
       <style jsx>{`
         @keyframes pulseGlow {
           0% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0.7); }
@@ -54,7 +59,7 @@ export default function TryAPuzzle() {
           100% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0); }
         }
       `}</style>
-      <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+      <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
           Try a puzzle right now
         </h2>
@@ -67,7 +72,7 @@ export default function TryAPuzzle() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: "1.5rem",
+        gap: "0.75rem",
       }}>
         {/* Tooltip */}
         {showTooltip && status === "idle" && (
@@ -127,7 +132,7 @@ export default function TryAPuzzle() {
               </div>
             )}
             <ChessBoard
-              fen={DEMO_PUZZLE.fen}
+              fen={currentFen}
               onMove={handleMove}
               lastMove={lastMove}
               draggable={status !== "solved" && status !== "wrong"}

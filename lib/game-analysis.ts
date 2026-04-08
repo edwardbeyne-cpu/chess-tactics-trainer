@@ -1,17 +1,53 @@
 // lib/game-analysis.ts
-// Shared game analysis that runs when Chess.com connects from any screen
+// Shared connected-account game analysis for Training Plan coaching output
 
 import { Chess } from "chess.js";
 
 type Platform = "chesscom" | "lichess";
 type GameResult = { pgn: string; playerColor: string };
 
+export interface PatternSummary {
+  pattern: string;
+  count: number;
+  share: number;
+}
+
+export interface StoredGameAnalysis {
+  missedTactics: Array<{ pattern: string; fen: string; moveNumber?: number }>;
+  strengths: PatternSummary[];
+  weaknesses: PatternSummary[];
+  recommendation: string;
+  platform: Platform;
+  username: string;
+  analyzedAt: string;
+  gameCount: number;
+}
+
+const CANONICAL_PATTERN_LABELS: Record<string, string> = {
+  fork: "Fork",
+  pin: "Pin",
+  skewer: "Skewer",
+  check: "Checks",
+  "winning capture": "Winning Captures",
+  exchange: "Exchanges",
+  "discovered attack": "Discovered Attacks",
+  "back rank mate": "Back Rank Mates",
+};
+
+function normalizePatternLabel(raw: string): string {
+  const key = raw.trim().toLowerCase();
+  return CANONICAL_PATTERN_LABELS[key] ?? raw
+    .split(" ")
+    .map((x) => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function parsePgnMoves(pgn: string): string[] {
   const cleaned = pgn
     .replace(/\{[^}]*\}/g, "")
     .replace(/\([^)]*\)/g, "")
     .replace(/\$\d+/g, "")
-    .replace(/\d+\./g, "")
+    .replace(/\d+\.{1,3}/g, "")
     .replace(/1-0|0-1|1\/2-1\/2|\*/g, "")
     .trim();
   const tokens = cleaned.split(/\s+/).filter(Boolean);
@@ -21,7 +57,9 @@ function parsePgnMoves(pgn: string): string[] {
     try {
       const m = c.move(tok);
       if (m) uci.push(m.from + m.to + (m.promotion ?? ""));
-    } catch { break; }
+    } catch {
+      break;
+    }
   }
   return uci;
 }
@@ -36,41 +74,36 @@ function detectMissedTacticSimple(fen: string): string | null {
       clone.move(m);
       const responses = clone.moves({ verbose: true });
 
-      // Fork: a single piece attacks 2+ opponent pieces after moving
-      const attacks = responses.filter(x => x.captured);
-      if (attacks.length >= 2) return "fork";
+      const captures = responses.filter((x) => x.captured);
+      if (captures.length >= 2) return "fork";
 
-      // Capture available (missed tactic opportunity)
       if (m.captured) {
-        // Check if it's a winning capture (captures higher value piece)
         const pieceValues: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
         const capturedVal = pieceValues[m.captured] ?? 0;
         const attackerVal = pieceValues[m.piece] ?? 0;
         if (capturedVal > attackerVal) return "winning capture";
-        if (capturedVal === attackerVal) return "exchange";
+        if (capturedVal === attackerVal && capturedVal > 0) return "exchange";
       }
 
-      // Check if move gives check
       if (clone.inCheck()) {
-        // Is it also capturing? Discovered attack
         if (m.captured) return "discovered attack";
         return "check";
       }
-
-      // Back rank weakness: king on back rank with no escape
-      const oppKingPos = responses.find(r => r.piece === "k");
-      if (!oppKingPos && clone.inCheck()) return "back rank mate";
     }
 
-    // Pin: a piece is pinned (can't move without exposing king)
-    const pinCandidates = moves.filter(m => {
+    const pinCandidates = moves.filter((m) => {
       const clone = new Chess(fen);
-      try { clone.move(m); } catch { return false; }
+      try {
+        clone.move(m);
+      } catch {
+        return false;
+      }
       return clone.inCheck();
     });
     if (pinCandidates.length > 0) return "pin";
-
-  } catch { /* skip */ }
+  } catch {
+    // ignore malformed positions
+  }
   return null;
 }
 
@@ -86,18 +119,47 @@ function analyzeGamesForQueue(games: GameResult[]): Array<{ pattern: string; fen
       const fen = c.fen();
       try {
         c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length === 5 ? uci[4] : undefined });
-      } catch { break; }
+      } catch {
+        break;
+      }
       if (moveNum > 1) {
-        // Check if it was player's previous position
         const wasPlayerTurn = isWhite ? fen.split(" ")[1] === "w" : fen.split(" ")[1] === "b";
         if (wasPlayerTurn) {
           const pattern = detectMissedTacticSimple(fen);
-          if (pattern) results.push({ pattern, fen, moveNumber: moveNum });
+          if (pattern) results.push({ pattern: normalizePatternLabel(pattern), fen, moveNumber: moveNum });
         }
       }
     }
   }
-  return results.slice(0, 50);
+  return results.slice(0, 150);
+}
+
+function buildPatternSummaries(missed: Array<{ pattern: string; fen: string; moveNumber?: number }>): {
+  strengths: PatternSummary[];
+  weaknesses: PatternSummary[];
+  recommendation: string;
+} {
+  const counts: Record<string, number> = {};
+  for (const item of missed) counts[item.pattern] = (counts[item.pattern] || 0) + 1;
+
+  const total = missed.length || 1;
+  const ranked = Object.entries(counts)
+    .map(([pattern, count]) => ({ pattern, count, share: count / total }))
+    .sort((a, b) => b.count - a.count);
+
+  const weaknesses = ranked.slice(0, 3);
+  const allPatterns = ["Fork", "Pin", "Skewer", "Checks", "Winning Captures", "Discovered Attacks", "Back Rank Mates"];
+  const weakSet = new Set(weaknesses.map((x) => x.pattern.toLowerCase()));
+  const strengths = allPatterns
+    .filter((p) => !weakSet.has(p.toLowerCase()))
+    .slice(0, 3)
+    .map((pattern) => ({ pattern, count: 0, share: 0 }));
+
+  const recommendation = weaknesses.length > 0
+    ? `Focus on ${weaknesses[0].pattern} (${Math.round(weaknesses[0].share * 100)}% of missed tactics). Master this pattern to eliminate your biggest tactical blind spot.`
+    : "Connect more games or train a few patterns to unlock personalized coaching recommendations.";
+
+  return { strengths, weaknesses, recommendation };
 }
 
 export async function fetchRecentGames(username: string, platform: Platform = "chesscom"): Promise<GameResult[]> {
@@ -126,23 +188,32 @@ export async function fetchRecentGames(username: string, platform: Platform = "c
       }
     }
     return allGames;
-  } else {
-    const res = await fetch(
-      `https://lichess.org/api/games/user/${username}?max=50&moves=true&pgnInJson=false`,
-      { headers: { Accept: "application/x-ndjson" } }
-    );
-    if (!res.ok) return [];
-    const text = await res.text();
-    return text.trim().split("\n").filter(Boolean).map(line => {
+  }
+
+  const res = await fetch(
+    `https://lichess.org/api/games/user/${username}?max=50&pgnInJson=true&clocks=false&evals=false&opening=false`,
+    { headers: { Accept: "application/x-ndjson" } }
+  );
+  if (!res.ok) return [];
+  const text = await res.text();
+  return text
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
       try {
         const game = JSON.parse(line);
+        const pgn = game.pgn || "";
+        const whiteName = game.players?.white?.user?.name?.toLowerCase() || "";
         return {
-          pgn: game.moves ?? "",
-          playerColor: game.players?.white?.user?.name?.toLowerCase() === username.toLowerCase() ? "white" : "black",
+          pgn,
+          playerColor: whiteName === username.toLowerCase() ? "white" : "black",
         };
-      } catch { return null; }
-    }).filter((x): x is GameResult => x !== null);
-  }
+      } catch {
+        return null;
+      }
+    })
+    .filter((x): x is GameResult => x !== null && Boolean(x.pgn));
 }
 
 export async function runGameAnalysis(username: string, platform: Platform = "chesscom"): Promise<boolean> {
@@ -152,19 +223,26 @@ export async function runGameAnalysis(username: string, platform: Platform = "ch
     if (games.length === 0) return false;
 
     const missed = analyzeGamesForQueue(games);
+    const { strengths, weaknesses, recommendation } = buildPatternSummaries(missed);
 
-    localStorage.setItem("ctt_custom_analysis", JSON.stringify({
+    const payload: StoredGameAnalysis = {
       missedTactics: missed,
+      strengths,
+      weaknesses,
+      recommendation,
       platform,
       username,
       analyzedAt: new Date().toISOString(),
       gameCount: games.length,
-    }));
+    };
+
+    localStorage.setItem("ctt_custom_analysis", JSON.stringify(payload));
+    localStorage.setItem("ctt_game_analysis", JSON.stringify(payload));
     localStorage.setItem("ctt_custom_platform", platform);
     localStorage.setItem("ctt_custom_username", username);
 
     if (missed.length > 0) {
-      const queue = missed.map((m, i) => ({
+      const queue = missed.slice(0, 50).map((m, i) => ({
         id: `custom_${i}`,
         fen: m.fen,
         theme: m.pattern,

@@ -78,7 +78,7 @@ export default function CalibrationPage() {
           <h1
             style={{
               color: "#e2e8f0",
-              fontSize: "1.8rem",
+              fontSize: "1.5rem",
               fontWeight: "800",
               margin: "0 0 1rem",
               lineHeight: 1.2,
@@ -89,7 +89,7 @@ export default function CalibrationPage() {
           <p
             style={{
               color: "#94a3b8",
-              fontSize: "1rem",
+              fontSize: "0.95rem",
               lineHeight: 1.6,
               margin: "0 0 0.75rem",
             }}
@@ -99,7 +99,7 @@ export default function CalibrationPage() {
           <p
             style={{
               color: "#4ade80",
-              fontSize: "0.9rem",
+              fontSize: "0.85rem",
               lineHeight: 1.6,
               margin: "0 0 2.5rem",
               fontWeight: 600,

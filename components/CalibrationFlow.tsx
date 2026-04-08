@@ -121,53 +121,7 @@ function analyzeGamesForQueue(games: Array<{ pgn: string; playerColor: string }>
   return results.slice(0, 50);
 }
 
-async function fetchRecentGames(platform: Platform, username: string): Promise<Array<{ pgn: string; playerColor: string }>> {
-  try {
-    if (platform === "chesscom") {
-      const archivesRes = await fetch(
-        `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
-        { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } }
-      );
-      if (!archivesRes.ok) return [];
-      const { archives } = await archivesRes.json() as { archives: string[] };
-      if (!archives?.length) return [];
-      // Walk archives in reverse (most recent first) until we have 50 games
-      const reversedArchives = [...archives].reverse();
-      const allGames: Array<{ pgn: string; playerColor: string }> = [];
-      for (const archive of reversedArchives) {
-        if (allGames.length >= 50) break;
-        const gamesRes = await fetch(archive, { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } });
-        if (!gamesRes.ok) continue;
-        const { games } = await gamesRes.json() as { games: Array<{ pgn: string; white: { username: string }; black: { username: string } }> };
-        if (!games?.length) continue;
-        // Take games from this archive, most recent first
-        for (const g of [...games].reverse()) {
-          allGames.push({ pgn: g.pgn, playerColor: g.white.username.toLowerCase() === username.toLowerCase() ? "white" : "black" });
-          if (allGames.length >= 50) break;
-        }
-      }
-      return allGames;
-    } else {
-      const res = await fetch(
-        `https://lichess.org/api/games/user/${username}?max=10&moves=true&pgnInJson=false`,
-        { headers: { Accept: "application/x-ndjson" } }
-      );
-      if (!res.ok) return [];
-      const text = await res.text();
-      return text.trim().split("\n").filter(Boolean).map(line => {
-        try {
-          const game = JSON.parse(line);
-          return {
-            pgn: game.moves ?? "",
-            playerColor: game.players?.white?.user?.name?.toLowerCase() === username.toLowerCase() ? "white" : "black",
-          };
-        } catch { return null; }
-      }).filter((x): x is { pgn: string; playerColor: string } => x !== null);
-    }
-  } catch {
-    return [];
-  }
-}
+
 
 // ── Puzzle selection & calibration math ────────────────────────────────────
 

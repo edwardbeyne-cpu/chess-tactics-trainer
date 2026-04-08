@@ -397,7 +397,7 @@ export default function CCTTrainer() {
           </div>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
             <Link
-              href="/app/patterns/fork"
+              href="/app/puzzles?pattern=fork&index=1"
               style={{
                 display: "inline-block",
                 backgroundColor: "#f97316",

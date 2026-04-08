@@ -107,22 +107,22 @@ export default function CCTOnboardingBridge() {
         flexDirection: "column",
       }}>
         <div style={{ marginBottom: "2rem" }}>
-          <h1 style={{
-            fontSize: "1.75rem",
-            fontWeight: "700",
-            marginBottom: "0.5rem",
-            color: "#f1f5f9",
-            letterSpacing: "-0.025em"
-          }}>
-            How do you currently solve tactics?
-          </h1>
-          <p style={{
-            color: "#94a3b8",
-            fontSize: "1rem",
-            lineHeight: 1.5,
-          }}>
-            Choose the option that sounds most like you.
-          </p>
+<h1 style={{
+                fontSize: "1.5rem",
+                fontWeight: "700",
+                marginBottom: "0.5rem",
+                color: "#f1f5f9",
+                letterSpacing: "-0.025em"
+              }}>
+                How do you currently solve tactics?
+              </h1>
+              <p style={{
+                color: "#94a3b8",
+                fontSize: "0.95rem",
+                lineHeight: 1.5,
+              }}>
+                Choose the option that sounds most like you.
+              </p>
         </div>
 
         <div style={{
@@ -178,7 +178,7 @@ export default function CCTOnboardingBridge() {
               }}
             >
               <div style={{
-                fontSize: "1.1rem",
+                fontSize: "1rem",
                 fontWeight: "600",
                 marginBottom: "0.5rem",
                 color: option.color,
@@ -187,7 +187,7 @@ export default function CCTOnboardingBridge() {
               </div>
               <div style={{
                 color: "#94a3b8",
-                fontSize: "0.95rem",
+                fontSize: "0.85rem",
                 lineHeight: 1.4,
               }}>
                 {option.subtitle}
@@ -246,7 +246,7 @@ export default function CCTOnboardingBridge() {
               Step 1 of 3
             </div>
             <h1 style={{
-              fontSize: "1.75rem",
+              fontSize: "1.5rem",
               fontWeight: "700",
               marginBottom: "1rem",
               color: "#f1f5f9",
@@ -256,7 +256,7 @@ export default function CCTOnboardingBridge() {
             </h1>
             <div style={{
               color: "#94a3b8",
-              fontSize: "1.05rem",
+              fontSize: "0.95rem",
               lineHeight: 1.6,
               marginBottom: "1.5rem",
             }}>
@@ -357,7 +357,7 @@ export default function CCTOnboardingBridge() {
               Step 2 of 3
             </div>
             <h1 style={{
-              fontSize: "1.75rem",
+              fontSize: "1.5rem",
               fontWeight: "700",
               marginBottom: "1rem",
               color: "#f1f5f9",
@@ -367,7 +367,7 @@ export default function CCTOnboardingBridge() {
             </h1>
             <div style={{
               color: "#94a3b8",
-              fontSize: "1.05rem",
+              fontSize: "0.95rem",
               lineHeight: 1.6,
               marginBottom: "1.5rem",
             }}>
@@ -477,7 +477,7 @@ export default function CCTOnboardingBridge() {
               {isLaunch ? "Step 3 of 3" : "Ready to train"}
             </div>
             <h1 style={{
-              fontSize: "1.75rem",
+              fontSize: "1.5rem",
               fontWeight: "700",
               marginBottom: "1rem",
               color: "#f1f5f9",
@@ -487,7 +487,7 @@ export default function CCTOnboardingBridge() {
             </h1>
             <div style={{
               color: "#94a3b8",
-              fontSize: "1.05rem",
+              fontSize: "0.95rem",
               lineHeight: 1.6,
               marginBottom: "1.5rem",
             }}>

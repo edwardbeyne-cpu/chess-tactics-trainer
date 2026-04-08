@@ -57,7 +57,7 @@ function difficultyColor(rating: number): string {
 export default function PatternDetail() {
   const params = useParams();
   const router = useRouter();
-  const themeKey = typeof params.theme === "string" ? params.theme : "";
+  const routeTheme = typeof params.theme === "string" ? params.theme : "";
 
   const [progressMap, setProgressMap] = useState<Record<string, PuzzleProgress>>({});
 
@@ -67,21 +67,36 @@ export default function PatternDetail() {
 
   // Find pattern definition
   const pattern = useMemo(() => {
-    // Try direct name match or theme key match
     return patterns.find((p) => {
-      const key = p.name.toLowerCase().replace(/\s+/g, "");
-      return key === themeKey || p.themes.some(t => t.toLowerCase().replace(/[\s_]/g, '') === themeKey.toLowerCase());
+      const slug = p.name.toLowerCase().replace(/\s+/g, "");
+      return slug === routeTheme.toLowerCase() || p.themes.some(t => t.toLowerCase().replace(/[\s_]/g, '') === routeTheme.toLowerCase());
     });
-  }, [themeKey]);
+  }, [routeTheme]);
+
+  const canonicalThemeKey = useMemo(() => {
+    if (!pattern) return routeTheme.toLowerCase();
+
+    const normalizedThemes = pattern.themes
+      .map((t) => t.toLowerCase().replace(/[\s_]/g, ""))
+      .filter(Boolean);
+
+    const directThemeMatch = normalizedThemes.find((t) => cachedPuzzlesByTheme[t]);
+    if (directThemeMatch) return directThemeMatch;
+
+    const slug = pattern.name.toLowerCase().replace(/\s+/g, "");
+    if (cachedPuzzlesByTheme[slug]) return slug;
+
+    return routeTheme.toLowerCase();
+  }, [pattern, routeTheme]);
 
   const puzzles: LichessCachedPuzzle[] = useMemo(() => {
-    return cachedPuzzlesByTheme[themeKey] ?? [];
-  }, [themeKey]);
+    return cachedPuzzlesByTheme[canonicalThemeKey] ?? [];
+  }, [canonicalThemeKey]);
 
-  const totalPuzzles = PATTERN_PUZZLE_COUNTS[themeKey] ?? puzzles.length;
-  const patternRating = getPatternRating(themeKey);
-  const summary = useMemo(() => getPatternCurriculumSummary(themeKey, totalPuzzles), [themeKey, totalPuzzles, progressMap]);
-  const nextPuzzleIndex = useMemo(() => getNextPuzzleForPattern(themeKey, totalPuzzles), [themeKey, totalPuzzles, progressMap]);
+  const totalPuzzles = PATTERN_PUZZLE_COUNTS[canonicalThemeKey] ?? puzzles.length;
+  const patternRating = getPatternRating(canonicalThemeKey);
+  const summary = useMemo(() => getPatternCurriculumSummary(canonicalThemeKey, totalPuzzles), [canonicalThemeKey, totalPuzzles, progressMap]);
+  const nextPuzzleIndex = useMemo(() => getNextPuzzleForPattern(canonicalThemeKey, totalPuzzles), [canonicalThemeKey, totalPuzzles, progressMap]);
 
   const now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -101,7 +116,7 @@ export default function PatternDetail() {
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>🔍</div>
           <div style={{ color: "#94a3b8", fontSize: "1.1rem", marginBottom: "0.5rem" }}>
-            Pattern &ldquo;{themeKey}&rdquo; not found or has no puzzles loaded yet.
+            Pattern &ldquo;{routeTheme}&rdquo; not found or has no puzzles loaded yet.
           </div>
           <div style={{ color: "#64748b", fontSize: "0.9rem", marginBottom: "2rem" }}>
             Try one of these recommended starting patterns instead:
@@ -229,7 +244,7 @@ export default function PatternDetail() {
         {/* Action buttons */}
         <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.25rem", flexWrap: "wrap" }}>
           <button
-            onClick={() => router.push(`/app/puzzles?pattern=${themeKey}&index=${nextPuzzleIndex}`)}
+            onClick={() => router.push(`/app/puzzles?pattern=${canonicalThemeKey}&index=${nextPuzzleIndex}`)}
             style={{
               backgroundColor: "#2e75b6",
               color: "white",
@@ -244,7 +259,7 @@ export default function PatternDetail() {
             {dueCount > 0 ? `Review ${dueCount} Due` : `Continue (Puzzle #${nextPuzzleIndex})`}
           </button>
           <button
-            onClick={() => router.push(`/app/puzzles?pattern=${themeKey}&index=1`)}
+            onClick={() => router.push(`/app/puzzles?pattern=${canonicalThemeKey}&index=1`)}
             style={{
               backgroundColor: "#1a1a2e",
               color: "#94a3b8",
@@ -287,7 +302,7 @@ export default function PatternDetail() {
             return (
               <button
                 key={puzzle.id}
-                onClick={() => router.push(`/app/puzzles?pattern=${themeKey}&index=${orderIndex}`)}
+                onClick={() => router.push(`/app/puzzles?pattern=${canonicalThemeKey}&index=${orderIndex}`)}
                 title={`Puzzle #${orderIndex} — ${difficultyLabel(puzzle.rating)} (${puzzle.rating}) — ${label}`}
                 style={{
                   backgroundColor: isNext ? "#162a4a" : "#0f1621",

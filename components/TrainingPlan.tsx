@@ -80,7 +80,7 @@ function PatternMasteryTierDisplay() {
           Each pattern you master builds your tactical instincts.
         </div>
         <Link
-          href="/app/patterns/fork"
+          href="/app/puzzles?pattern=fork&index=1"
           style={{
             display: "inline-block",
             backgroundColor: "#2e75b6",
@@ -988,7 +988,7 @@ export default function TrainingPlan() {
             </div>
             <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
               <Link
-                href="/app/patterns/fork"
+                href="/app/puzzles?pattern=fork&index=1"
                 style={{
                   display: "inline-block",
                   backgroundColor: "#f97316",
@@ -1193,15 +1193,19 @@ export default function TrainingPlan() {
               // Check for Chess.com game analysis data
               const gameAnalysis = (() => {
                 try {
-                  const raw = localStorage.getItem("ctt_custom_analysis");
+                  const raw = localStorage.getItem("ctt_custom_analysis") || localStorage.getItem("ctt_game_analysis");
                   if (!raw) return null;
-                  const data = JSON.parse(raw) as { missedTactics: Array<{ pattern: string; fen: string }>; platform: string; username: string };
-                  if (!data.missedTactics?.length) return null;
-                  // Count pattern frequencies
-                  const counts: Record<string, number> = {};
-                  data.missedTactics.forEach(m => { counts[m.pattern] = (counts[m.pattern] || 0) + 1; });
-                  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-                  return { username: data.username, platform: data.platform, topPatterns: sorted.slice(0, 3), total: data.missedTactics.length };
+                  const data = JSON.parse(raw) as {
+                    missedTactics: Array<{ pattern: string; fen: string }>;
+                    strengths?: Array<{ pattern: string; count: number; share: number }>;
+                    weaknesses?: Array<{ pattern: string; count: number; share: number }>;
+                    recommendation?: string;
+                    platform: string;
+                    username: string;
+                    gameCount?: number;
+                  };
+                  if (!data.missedTactics?.length && !(data.weaknesses?.length)) return null;
+                  return data;
                 } catch { return null; }
               })();
 
@@ -1209,33 +1213,31 @@ export default function TrainingPlan() {
 
               // BEST: Chess.com game analysis available
               if (gameAnalysis) {
-                const weakPatterns = gameAnalysis.topPatterns.map(([p]) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
-                // Infer strengths as the opposite — patterns NOT in the missed list
-                const allCommon = ["Fork", "Pin", "Skewer", "Back Rank Mate", "Discovered Attack", "Double Check"];
-                const strengthPatterns = allCommon.filter(p => !weakPatterns.some(w => w.toLowerCase() === p.toLowerCase())).slice(0, 3);
+                const weakPatterns = (gameAnalysis.weaknesses || []).slice(0, 3);
+                const strengthPatterns = (gameAnalysis.strengths || []).slice(0, 3);
                 return (
                   <>
                     <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
-                      Based on your {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} game analysis
+                      Based on your last {gameAnalysis.gameCount || 0} {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} games
                     </div>
                     {strengthPatterns.length > 0 && (
                       <div style={{ marginBottom: "0.6rem" }}>
-                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Your Strengths</div>
-                        {strengthPatterns.map(p => (
-                          <div key={p} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p}</div>
+                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Tactical strengths</div>
+                        {strengthPatterns.map((p) => (
+                          <div key={p.pattern} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p.pattern}</div>
                         ))}
                       </div>
                     )}
                     {weakPatterns.length > 0 && (
                       <div style={{ marginBottom: "0.75rem" }}>
-                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Your Weaknesses</div>
-                        {weakPatterns.map(p => (
-                          <div key={p} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p}</div>
+                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Tactical weaknesses</div>
+                        {weakPatterns.map((p) => (
+                          <div key={p.pattern} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p.pattern} <span style={{ color: "#64748b" }}>({Math.round(p.share * 100)}%)</span></div>
                         ))}
                       </div>
                     )}
                     <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
-                      The puzzles below are designed around your weaknesses. Master them and you will improve at chess.
+                      {gameAnalysis.recommendation || "The puzzles below are designed around your biggest tactical weaknesses."}
                     </div>
                   </>
                 );
@@ -1367,7 +1369,13 @@ export default function TrainingPlan() {
             try {
               const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
               if (!raw) return [];
-              const data = JSON.parse(raw) as { missedTactics: Array<{ pattern: string }> };
+              const data = JSON.parse(raw) as {
+                weaknesses?: Array<{ pattern: string; share: number }>;
+                missedTactics?: Array<{ pattern: string }>;
+              };
+              if (data.weaknesses?.length) {
+                return data.weaknesses.slice(0, 3).map((w) => ({ pattern: w.pattern, missRate: w.share }));
+              }
               if (!data.missedTactics?.length) return [];
               const counts: Record<string, number> = {};
               const total = data.missedTactics.length;
@@ -1428,25 +1436,26 @@ export default function TrainingPlan() {
                     <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
                       How your training fixes this
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                      {displayPatterns.map(({ pattern }) => {
-                        const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
-                        // Count puzzles in mastery set matching this pattern
-                        const count = masterySet
-                          ? masterySet.puzzles.filter((p) => {
-                              const theme = p.puzzleData?.theme ?? p.puzzleData?.patternTag ?? "";
-                              return typeof theme === "string" && theme.toLowerCase() === pattern.toLowerCase();
-                            }).length
-                          : 0;
-                        return (
-                          <div key={pattern} style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                            Your Set 1 includes{" "}
-                            <span style={{ color: "#4ade80", fontWeight: "bold" }}>{count}</span>{" "}
-                            {label} puzzles weighted to your rating.
-                          </div>
-                        );
-                      })}
-                    </div>
+<div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                       {displayPatterns.map(({ pattern, missRate }) => {
+                         const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
+                         // Count puzzles in mastery set matching this pattern
+                         const count = masterySet
+                           ? masterySet.puzzles.filter((p) => {
+                               const theme = p.puzzleData?.theme ?? p.puzzleData?.patternTag ?? "";
+                               return typeof theme === "string" && theme.toLowerCase() === pattern.toLowerCase();
+                             }).length
+                           : 0;
+                         return (
+                           <div key={pattern} style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
+                             <span style={{ color: "#4ade80", fontWeight: "bold" }}>{count}</span> {label} puzzles in your mastery set target this weakness at your exact rating level.
+                           </div>
+                         );
+                       })}
+                       <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.5rem", fontStyle: "italic" }}>
+                         Master these patterns and they'll become automatic recognition instead of calculation.
+                       </div>
+                     </div>
                   </div>
                 </>
               )}
