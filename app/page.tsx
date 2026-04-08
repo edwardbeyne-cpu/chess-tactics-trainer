@@ -163,7 +163,7 @@ export default function HomePage() {
       <TryAPuzzle />
 
       {/* Feature cards */}
-      <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "5rem 2rem" }}>
+      <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "3rem 2rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", textAlign: "center", marginBottom: "3rem" }}>
           Train smarter, not more
         </h2>

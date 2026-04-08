@@ -51,7 +51,7 @@ export default function TryAPuzzle() {
   }
 
   return (
-    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 2rem 4.5rem" }}>
+    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 2rem 1.5rem" }}>
       <style jsx>{`
         @keyframes pulseGlow {
           0% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0.7); }
