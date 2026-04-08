@@ -215,6 +215,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [platform, setPlatform] = useState<Platform>("chesscom");
   const [username, setUsername] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const [connectingPhase, setConnectingPhase] = useState<"connecting" | "analyzing">("connecting");
   const [connectError, setConnectError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [connectedUsername, setConnectedUsername] = useState("");
@@ -467,6 +468,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     const uname = username.trim();
     if (!uname) return;
     setConnecting(true);
+    setConnectingPhase("connecting");
     setConnectError(null);
     try {
       const allRatings = await fetchAllRatings(platform, uname);
@@ -487,8 +489,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       setFetchedRatings({ bullet: allRatings.bullet, blitz: allRatings.blitz, rapid: allRatings.rapid });
       setConnectedUsername(uname);
       setConnectedPlatform(platform);
+
+      // Run analysis BEFORE marking connected — ensures data is in localStorage
+      // before user lands on Training Plan
+      setConnectingPhase("analyzing");
+      try {
+        await runBackgroundAnalysis(platform, uname);
+      } catch {
+        // Non-fatal: connect still works even if analysis fails
+      }
+
       setConnected(true);
-      runBackgroundAnalysis(platform, uname);
     } catch {
       setConnectError("Connection failed. Check your username and try again.");
     } finally {
@@ -919,7 +930,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                 }}
               >
                 {connecting
-                  ? "Connecting…"
+                  ? (connectingPhase === "analyzing" ? "Analyzing your games…" : "Connecting…")
                   : platform === "chesscom"
                   ? "Connect Chess.com →"
                   : "Connect Lichess →"}
