@@ -229,8 +229,7 @@ const TACTIC_PRIORITY = [
 type TacticLabel = (typeof TACTIC_PRIORITY)[number];
 
 // FAST tactic scanner — optimized for browser performance.
-// Only checks captures and knight moves (most common fork piece).
-// Avoids iterating ALL legal moves which is extremely slow in chess.js.
+// Focuses on captures and checks — the moves most likely to be tactical.
 function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
   const found = new Map<TacticLabel, string[]>();
 
@@ -242,35 +241,44 @@ function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
 
   try {
     const c = new Chess(fen);
-    // Only get captures and knight moves — dramatically reduces computation
-    const captures = c.moves({ verbose: true }).filter(
-      (m) => m.captured || m.piece === "n"
+    const allMoves = c.moves({ verbose: true });
+
+    // Pre-filter to only tactical candidate moves: captures, knight moves, checks
+    // This avoids cloning the board for quiet non-knight moves
+    const candidates = allMoves.filter(
+      (m) => m.captured || m.piece === "n" || m.piece === "q"
     );
 
-    for (const m of captures) {
+    for (const m of candidates) {
       const moveUci = m.from + m.to + (m.promotion ?? "");
 
-      // Winning capture: piece captures something worth 2+ more
+      // Winning capture: piece captures something worth more
+      // PxN, PxB, PxR, PxQ, NxR, NxQ, BxR, BxQ, RxQ
       if (m.captured) {
         const capturedVal = PIECE_VALUES[m.captured] ?? 0;
         const attackerVal = PIECE_VALUES[m.piece] ?? 0;
-        if (capturedVal - attackerVal >= 2) {
+        if (capturedVal > attackerVal) {
           addMove("winning capture", moveUci);
         }
       }
 
-      // Knight fork: knight moves to a square attacking 2+ pieces worth rook or more
-      // Only knights — they're the classic fork piece and cheapest to check
-      if (m.piece === "n") {
+      // Fork detection: piece moves and attacks 2+ enemy pieces worth 3+
+      // Only check knights and queens (most common fork pieces, worth the clone cost)
+      if (m.piece === "n" || m.piece === "q") {
         const clone = new Chess(fen);
         clone.move(m);
-        const isCheck = clone.inCheck();
-        if (isCheck) {
-          // Knight gives check — check if it also attacks a rook or queen
-          const attacked = getAttackedPieceValues(clone.fen(), m.to);
+        const attacked = getAttackedPieceValues(clone.fen(), m.to);
+        const significantTargets = attacked.filter((v) => v >= 3);
+        if (significantTargets.length >= 2) {
+          // Extra filter: at least one target must be rook or queen
           if (attacked.some((v) => v >= 5)) {
             addMove("fork", moveUci);
           }
+        }
+
+        // Check + attack = discovered attack pattern
+        if (clone.inCheck() && attacked.some((v) => v >= 3)) {
+          addMove("discovered attack", moveUci);
         }
       }
     }
@@ -331,29 +339,22 @@ function analyzeGamesForQueue(
         break;
       }
 
-      // Skip opening (first 10 full moves / 20 half-moves) — tactics rarely happen there
-      if (moveNum <= 20) continue;
+      // Skip first 6 full moves (12 half-moves) — very early opening
+      if (moveNum <= 12) continue;
 
-      if (moveNum > 1) {
-        const wasPlayerTurn = isWhite
-          ? fen.split(" ")[1] === "w"
-          : fen.split(" ")[1] === "b";
+      const wasPlayerTurn = isWhite
+        ? fen.split(" ")[1] === "w"
+        : fen.split(" ")[1] === "b";
 
-        if (wasPlayerTurn) {
-          playerMoveIndex++;
-          // Sample every other player move to cut analysis time in half
-          // while still getting statistically meaningful results
-          if (playerMoveIndex % 2 === 0) continue;
-
-          // Pass the actual move played so we only flag genuinely missed tactics
-          const pattern = detectMissedTactic(fen, uci);
-          if (pattern) {
-            results.push({
-              pattern: normalizePatternLabel(pattern),
-              fen,
-              moveNumber: moveNum,
-            });
-          }
+      if (wasPlayerTurn) {
+        // Pass the actual move played so we only flag genuinely missed tactics
+        const pattern = detectMissedTactic(fen, uci);
+        if (pattern) {
+          results.push({
+            pattern: normalizePatternLabel(pattern),
+            fen,
+            moveNumber: moveNum,
+          });
         }
       }
     }
