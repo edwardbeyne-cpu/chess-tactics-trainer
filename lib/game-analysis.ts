@@ -228,7 +228,9 @@ const TACTIC_PRIORITY = [
 
 type TacticLabel = (typeof TACTIC_PRIORITY)[number];
 
-// Scan a position for available tactics and return them bucketed by label.
+// FAST tactic scanner — optimized for browser performance.
+// Only checks captures and knight moves (most common fork piece).
+// Avoids iterating ALL legal moves which is extremely slow in chess.js.
 function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
   const found = new Map<TacticLabel, string[]>();
 
@@ -240,41 +242,15 @@ function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
 
   try {
     const c = new Chess(fen);
-    const moves = c.moves({ verbose: true });
+    // Only get captures and knight moves — dramatically reduces computation
+    const captures = c.moves({ verbose: true }).filter(
+      (m) => m.captured || m.piece === "n"
+    );
 
-    for (const m of moves) {
-      const clone = new Chess(fen);
-      clone.move(m);
+    for (const m of captures) {
       const moveUci = m.from + m.to + (m.promotion ?? "");
 
-      // Checkmate
-      if (clone.isCheckmate()) {
-        addMove("checkmate", moveUci);
-        continue;
-      }
-
-      // Fork detection — extremely strict to avoid false positives
-      const isCheck = clone.inCheck();
-      const attackedVals = getAttackedPieceValues(clone.fen(), m.to);
-      const highValueTargets = attackedVals.filter((v) => v >= 5); // rook or queen only
-
-      if (isCheck && highValueTargets.length >= 1) {
-        // Royal fork: check + attacking rook/queen. Only count if the forking piece
-        // can't be immediately captured (check opponent's responses)
-        const responses = clone.moves({ verbose: true });
-        const canCaptureFork = responses.some((r) => r.to === m.to && r.captured);
-        if (!canCaptureFork) {
-          addMove("fork", moveUci);
-        }
-      }
-
-      // Discovered attack: capturing a piece worth 5+ while giving check
-      if (isCheck && m.captured && PIECE_VALUES[m.captured] >= 5) {
-        addMove("discovered attack", moveUci);
-      }
-
-      // Material-based tactics — only flag winning captures with 2+ point advantage
-      // This avoids flagging BxN as "winning" when it's just an equal exchange
+      // Winning capture: piece captures something worth 2+ more
       if (m.captured) {
         const capturedVal = PIECE_VALUES[m.captured] ?? 0;
         const attackerVal = PIECE_VALUES[m.piece] ?? 0;
@@ -282,14 +258,22 @@ function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
           addMove("winning capture", moveUci);
         }
       }
-    }
 
-    // Geometric patterns — these are position-level, not move-level.
-    // Only add them if no higher-priority tactic was already found,
-    // to avoid inflating miss counts with patterns we can't verify.
-    // Since we can't match these to specific moves, skip them if the player
-    // played any capture or check (likely engaged with the position).
-    // This is a conservative heuristic to reduce false positives.
+      // Knight fork: knight moves to a square attacking 2+ pieces worth rook or more
+      // Only knights — they're the classic fork piece and cheapest to check
+      if (m.piece === "n") {
+        const clone = new Chess(fen);
+        clone.move(m);
+        const isCheck = clone.inCheck();
+        if (isCheck) {
+          // Knight gives check — check if it also attacks a rook or queen
+          const attacked = getAttackedPieceValues(clone.fen(), m.to);
+          if (attacked.some((v) => v >= 5)) {
+            addMove("fork", moveUci);
+          }
+        }
+      }
+    }
   } catch { /* ignore malformed positions */ }
 
   return found;
@@ -503,14 +487,17 @@ export async function runGameAnalysis(
   try {
     // Signal that analysis is in progress so UI can show loading state
     localStorage.setItem("ctt_analysis_status", "running");
+    console.log("[CTT] Starting game analysis for", username, platform);
 
     const games = await fetchRecentGames(username, platform);
+    console.log("[CTT] Fetched", games.length, "games");
     if (games.length === 0) {
       localStorage.setItem("ctt_analysis_status", "done");
       return false;
     }
 
     const missed = analyzeGamesForQueue(games);
+    console.log("[CTT] Analysis complete. Missed tactics:", missed.length);
     const { strengths, weaknesses, recommendation } =
       buildPatternSummaries(missed);
 
@@ -541,8 +528,11 @@ export async function runGameAnalysis(
       localStorage.setItem("ctt_custom_queue", JSON.stringify(queue));
     }
 
+    console.log("[CTT] Analysis saved to localStorage successfully");
     return true;
-  } catch {
+  } catch (err) {
+    console.error("[CTT] Game analysis failed:", err);
+    localStorage.setItem("ctt_analysis_status", "error");
     return false;
   }
 }
