@@ -106,23 +106,35 @@ export default function CCTOnboardingBridge() {
         display: "flex",
         flexDirection: "column",
       }}>
-        <div style={{ marginBottom: "2rem" }}>
-<h1 style={{
-                fontSize: "1.5rem",
-                fontWeight: "700",
-                marginBottom: "0.5rem",
-                color: "#f1f5f9",
-                letterSpacing: "-0.025em"
-              }}>
-                How do you currently solve tactics?
-              </h1>
-              <p style={{
-                color: "#94a3b8",
-                fontSize: "0.95rem",
-                lineHeight: 1.5,
-              }}>
-                Choose the option that sounds most like you.
-              </p>
+        <div style={{ marginBottom: "1.75rem" }}>
+          <div style={{
+            color: "#64748b",
+            fontSize: "0.78rem",
+            fontWeight: "700",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            marginBottom: "0.6rem"
+          }}>
+            Step 1 of 2 · CCT Check
+          </div>
+          <h1 style={{
+            fontSize: "1.75rem",
+            fontWeight: "800",
+            marginBottom: "0.6rem",
+            color: "#f1f5f9",
+            letterSpacing: "-0.03em",
+            lineHeight: 1.15,
+          }}>
+            Before we build your plan, how do you currently scan a position?
+          </h1>
+          <p style={{
+            color: "#94a3b8",
+            fontSize: "1rem",
+            lineHeight: 1.6,
+            maxWidth: "560px",
+          }}>
+            This helps us decide whether to teach Checks, Captures, Threats (CCT), refresh it, or use it immediately in your training.
+          </p>
         </div>
 
         <div style={{
@@ -134,20 +146,23 @@ export default function CCTOnboardingBridge() {
           {[
             {
               value: "new_to_cct" as CCTFamiliarity,
-              title: "I usually just look for the best move and play it",
-              subtitle: "I don't follow a consistent process yet.",
+              title: "I usually just look for the best move",
+              subtitle: "I don’t use a set process yet.",
+              next: "We’ll teach you CCT in about 2 minutes.",
               color: "#f97316",
             },
             {
               value: "cct_inconsistent" as CCTFamiliarity,
-              title: "I sometimes look for checks, captures, and threats",
-              subtitle: "I know the idea, but I don't use it every time.",
+              title: "I sometimes check checks, captures, and threats",
+              subtitle: "I know the idea, but I don’t use it consistently.",
+              next: "We’ll give you a quick refresher and then drop you into training.",
               color: "#3b82f6",
             },
             {
               value: "cct_confident" as CCTFamiliarity,
-              title: "I already use checks, captures, and threats consistently",
-              subtitle: "It's already part of how I calculate.",
+              title: "I already use CCT consistently",
+              subtitle: "It’s already part of how I calculate.",
+              next: "We’ll plug it straight into your training flow.",
               color: "#10b981",
             },
           ].map((option) => (
@@ -156,10 +171,10 @@ export default function CCTOnboardingBridge() {
               onClick={() => handleSegmentationSelect(option.value)}
               style={{
                 textAlign: "left",
-                padding: "1.5rem",
+                padding: "1.2rem 1.25rem",
                 backgroundColor: "#0f172a",
                 border: "1px solid #1e293b",
-                borderRadius: "12px",
+                borderRadius: "14px",
                 cursor: "pointer",
                 transition: "all 0.2s",
                 color: "#f1f5f9",
@@ -170,30 +185,65 @@ export default function CCTOnboardingBridge() {
                 e.currentTarget.style.backgroundColor = "#1a1f2e";
                 e.currentTarget.style.borderColor = option.color;
                 e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = `0 10px 24px ${option.color}22`;
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.backgroundColor = "#0f172a";
                 e.currentTarget.style.borderColor = "#1e293b";
                 e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
               }}
             >
-              <div style={{
-                fontSize: "1rem",
-                fontWeight: "600",
-                marginBottom: "0.5rem",
-                color: option.color,
-              }}>
-                {option.title}
-              </div>
-              <div style={{
-                color: "#94a3b8",
-                fontSize: "0.85rem",
-                lineHeight: 1.4,
-              }}>
-                {option.subtitle}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontSize: "1rem",
+                    fontWeight: "700",
+                    marginBottom: "0.4rem",
+                    color: option.color,
+                    lineHeight: 1.35,
+                  }}>
+                    {option.title}
+                  </div>
+                  <div style={{
+                    color: "#cbd5e1",
+                    fontSize: "0.88rem",
+                    lineHeight: 1.45,
+                    marginBottom: "0.45rem",
+                  }}>
+                    {option.subtitle}
+                  </div>
+                  <div style={{
+                    color: "#94a3b8",
+                    fontSize: "0.8rem",
+                    lineHeight: 1.4,
+                  }}>
+                    → {option.next}
+                  </div>
+                </div>
+                <div style={{
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "999px",
+                  border: `2px solid ${option.color}`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: option.color,
+                  flexShrink: 0,
+                  marginTop: "0.1rem",
+                  fontSize: "0.8rem",
+                  fontWeight: "700",
+                }}>
+                  ○
+                </div>
               </div>
             </button>
           ))}
+        </div>
+
+        <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "center", marginBottom: "0.5rem" }}>
+          Choose one to personalize what happens next.
         </div>
 
         <button
@@ -208,7 +258,7 @@ export default function CCTOnboardingBridge() {
             alignSelf: "center",
           }}
         >
-          Skip for now →
+          Skip CCT setup for now →
         </button>
       </div>
     );
@@ -442,10 +492,11 @@ export default function CCTOnboardingBridge() {
   
   if (isLaunch || isRefresher) {
     const title = isLaunch ? "Now build the habit" : "Turn CCT into a habit";
-    const body = isLaunch 
-      ? "You'll practice each part of CCT one step at a time: Checks, Captures, Threats, Then full solve. This teaches you how to scan before you commit to a move. After training, you'll start with Fork — the most common tactical pattern."
-      : "You already know the idea. Now the goal is consistency. The CCT Trainer helps you practice checks, captures, and threats in order so the process becomes automatic during real games. After training, you'll start with Fork — the most common tactical pattern.";
-    const cta = "Start CCT Training";
+    const body = isLaunch
+      ? "You’ll practice Checks, Captures, and Threats one step at a time so the scan becomes automatic before you move."
+      : "You know the idea already. Now we’ll make it consistent so you naturally scan forcing moves in every position.";
+    const nextLine = "Next: one short CCT training round, then your first Fork pattern.";
+    const cta = "Start 2-Minute CCT Training";
 
     return (
       <div style={{
@@ -457,93 +508,96 @@ export default function CCTOnboardingBridge() {
         color: "#f1f5f9",
         display: "flex",
         flexDirection: "column",
+        justifyContent: "center",
       }}>
-        <div style={{ flex: 1 }}>
+        <div style={{
+          padding: "1.35rem 1.4rem",
+          backgroundColor: "#0f172a",
+          borderRadius: "14px",
+          borderLeft: "4px solid #f97316",
+          marginBottom: "1.25rem",
+        }}>
           <div style={{
-            marginBottom: "2rem",
-            padding: "1.5rem",
-            backgroundColor: "#0f172a",
-            borderRadius: "12px",
-            borderLeft: "4px solid #f97316",
+            fontSize: "0.78rem",
+            fontWeight: "700",
+            color: "#f97316",
+            marginBottom: "0.5rem",
+            textTransform: "uppercase",
+            letterSpacing: "0.07em"
           }}>
-            <div style={{
-              fontSize: "0.8rem",
-              fontWeight: "600",
-              color: "#f97316",
-              marginBottom: "0.5rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em"
-            }}>
-              {isLaunch ? "Step 3 of 3" : "Ready to train"}
-            </div>
-            <h1 style={{
-              fontSize: "1.5rem",
-              fontWeight: "700",
-              marginBottom: "1rem",
-              color: "#f1f5f9",
-              letterSpacing: "-0.025em"
-            }}>
-              {title}
-            </h1>
-            <div style={{
-              color: "#94a3b8",
-              fontSize: "0.95rem",
-              lineHeight: 1.6,
-              marginBottom: "1.5rem",
-            }}>
-              {body}
-            </div>
+            {isLaunch ? "Step 2 of 2 · Ready to train" : "Step 2 of 2 · Ready to train"}
+          </div>
+          <h1 style={{
+            fontSize: "1.7rem",
+            fontWeight: "800",
+            marginBottom: "0.75rem",
+            color: "#f1f5f9",
+            letterSpacing: "-0.03em",
+            lineHeight: 1.15,
+          }}>
+            {title}
+          </h1>
+          <div style={{
+            color: "#cbd5e1",
+            fontSize: "0.98rem",
+            lineHeight: 1.6,
+            marginBottom: "0.85rem",
+          }}>
+            {body}
+          </div>
+          <div style={{
+            color: "#94a3b8",
+            fontSize: "0.85rem",
+            lineHeight: 1.5,
+          }}>
+            {nextLine}
           </div>
         </div>
 
-        <div style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "1rem",
-        }}>
-          <button
-            onClick={isLaunch ? () => setScreen("why_it_works") : handleSkip}
-            style={{
-              color: "#64748b",
-              backgroundColor: "transparent",
-              border: "none",
-              padding: "0.75rem 1.5rem",
-              cursor: "pointer",
-              fontSize: "0.95rem",
-            }}
-          >
-            {isLaunch ? "Back" : "Skip"}
-          </button>
-          <button
-            onClick={handleNext}
-            style={{
-              backgroundColor: "#f97316",
-              color: "white",
-              border: "none",
-              padding: "0.875rem 2rem",
-              borderRadius: "8px",
-              fontWeight: "600",
-              fontSize: "1rem",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              minWidth: "140px",
-              boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor = "#ea580c";
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 4px 8px rgba(249, 115, 22, 0.3)";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor = "#f97316";
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 4px rgba(249, 115, 22, 0.2)";
-            }}
-          >
-            {cta}
-          </button>
-        </div>
+        <button
+          onClick={handleNext}
+          style={{
+            backgroundColor: "#f97316",
+            color: "white",
+            border: "none",
+            padding: "0.95rem 1.4rem",
+            borderRadius: "10px",
+            fontWeight: "700",
+            fontSize: "1rem",
+            cursor: "pointer",
+            transition: "all 0.2s",
+            width: "100%",
+            boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
+            marginBottom: "0.5rem",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = "#ea580c";
+            e.currentTarget.style.transform = "translateY(-2px)";
+            e.currentTarget.style.boxShadow = "0 4px 8px rgba(249, 115, 22, 0.3)";
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = "#f97316";
+            e.currentTarget.style.transform = "translateY(0)";
+            e.currentTarget.style.boxShadow = "0 2px 4px rgba(249, 115, 22, 0.2)";
+          }}
+        >
+          {cta}
+        </button>
+
+        <button
+          onClick={isLaunch ? () => setScreen("why_it_works") : handleSkip}
+          style={{
+            color: "#64748b",
+            backgroundColor: "transparent",
+            border: "none",
+            padding: "0.65rem 1rem",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+            alignSelf: "center",
+          }}
+        >
+          {isLaunch ? "Back" : "Skip for now"}
+        </button>
       </div>
     );
   }

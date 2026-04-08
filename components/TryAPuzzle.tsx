@@ -51,7 +51,7 @@ export default function TryAPuzzle() {
   }
 
   return (
-    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 2rem 4rem" }}>
+    <section style={{ maxWidth: "900px", margin: "0 auto", padding: "3rem 2rem 4.5rem" }}>
       <style jsx>{`
         @keyframes pulseGlow {
           0% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0.7); }
@@ -59,7 +59,7 @@ export default function TryAPuzzle() {
           100% { box-shadow: inset 0 0 0 0 rgba(245, 158, 11, 0); }
         }
       `}</style>
-      <div style={{ textAlign: "center", marginBottom: "1.25rem" }}>
+      <div style={{ textAlign: "center", marginBottom: "2rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", margin: "0 0 0.5rem" }}>
           Try a puzzle right now
         </h2>
@@ -72,27 +72,8 @@ export default function TryAPuzzle() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: "0.75rem",
+        gap: "1.25rem",
       }}>
-        {/* Tooltip */}
-        {showTooltip && status === "idle" && (
-          <div style={{
-            backgroundColor: "#1a1508",
-            border: "1px solid #f59e0b",
-            borderRadius: "8px",
-            padding: "0.75rem 1rem",
-            color: "#f59e0b",
-            fontSize: "0.85rem",
-            fontWeight: "600",
-            opacity: 0,
-            animation: "fadeIn 0.3s ease forwards",
-            position: "relative",
-            marginBottom: "0.5rem",
-          }}>
-            💡 Try moving the Rook
-          </div>
-        )}
-
         {/* Board */}
         <div style={{
           backgroundColor: "#13132b",
@@ -102,6 +83,27 @@ export default function TryAPuzzle() {
           transition: "border-color 0.2s",
           position: "relative",
         }}>
+          {/* Tooltip overlay */}
+          {showTooltip && status === "idle" && (
+            <div style={{
+              backgroundColor: "rgba(26, 21, 8, 0.96)",
+              border: "1px solid #f59e0b",
+              borderRadius: "8px",
+              padding: "0.55rem 0.85rem",
+              color: "#f59e0b",
+              fontSize: "0.8rem",
+              fontWeight: "600",
+              position: "absolute",
+              top: "-0.65rem",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 3,
+              whiteSpace: "nowrap",
+              boxShadow: "0 6px 18px rgba(0,0,0,0.28)",
+            }}>
+              💡 Try moving the Rook
+            </div>
+          )}
           <div style={{
             position: "relative",
             borderRadius: "8px",

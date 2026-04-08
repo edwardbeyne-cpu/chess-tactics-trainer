@@ -15,7 +15,8 @@ export default function CalibrationPage() {
   useEffect(() => {
     try {
       if (localStorage.getItem("ctt_calibration_complete") === "true") {
-        router.replace("/app/training-plan");
+        const cctDone = localStorage.getItem("ctt_cct_onboarding_complete") === "true";
+        router.replace(cctDone ? "/app/training-plan" : "/app/cct-onboarding");
         return;
       }
     } catch { /* ignore */ }
@@ -46,7 +47,11 @@ export default function CalibrationPage() {
         });
       }
     } catch { /* ignore */ }
-    router.replace("/app/training-plan");
+    try {
+      localStorage.removeItem("ctt_cct_onboarding_complete");
+      localStorage.removeItem("ctt_cct_familiarity");
+    } catch { /* ignore */ }
+    router.replace("/app/cct-onboarding");
   }
 
   if (step === "checking") {
