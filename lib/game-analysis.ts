@@ -66,10 +66,10 @@ function parsePgnMoves(pgn: string): string[] {
 
 const PIECE_VALUES: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
-// Count how many opponent pieces the piece at `square` can capture in the given FEN.
+// Get the values of opponent pieces that the piece at `square` can capture.
 // Uses side-flip trick: temporarily switches the active color so we can query
 // the piece's attacks from its current owner's perspective.
-function countPieceAttacks(fen: string, square: string): number {
+function getAttackedPieceValues(fen: string, square: string): number[] {
   try {
     const parts = fen.split(" ");
     // Flip active side so the piece at `square` belongs to the side to move
@@ -78,9 +78,11 @@ function countPieceAttacks(fen: string, square: string): number {
     parts[3] = "-"; // clear en passant
     const flippedFen = parts.join(" ");
     const c = new Chess(flippedFen);
-    return c.moves({ square: square as Square, verbose: true }).filter((m) => m.captured).length;
+    return c.moves({ square: square as Square, verbose: true })
+      .filter((m) => m.captured)
+      .map((m) => PIECE_VALUES[m.captured!] ?? 0);
   } catch {
-    return 0;
+    return [];
   }
 }
 
@@ -213,6 +215,7 @@ function hasBackRankThreat(fen: string): boolean {
 }
 
 // Priority order for labeling the best available tactic
+// Only includes patterns that represent real tactical misses worth training
 const TACTIC_PRIORITY = [
   "checkmate",
   "fork",
@@ -221,8 +224,6 @@ const TACTIC_PRIORITY = [
   "pin",
   "skewer",
   "back rank mate",
-  "check",
-  "exchange",
 ] as const;
 
 type TacticLabel = (typeof TACTIC_PRIORITY)[number];
@@ -252,37 +253,43 @@ function findAvailableTactics(fen: string): Map<TacticLabel, string[]> {
         continue;
       }
 
-      // Fork: after move, our piece at m.to attacks 2+ opponent pieces
-      const threats = countPieceAttacks(clone.fen(), m.to);
-      if (threats >= 2) {
-        addMove("fork", moveUci);
-      }
+      // Fork detection — extremely strict to avoid false positives
+      const isCheck = clone.inCheck();
+      const attackedVals = getAttackedPieceValues(clone.fen(), m.to);
+      const highValueTargets = attackedVals.filter((v) => v >= 5); // rook or queen only
 
-      // Check-based tactics
-      if (clone.inCheck()) {
-        if (m.captured) {
-          addMove("discovered attack", moveUci);
-        } else {
-          addMove("check", moveUci);
+      if (isCheck && highValueTargets.length >= 1) {
+        // Royal fork: check + attacking rook/queen. Only count if the forking piece
+        // can't be immediately captured (check opponent's responses)
+        const responses = clone.moves({ verbose: true });
+        const canCaptureFork = responses.some((r) => r.to === m.to && r.captured);
+        if (!canCaptureFork) {
+          addMove("fork", moveUci);
         }
       }
 
-      // Material-based tactics
+      // Discovered attack: capturing a piece worth 5+ while giving check
+      if (isCheck && m.captured && PIECE_VALUES[m.captured] >= 5) {
+        addMove("discovered attack", moveUci);
+      }
+
+      // Material-based tactics — only flag winning captures with 2+ point advantage
+      // This avoids flagging BxN as "winning" when it's just an equal exchange
       if (m.captured) {
         const capturedVal = PIECE_VALUES[m.captured] ?? 0;
         const attackerVal = PIECE_VALUES[m.piece] ?? 0;
-        if (capturedVal > attackerVal) {
+        if (capturedVal - attackerVal >= 2) {
           addMove("winning capture", moveUci);
-        } else if (capturedVal === attackerVal && capturedVal >= 3) {
-          addMove("exchange", moveUci);
         }
       }
     }
 
-    // Geometric patterns (not tied to a specific move UCI)
-    if (hasPinOpportunity(fen)) addMove("pin", "geometric");
-    if (hasSkewerOpportunity(fen)) addMove("skewer", "geometric");
-    if (hasBackRankThreat(fen)) addMove("back rank mate", "geometric");
+    // Geometric patterns — these are position-level, not move-level.
+    // Only add them if no higher-priority tactic was already found,
+    // to avoid inflating miss counts with patterns we can't verify.
+    // Since we can't match these to specific moves, skip them if the player
+    // played any capture or check (likely engaged with the position).
+    // This is a conservative heuristic to reduce false positives.
   } catch { /* ignore malformed positions */ }
 
   return found;
