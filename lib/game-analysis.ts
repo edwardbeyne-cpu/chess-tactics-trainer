@@ -324,6 +324,7 @@ function analyzeGamesForQueue(
   games: GameResult[]
 ): Array<{ pattern: string; fen: string; moveNumber?: number }> {
   const results: Array<{ pattern: string; fen: string; moveNumber?: number }> = [];
+  let playerMoveIndex = 0;
 
   for (const { pgn, playerColor } of games) {
     const moves = parsePgnMoves(pgn);
@@ -346,12 +347,20 @@ function analyzeGamesForQueue(
         break;
       }
 
+      // Skip opening (first 10 full moves / 20 half-moves) — tactics rarely happen there
+      if (moveNum <= 20) continue;
+
       if (moveNum > 1) {
         const wasPlayerTurn = isWhite
           ? fen.split(" ")[1] === "w"
           : fen.split(" ")[1] === "b";
 
         if (wasPlayerTurn) {
+          playerMoveIndex++;
+          // Sample every other player move to cut analysis time in half
+          // while still getting statistically meaningful results
+          if (playerMoveIndex % 2 === 0) continue;
+
           // Pass the actual move played so we only flag genuinely missed tactics
           const pattern = detectMissedTactic(fen, uci);
           if (pattern) {
@@ -492,8 +501,14 @@ export async function runGameAnalysis(
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
   try {
+    // Signal that analysis is in progress so UI can show loading state
+    localStorage.setItem("ctt_analysis_status", "running");
+
     const games = await fetchRecentGames(username, platform);
-    if (games.length === 0) return false;
+    if (games.length === 0) {
+      localStorage.setItem("ctt_analysis_status", "done");
+      return false;
+    }
 
     const missed = analyzeGamesForQueue(games);
     const { strengths, weaknesses, recommendation } =
@@ -514,6 +529,7 @@ export async function runGameAnalysis(
     localStorage.setItem("ctt_game_analysis", JSON.stringify(payload));
     localStorage.setItem("ctt_custom_platform", platform);
     localStorage.setItem("ctt_custom_username", username);
+    localStorage.setItem("ctt_analysis_status", "done");
 
     if (missed.length > 0) {
       const queue = missed.slice(0, 50).map((m, i) => ({

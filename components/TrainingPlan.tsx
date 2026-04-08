@@ -1211,6 +1211,23 @@ export default function TrainingPlan() {
 
               const hasPatternData = patternStats.filter(s => s.totalAttempts >= 5).length >= 3;
 
+              // LOADING: Analysis is running in the background
+              const analysisStatus = (() => {
+                try { return localStorage.getItem("ctt_analysis_status"); } catch { return null; }
+              })();
+              if (!gameAnalysis && analysisStatus === "running") {
+                return (
+                  <>
+                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
+                      Analyzing your games...
+                    </div>
+                    <div style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.7 }}>
+                      We&apos;re analyzing your recent games for tactical patterns. This takes a few seconds — refresh the page in a moment to see your results.
+                    </div>
+                  </>
+                );
+              }
+
               // BEST: Chess.com game analysis available
               if (gameAnalysis) {
                 const weakPatterns = (gameAnalysis.weaknesses || []).slice(0, 3);
@@ -1405,7 +1422,14 @@ export default function TrainingPlan() {
 
               {displayPatterns.length === 0 ? (
                 <div style={{ color: "#475569", fontSize: "0.88rem", textAlign: "center", padding: "0.75rem 0" }}>
-                  Solve more puzzles to unlock your pattern breakdown.
+                  {(() => {
+                    try {
+                      if (localStorage.getItem("ctt_analysis_status") === "running") {
+                        return "Analyzing your games for tactical weaknesses...";
+                      }
+                    } catch { /* ignore */ }
+                    return "Solve more puzzles to unlock your pattern breakdown.";
+                  })()}
                 </div>
               ) : (
                 <>
