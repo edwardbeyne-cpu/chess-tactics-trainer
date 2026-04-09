@@ -490,16 +490,20 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       setConnectedUsername(uname);
       setConnectedPlatform(platform);
 
-      // Run analysis BEFORE marking connected — ensures data is in localStorage
-      // before user lands on Training Plan
-      setConnectingPhase("analyzing");
-      try {
-        await runBackgroundAnalysis(platform, uname);
-      } catch {
-        // Non-fatal: connect still works even if analysis fails
-      }
-
+      // Show connected state immediately, run analysis in background
       setConnected(true);
+      setConnectingPhase("analyzing");
+
+      // Use setTimeout to yield the main thread so the UI repaints
+      // before the CPU-intensive analysis starts
+      setTimeout(async () => {
+        try {
+          await runBackgroundAnalysis(platform, uname);
+        } catch {
+          // Non-fatal: connect still works even if analysis fails
+        }
+        setConnectingPhase("connecting");
+      }, 100);
     } catch {
       setConnectError("Connection failed. Check your username and try again.");
     } finally {
@@ -942,19 +946,21 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         {/* Continue → complete calibration */}
         <button
           onClick={() => onComplete(finalElo)}
+          disabled={connectingPhase === "analyzing"}
           style={{
-            backgroundColor: "#4ade80",
-            color: "#0f1a0a",
-            border: "none",
+            backgroundColor: connectingPhase === "analyzing" ? "#1a2535" : "#4ade80",
+            color: connectingPhase === "analyzing" ? "#4ade80" : "#0f1a0a",
+            border: connectingPhase === "analyzing" ? "1px solid #4ade80" : "none",
             borderRadius: "10px",
             padding: "1rem",
             fontSize: "0.95rem",
             fontWeight: "bold",
-            cursor: "pointer",
+            cursor: connectingPhase === "analyzing" ? "wait" : "pointer",
             width: "100%",
+            transition: "all 0.3s ease",
           }}
         >
-          Continue →
+          {connectingPhase === "analyzing" ? "Analyzing your games… hang tight" : "Continue →"}
         </button>
 
         {!connected && (
