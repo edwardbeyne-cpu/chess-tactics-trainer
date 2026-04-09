@@ -1290,28 +1290,41 @@ export default function TrainingPlan() {
                 );
               }
 
-              // FALLBACK: No data yet — tier-based
+              // FALLBACK: No Chess.com connection — prompt to connect
+              if (!username) {
+                return (
+                  <>
+                    <div style={{ color: "#f59e0b", fontWeight: "600", fontSize: "0.88rem", marginBottom: "0.5rem" }}>
+                      Connect your Chess.com account to unlock personalized coaching
+                    </div>
+                    <div style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.7, marginBottom: "0.75rem" }}>
+                      We&apos;ll analyze your last 50 games to find the exact tactical patterns you&apos;re missing — then build your training plan around them. No guessing, no generic advice.
+                    </div>
+                    <a href="/app/calibration" style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.85rem", textDecoration: "none" }}>
+                      Connect Chess.com →
+                    </a>
+                  </>
+                );
+              }
+
+              // Connected but no analysis data yet — generic coaching
               const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
-              const tierMessages: Record<string, { headline: string; body: string; cta: string }> = {
+              const tierMessages: Record<string, { headline: string; body: string }> = {
                 beginner: {
                   headline: "Master these puzzles and you will start winning material in every game.",
-                  body: "These aren't random puzzles — they are the exact patterns that decide games at your level. Forks, pins, back rank mates. Your opponents won't see them. You will. Each puzzle you master is a weapon you carry into every game you play from now on.",
-                  cta: "Connect Chess.com to personalize your puzzles around patterns you're missing in your actual games.",
+                  body: "These aren't random puzzles — they are the exact patterns that decide games at your level. Forks, pins, back rank mates. Your opponents won't see them. You will.",
                 },
                 intermediate: {
                   headline: "Master these puzzles and your opponents will start making mistakes you instantly punish.",
-                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These puzzles drill the patterns until your brain recognizes them automatically, without thinking. One session at a time, your instincts get sharper.",
-                  cta: "Connect Chess.com to weight your puzzles toward the patterns costing you the most rating points.",
+                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These puzzles drill the patterns until your brain recognizes them automatically.",
                 },
                 advanced: {
                   headline: "Master these puzzles and you will solve in seconds what used to take minutes.",
-                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These puzzles are calibrated to your exact rating, targeting the positions where your recognition slows down. Master them and the time you save goes straight into better decisions later in the game.",
-                  cta: "Connect Chess.com to see exactly which patterns are still costing you time in real games.",
+                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These puzzles are calibrated to your exact rating.",
                 },
                 elite: {
                   headline: "Master these puzzles and the positions that slow you down now will never slow you down again.",
-                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These puzzles find the patterns in your blind spots — the ones that still require a beat of calculation when they should be instant. Drill them to mastery and your calculation becomes available for the positions that actually demand it.",
-                  cta: "Connect Chess.com to target the specific positions that are still costing you time.",
+                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These puzzles find the patterns in your blind spots.",
                 },
               };
               const msg = tierMessages[tier];
@@ -1428,6 +1441,14 @@ export default function TrainingPlan() {
                         return "Analyzing your games for tactical weaknesses...";
                       }
                     } catch { /* ignore */ }
+                    if (!username) {
+                      return (
+                        <span>
+                          Connect your Chess.com account to see which patterns are costing you games.{" "}
+                          <a href="/app/calibration" style={{ color: "#4ade80", textDecoration: "none", fontWeight: "600" }}>Connect →</a>
+                        </span>
+                      );
+                    }
                     return "Solve more puzzles to unlock your pattern breakdown.";
                   })()}
                 </div>
