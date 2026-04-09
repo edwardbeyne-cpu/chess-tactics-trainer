@@ -225,18 +225,55 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   // ── Tactic puzzles ──────────────────────────────────────────────────────
   const allThemes = Object.keys(cachedPuzzlesByTheme);
 
-  // Identify weak patterns (lowest solve-rate with enough data)
-  const patternStats = getAllPatternStats();
-  const weakestThemes = patternStats
-    .filter((s) => s.totalAttempts >= 3)
-    .sort((a, b) => a.solveRate - b.solveRate)
-    .slice(0, 3)
-    .map((s) => s.theme.toLowerCase());
+  // Map game analysis pattern labels to puzzle theme keys
+  const gameAnalysisToTheme: Record<string, string> = {
+    "Fork": "fork",
+    "Pin": "pin",
+    "Skewer": "skewer",
+    "Winning Captures": "fork",       // closest tactical theme
+    "Discovered Attacks": "discoveredAttack",
+    "Back Rank Mates": "backRankMate",
+    "Checks": "fork",                 // fallback
+  };
 
-  const weakTacticTarget = Math.round(newTacticCount * 0.5);
+  // Primary: use Chess.com game analysis weaknesses if available
+  // This is the real-game data — what patterns the player actually misses
+  let weakestThemes: string[] = [];
+  try {
+    const gameAnalysisRaw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+    if (gameAnalysisRaw) {
+      const gameData = JSON.parse(gameAnalysisRaw) as {
+        weaknesses?: Array<{ pattern: string; share: number }>;
+      };
+      if (gameData.weaknesses?.length) {
+        weakestThemes = gameData.weaknesses
+          .slice(0, 3)
+          .map((w) => gameAnalysisToTheme[w.pattern] ?? w.pattern.toLowerCase())
+          .filter((t) => allThemes.includes(t));
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Fallback: use in-app training solve rates if no game analysis
+  if (weakestThemes.length === 0) {
+    const patternStats = getAllPatternStats();
+    weakestThemes = patternStats
+      .filter((s) => s.totalAttempts >= 3)
+      .sort((a, b) => a.solveRate - b.solveRate)
+      .slice(0, 3)
+      .map((s) => s.theme.toLowerCase());
+  }
+
+  // If we have Chess.com game data, weight harder toward weaknesses (70%)
+  // Otherwise use balanced 50/50 split for in-app training data
+  const hasGameAnalysis = (() => {
+    try { return !!localStorage.getItem("ctt_game_analysis"); } catch { return false; }
+  })();
+  const weakRatio = hasGameAnalysis ? 0.7 : 0.5;
+  const weakTacticTarget = Math.round(newTacticCount * weakRatio);
   const spreadTacticTarget = newTacticCount - weakTacticTarget;
 
-  // Select from weak patterns (50% of tactic slots)
+  // Select from weak patterns
   if (weakestThemes.length > 0) {
     const perWeak = Math.ceil(weakTacticTarget / weakestThemes.length);
     for (const theme of weakestThemes) {
