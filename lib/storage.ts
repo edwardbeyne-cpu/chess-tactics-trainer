@@ -3511,3 +3511,19 @@ export function getCCTFirstSessionComplete(): boolean {
 export function saveCCTFirstSessionComplete(complete: boolean): void {
   try { localStorage.setItem(CCT_FIRST_SESSION_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
 }
+
+// CCT Trainer first visit
+const CCT_TRAINER_FIRST_VISIT_KEY = "ctt_cct_trainer_first_visit";
+
+export function getCCTTrainerFirstVisit(): boolean {
+  try {
+    const val = localStorage.getItem(CCT_TRAINER_FIRST_VISIT_KEY);
+    return val === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function saveCCTTrainerFirstVisit(visited: boolean): void {
+  try { localStorage.setItem(CCT_TRAINER_FIRST_VISIT_KEY, visited ? "true" : "false"); } catch { /* ignore */ }
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Chess } from "chess.js";
-import { saveCCTFirstSessionComplete } from "@/lib/storage";
+import { saveCCTFirstSessionComplete, getCCTTrainerFirstVisit, saveCCTTrainerFirstVisit } from "@/lib/storage";
 import ChessBoard from "./ChessBoard";
 import Link from "next/link";
 
@@ -46,7 +46,8 @@ export default function CCTTrainer() {
     threatsFound: 0,
     puzzlesSolved: 0,
   });
-  const [boardWidth, setBoardWidth] = useState(480);
+  const [boardWidth, setBoardWidth] = useState(560);
+  const [showFirstVisitTooltip, setShowFirstVisitTooltip] = useState(false);
 
   const currentPuzzle = POSITIONS[puzzleIdx];
   const allChecks = currentPuzzle.checks;
@@ -61,19 +62,38 @@ export default function CCTTrainer() {
   }, [chess, currentPuzzle.fen]);
 
   useEffect(() => {
-    resetForNewPuzzle();
-    
-    // Calculate board width for client-side
+    // Reset when puzzle changes
+    const timer = setTimeout(() => {
+      resetForNewPuzzle();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [puzzleIdx, resetForNewPuzzle]);
+
+  useEffect(() => {
+    // Calculate board width for client-side - larger board for better presence
     const updateBoardWidth = () => {
       if (typeof window !== "undefined") {
-        setBoardWidth(Math.min(480, window.innerWidth - 40));
+        const isMobile = window.innerWidth < 768;
+        setBoardWidth(isMobile ? Math.min(560, window.innerWidth - 32) : Math.min(640, window.innerWidth - 64));
       }
     };
     
     updateBoardWidth();
     window.addEventListener("resize", updateBoardWidth);
+    
+    // Check for first visit
+    if (typeof window !== "undefined") {
+      const hasVisitedBefore = getCCTTrainerFirstVisit();
+      if (!hasVisitedBefore) {
+        setTimeout(() => {
+          setShowFirstVisitTooltip(true);
+        }, 100);
+        saveCCTTrainerFirstVisit(true);
+      }
+    }
+    
     return () => window.removeEventListener("resize", updateBoardWidth);
-  }, [resetForNewPuzzle]);
+  }, []);
 
   useEffect(() => {
     if (phase === "complete") {
@@ -175,22 +195,7 @@ export default function CCTTrainer() {
     }
   };
 
-  const getPhaseInstructions = () => {
-    switch (phase) {
-      case "checks":
-        return "Find every checking move for White. Then tap ‘No more checks’ when you think you found them all.";
-      case "captures":
-        return "Find every capture for White. Then tap ‘No more captures’ when you’re done.";
-      case "threats":
-        return "Tap the White pieces that Black is attacking. Then continue when you’ve identified the threats.";
-      case "solve":
-        return "Now play the best move in the position.";
-      case "complete":
-        return "Training complete! Review your stats below.";
-      default:
-        return "";
-    }
-  };
+  // Phase instructions are now inline in the instruction card
 
   const getHighlightSquares = () => {
     const highlights: Record<string, { background?: string; borderRadius?: string }> = {};
@@ -248,16 +253,17 @@ export default function CCTTrainer() {
           marginBottom: "1.5rem",
         }}>
           <div style={{
-            width: "48px",
-            height: "48px",
+            width: "56px",
+            height: "56px",
             borderRadius: "50%",
-            backgroundColor: "#f97316",
+            backgroundColor: "#10b981",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: "white",
-            fontSize: "1.5rem",
+            fontSize: "1.75rem",
             fontWeight: "600",
+            boxShadow: "0 4px 16px rgba(16, 185, 129, 0.3)",
           }}>
             ✓
           </div>
@@ -275,7 +281,7 @@ export default function CCTTrainer() {
               color: "#94a3b8", 
               fontSize: "0.95rem"
             }}>
-              You've practiced the CCT scanning habit
+              You&apos;ve practiced the CCT scanning habit
             </p>
           </div>
         </div>
@@ -400,25 +406,25 @@ export default function CCTTrainer() {
               href="/app/puzzles?pattern=fork&index=1"
               style={{
                 display: "inline-block",
-                backgroundColor: "#f97316",
+                backgroundColor: "#10b981",
                 color: "white",
-                padding: "0.875rem 1.5rem",
-                borderRadius: "8px",
+                padding: "1rem 2rem",
+                borderRadius: "10px",
                 textDecoration: "none",
                 fontWeight: "600",
-                fontSize: "0.9rem",
+                fontSize: "1rem",
                 transition: "all 0.2s",
-                boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)",
+                boxShadow: "0 4px 16px rgba(16, 185, 129, 0.3)",
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.backgroundColor = "#ea580c";
+                e.currentTarget.style.backgroundColor = "#059669";
                 e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0 6px 16px rgba(249, 115, 22, 0.4)";
+                e.currentTarget.style.boxShadow = "0 6px 20px rgba(16, 185, 129, 0.4)";
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.backgroundColor = "#f97316";
+                e.currentTarget.style.backgroundColor = "#10b981";
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.3)";
+                e.currentTarget.style.boxShadow = "0 4px 16px rgba(16, 185, 129, 0.3)";
               }}
             >
               Start with Fork →
@@ -470,96 +476,156 @@ export default function CCTTrainer() {
       minHeight: "100vh",
     }}>
       {/* Header */}
-      <div style={{ marginBottom: "1rem" }}>
+      <div style={{ marginBottom: "1.5rem" }}>
         <h1 style={{ 
-          fontSize: "1.75rem", 
+          fontSize: "2rem", 
           fontWeight: "800", 
           marginBottom: "0.25rem",
           color: "#f1f5f9",
           letterSpacing: "-0.025em"
         }}>
-          CCT Trainer
+          Scan Before You Move
         </h1>
         <p style={{ 
-          color: "#94a3b8", 
-          fontSize: "0.9rem",
-          marginBottom: "0.75rem"
+          color: "#f97316", 
+          fontSize: "1.1rem",
+          fontWeight: "600",
+          marginBottom: "0.5rem"
         }}>
-          Build the Checks, Captures, Threats scanning habit
+          The #1 habit that separates improving players from stuck ones
+        </p>
+        <p style={{ 
+          color: "#94a3b8", 
+          fontSize: "0.95rem",
+          marginBottom: "1.25rem",
+          backgroundColor: "#1a1f2e",
+          padding: "0.75rem",
+          borderRadius: "8px",
+          border: "1px solid #2e3a5c"
+        }}>
+          <span style={{ color: "#ef4444", fontWeight: "600" }}>C</span>an I give <span style={{ color: "#ef4444", fontWeight: "600" }}>C</span>heck? • <span style={{ color: "#3b82f6", fontWeight: "600" }}>C</span>an I <span style={{ color: "#3b82f6", fontWeight: "600" }}>C</span>apture anything? • Is my piece under <span style={{ color: "#eab308", fontWeight: "600" }}>T</span>hreat?
         </p>
         
-        {/* Premium segmented control for mode selector (visual indicator only) */}
+        {/* Step progress stepper */}
         <div style={{
           display: "flex",
-          backgroundColor: "#1a1f2e",
-          padding: "0.25rem",
-          borderRadius: "10px",
-          border: "1px solid #2e3a5c",
-          overflow: "hidden",
-          maxWidth: "100%",
+          justifyContent: "space-between",
+          alignItems: "center",
+          position: "relative",
+          marginBottom: "0.5rem",
         }}>
-          {(["checks", "captures", "threats", "solve"] as Phase[]).map(p => (
-            <div
-              key={p}
-              style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "8px",
-                backgroundColor: phase === p ? "#f97316" : "transparent",
-                color: phase === p ? "white" : "#94a3b8",
-                fontWeight: phase === p ? "600" : "400",
-                textTransform: "capitalize",
-                fontSize: "0.85rem",
-                transition: "all 0.2s",
-                flex: 1,
-                textAlign: "center",
-                whiteSpace: "nowrap",
-                minWidth: 0, // Allows text truncation on small screens
-              }}
-            >
-              {p}
-            </div>
-          ))}
+          <div style={{
+            position: "absolute",
+            top: "12px",
+            left: "40px",
+            right: "40px",
+            height: "2px",
+            backgroundColor: "#334155",
+            zIndex: 1,
+          }} />
+          {[
+            { id: "checks", label: "Checks", color: "#ef4444", number: 1 },
+            { id: "captures", label: "Captures", color: "#3b82f6", number: 2 },
+            { id: "threats", label: "Threats", color: "#eab308", number: 3 },
+            { id: "solve", label: "Solve", color: "#10b981", number: 4 }
+          ].map((step, idx) => {
+            const isActive = phase === step.id;
+            const isCompleted = ["checks", "captures", "threats", "solve"].indexOf(phase) > idx;
+            return (
+              <div key={step.id} style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                position: "relative",
+                zIndex: 2,
+              }}>
+                <div style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  backgroundColor: isActive || isCompleted ? step.color : "#334155",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "600",
+                  fontSize: "0.85rem",
+                  marginBottom: "0.5rem",
+                  border: isActive ? "2px solid white" : "none",
+                  boxShadow: isActive ? `0 0 0 3px ${step.color}40` : "none",
+                  transition: "all 0.2s",
+                }}>
+                  {isCompleted ? "✓" : step.number}
+                </div>
+                <div style={{
+                  fontSize: "0.8rem",
+                  fontWeight: isActive ? "600" : "400",
+                  color: isActive ? step.color : "#94a3b8",
+                  textAlign: "center",
+                  textTransform: "capitalize",
+                }}>
+                  {step.label}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Coaching cue / instruction area */}
       <div style={{ 
-        marginBottom: "0.75rem",
-        padding: "0.85rem 0.9rem",
+        marginBottom: "1rem",
+        padding: "1rem",
         backgroundColor: "#0f172a",
-        borderRadius: "10px",
-        borderLeft: "3px solid #f97316",
+        borderRadius: "12px",
+        borderLeft: `4px solid ${phase === "checks" ? "#ef4444" : phase === "captures" ? "#3b82f6" : phase === "threats" ? "#eab308" : "#10b981"}`,
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
       }}>
-        <div style={{
-          fontSize: "0.8rem",
-          fontWeight: "600",
-          color: "#f97316",
-          marginBottom: "0.25rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em"
-        }}>
-          Step {(["checks", "captures", "threats", "solve"] as Phase[]).indexOf(phase) + 1} of 4 · Puzzle {puzzleIdx + 1} of {POSITIONS.length} · {phase.charAt(0).toUpperCase() + phase.slice(1)}
-        </div>
         <div style={{ 
           color: "#e2e8f0", 
-          fontSize: "1rem",
-          fontWeight: "500",
-          lineHeight: 1.45,
-          marginBottom: "0.35rem"
+          fontSize: "1.1rem",
+          fontWeight: "600",
+          lineHeight: 1.4,
+          marginBottom: "0.5rem"
         }}>
-          {getPhaseInstructions()}
+          {phase === "checks" ? "Step 1: Find all Checks" :
+           phase === "captures" ? "Step 2: Find all Captures" :
+           phase === "threats" ? "Step 3: Identify all Threats" :
+           "Step 4: Find the Best Move"}
         </div>
-        <div style={{ color: "#64748b", fontSize: "0.8rem" }}>
-          White to move
+        <div style={{ 
+          color: "#94a3b8", 
+          fontSize: "0.95rem",
+          fontWeight: "500",
+          lineHeight: 1.5,
+          marginBottom: "0.5rem"
+        }}>
+          {phase === "checks" ? "Click every square where White can give check. Hit 'Done' when finished." :
+           phase === "captures" ? "Click every square where White can capture an opponent's piece." :
+           phase === "threats" ? "Tap the White pieces that Black is attacking right now." :
+           "Now play the single best move in the position."}
+        </div>
+        <div style={{ 
+          color: "#64748b", 
+          fontSize: "0.85rem",
+          fontWeight: "500",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <span>White to move</span>
+          <span>Puzzle {puzzleIdx + 1} of {POSITIONS.length}</span>
         </div>
       </div>
 
-      {/* Board as hero */}
+      {/* Board as hero - larger and centered */}
       <div style={{
         position: "relative",
-        marginBottom: "0.75rem",
+        marginBottom: "1.5rem",
         display: "flex",
         justifyContent: "center",
+        alignItems: "center",
+        minHeight: boardWidth + 40,
       }}>
         <div
           style={{
@@ -628,17 +694,19 @@ export default function CCTTrainer() {
           flex: "1 1 200px", // Grow, shrink, min width 200px
         }}>
           {/* Progress dots */}
-          <div style={{ display: "flex", gap: "0.375rem", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
             {POSITIONS.map((_, idx) => (
               <div
                 key={idx}
                 style={{
-                  width: "10px",
-                  height: "10px",
+                  width: "16px",
+                  height: "16px",
                   borderRadius: "50%",
-                  backgroundColor: idx === puzzleIdx ? "#f97316" : 
+                  backgroundColor: idx === puzzleIdx ? (phase === "checks" ? "#ef4444" : phase === "captures" ? "#3b82f6" : phase === "threats" ? "#eab308" : "#10b981") : 
                                  idx < puzzleIdx ? "#4ade80" : "#334155",
                   transition: "background-color 0.2s",
+                  border: idx === puzzleIdx ? "2px solid white" : "none",
+                  boxShadow: idx === puzzleIdx ? "0 0 0 2px rgba(255, 255, 255, 0.3)" : "none",
                 }}
               />
             ))}
@@ -660,8 +728,76 @@ export default function CCTTrainer() {
               )}
               {phase === "threats" && (
                 <>Threats found: <span style={{ color: "#4ade80", fontWeight: "600" }}>{threatSquares.length}</span></>
-              )}
+)}
+        
+        {/* First visit tooltip */}
+        {showFirstVisitTooltip && phase === "checks" && (
+          <div style={{
+            position: "absolute",
+            top: "50%",
+            right: "20px",
+            transform: "translateY(-50%)",
+            backgroundColor: "#0f172a",
+            border: "2px solid #ef4444",
+            borderRadius: "12px",
+            padding: "1rem",
+            width: "260px",
+            zIndex: 10,
+            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+          }}>
+            <div style={{
+              position: "absolute",
+              right: "100%",
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 0,
+              height: 0,
+              borderTop: "12px solid transparent",
+              borderBottom: "12px solid transparent",
+              borderRight: "12px solid #ef4444",
+            }} />
+            <div style={{ 
+              color: "#ef4444", 
+              fontWeight: "600", 
+              fontSize: "0.9rem",
+              marginBottom: "0.5rem"
+            }}>
+              Tip for beginners
             </div>
+            <div style={{ 
+              color: "#e2e8f0", 
+              fontSize: "0.95rem",
+              lineHeight: 1.5,
+              marginBottom: "1rem"
+            }}>
+              A <span style={{ color: "#ef4444", fontWeight: "600" }}>check</span> is any move that attacks the enemy king. Look for pieces that could move to threaten the black king.
+            </div>
+            <button
+              onClick={() => setShowFirstVisitTooltip(false)}
+              style={{
+                backgroundColor: "#ef4444",
+                color: "white",
+                border: "none",
+                padding: "0.5rem 1rem",
+                borderRadius: "6px",
+                fontWeight: "600",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                width: "100%",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#dc2626";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "#ef4444";
+              }}
+            >
+              Got it — let&apos;s practice
+            </button>
+          </div>
+        )}
+      </div>
           )}
           {phase === "solve" && (
             <div style={{ color: "#94a3b8", fontSize: "0.95rem", minWidth: "140px" }}>
@@ -672,36 +808,44 @@ export default function CCTTrainer() {
 
         {/* Right: Action button */}
         {phase !== "solve" && (
-          <button
+           <button
             onClick={handleAdvancePhase}
             style={{
-              backgroundColor: "#f97316",
+              backgroundColor: phase === "checks" ? "#ef4444" : phase === "captures" ? "#3b82f6" : "#eab308",
               color: "white",
               border: "none",
-              padding: "0.75rem 1.5rem",
-              borderRadius: "8px",
+              padding: "0.875rem 1.75rem",
+              borderRadius: "10px",
               fontWeight: "600",
-              fontSize: "0.95rem",
+              fontSize: "1rem",
               cursor: "pointer",
               transition: "all 0.2s",
               flexShrink: 0,
-              minWidth: "140px",
-              boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
+              minWidth: "160px",
+              boxShadow: phase === "checks" ? "0 4px 12px rgba(239, 68, 68, 0.3)" : 
+                         phase === "captures" ? "0 4px 12px rgba(59, 130, 246, 0.3)" :
+                         "0 4px 12px rgba(234, 179, 8, 0.3)",
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.backgroundColor = "#ea580c";
-              e.currentTarget.style.transform = "translateY(-1px)";
-              e.currentTarget.style.boxShadow = "0 4px 8px rgba(249, 115, 22, 0.3)";
+              const hoverColor = phase === "checks" ? "#dc2626" : phase === "captures" ? "#2563eb" : "#ca8a04";
+              e.currentTarget.style.backgroundColor = hoverColor;
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = phase === "checks" ? "0 6px 16px rgba(239, 68, 68, 0.4)" : 
+                                               phase === "captures" ? "0 6px 16px rgba(59, 130, 246, 0.4)" :
+                                               "0 6px 16px rgba(234, 179, 8, 0.4)";
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.backgroundColor = "#f97316";
+              const originalColor = phase === "checks" ? "#ef4444" : phase === "captures" ? "#3b82f6" : "#eab308";
+              e.currentTarget.style.backgroundColor = originalColor;
               e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 2px 4px rgba(249, 115, 22, 0.2)";
+              e.currentTarget.style.boxShadow = phase === "checks" ? "0 4px 12px rgba(239, 68, 68, 0.3)" : 
+                                               phase === "captures" ? "0 4px 12px rgba(59, 130, 246, 0.3)" :
+                                               "0 4px 12px rgba(234, 179, 8, 0.3)";
             }}
           >
-            {phase === "checks" ? "No more checks" :
-             phase === "captures" ? "No more captures" :
-             "Done with threats"}
+            {phase === "checks" ? (foundMoves.length > 0 ? "Done — Next →" : "None exist — Next →") :
+             phase === "captures" ? (foundMoves.length > 0 ? "Done — Next →" : "None exist — Next →") :
+             "Done — Next →"}
           </button>
         )}
       </div>
