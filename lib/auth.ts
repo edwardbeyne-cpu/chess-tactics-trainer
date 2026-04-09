@@ -75,8 +75,17 @@ export function applyBetaCode(code: string): boolean {
     saveUserProfile(profile);
   }
 
-  // Grant Pro tier via existing subscription tier mechanism
+  // Grant Pro tier via both current and legacy subscription mechanisms
   localStorage.setItem("ctt_sub_tier", "2");
+  localStorage.setItem("subscription_status", "active");
+
+  // Nudge already-mounted UI to re-check entitlement state
+  try {
+    window.dispatchEvent(new Event("storage"));
+    window.dispatchEvent(new Event("ctt-subscription-updated"));
+  } catch {
+    // ignore
+  }
 
   return true;
 }

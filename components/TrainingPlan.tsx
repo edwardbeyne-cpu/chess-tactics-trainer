@@ -947,80 +947,6 @@ export default function TrainingPlan() {
           </div>
         )}
 
-        {/* ── Recommended Starter Pattern ───────────────────────────────────── */}
-        {totalPuzzlesSolved < 50 && (
-          <div style={{
-            backgroundColor: "#0a1520",
-            border: "3px solid #f97316",
-            borderRadius: "16px",
-            padding: "1.5rem",
-            marginBottom: "1rem",
-            boxShadow: "0 4px 20px rgba(249, 115, 22, 0.15)",
-          }}>
-            <div style={{ 
-              color: "#f97316", 
-              fontSize: "1.1rem", 
-              fontWeight: "800",
-              marginBottom: "0.5rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem"
-            }}>
-              <span>🔥</span>
-              <span>Build Your Foundation</span>
-            </div>
-            <div style={{ 
-              color: "#e2e8f0", 
-              fontSize: "0.95rem", 
-              fontWeight: "700",
-              marginBottom: "0.5rem"
-            }}>
-              Start with <span style={{color: "#f97316"}}>Fork</span> — The Most Common Chess Tactic
-            </div>
-            <div style={{ 
-              color: "#94a3b8", 
-              fontSize: "0.85rem", 
-              marginBottom: "1rem",
-              lineHeight: 1.6
-            }}>
-              <strong>Fork</strong> attacks two pieces at once and appears in 1 out of 4 tactical puzzles.
-              Master this first to build pattern recognition that works in real games.
-            </div>
-            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
-              <Link
-                href="/app/puzzles?pattern=fork&index=1"
-                style={{
-                  display: "inline-block",
-                  backgroundColor: "#f97316",
-                  color: "white",
-                  padding: "0.6rem 1.25rem",
-                  borderRadius: "8px",
-                  fontSize: "0.85rem",
-                  fontWeight: "700",
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  boxShadow: "0 2px 8px rgba(249, 115, 22, 0.3)",
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = "#ea580c";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(249, 115, 22, 0.4)";
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = "#f97316";
-                  e.currentTarget.style.transform = "translateY(0)";
-                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(249, 115, 22, 0.3)";
-                }}
-              >
-                Start with Fork →
-              </Link>
-              <div style={{ color: "#64748b", fontSize: "0.75rem" }}>
-                Or explore 27 other patterns in <Link href="/app/patterns" style={{color: "#60a5fa", textDecoration: "none"}}>Drill Tactics</Link>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
         <div style={{
           backgroundColor: "#13132b",
@@ -1507,6 +1433,27 @@ export default function TrainingPlan() {
             </div>
           );
         })()}
+
+        {/* ── Why this training is personalized ───────────────────────────── */}
+        <div style={{
+          backgroundColor: "#0d1621",
+          border: "1px solid #1e3a5c",
+          borderRadius: "16px",
+          padding: "1.25rem 1.4rem",
+          marginBottom: "1rem",
+        }}>
+          <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+            Why this training is personalized
+          </div>
+          <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
+            This queue is built to emphasize the tactical patterns you miss most often.
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
+            {username
+              ? `We analyzed your recent ${platform === "lichess" ? "Lichess" : "Chess.com"} games, identified the patterns costing you the most, and weighted this training set toward those weaknesses at your current level.`
+              : "As you train, the system tracks what you miss, what you master, and what needs more repetition — then builds your queue to target those weaknesses instead of giving you random puzzles."}
+          </div>
+        </div>
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{

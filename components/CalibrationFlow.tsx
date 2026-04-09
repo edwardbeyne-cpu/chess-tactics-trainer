@@ -619,8 +619,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       }
 
       return (
-        <div style={{ padding: "1.5rem 1rem 0.5rem" }}>
-          <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+        <div style={{ padding: "3.25rem 1rem 0.75rem" }}>
+          <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
             <p style={{ color: "#e2e8f0", fontSize: "1.1rem", fontWeight: "700", margin: "0 0 0.6rem" }}>
               How fast do you want to improve?
             </p>
@@ -642,7 +642,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                 key={g}
                 onClick={() => commitGoal(g)}
                 style={{
-                  backgroundColor: selectedGoal === g ? "#0d2a1a" : "#0d1621",
+                  backgroundColor: selectedGoal === g ? "#123021" : "#0d1621",
                   border: `1px solid ${selectedGoal === g ? "#4ade80" : "#2e3a5c"}`,
                   borderRadius: "12px",
                   color: selectedGoal === g ? "#4ade80" : "#e2e8f0",
@@ -656,9 +656,23 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
                   justifyContent: "space-between",
                   alignItems: "center",
                 }}
+                onMouseEnter={(e) => {
+                  if (selectedGoal !== g) {
+                    e.currentTarget.style.backgroundColor = "#123021";
+                    e.currentTarget.style.borderColor = "#4ade80";
+                    e.currentTarget.style.color = "#4ade80";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedGoal !== g) {
+                    e.currentTarget.style.backgroundColor = "#0d1621";
+                    e.currentTarget.style.borderColor = "#2e3a5c";
+                    e.currentTarget.style.color = "#e2e8f0";
+                  }
+                }}
               >
                 <span>{TIER_LABELS[g]?.label ?? `${g} puzzles / day`}</span>
-                <span style={{ fontSize: "0.8rem", fontWeight: 400, color: selectedGoal === g ? "#4ade80" : "#64748b" }}>{TIER_LABELS[g]?.sub}</span>
+                <span style={{ fontSize: "0.8rem", fontWeight: 400, color: selectedGoal === g ? "#4ade80" : "#94a3b8" }}>{TIER_LABELS[g]?.sub}</span>
               </button>
             ))}
 

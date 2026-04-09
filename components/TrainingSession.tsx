@@ -464,6 +464,11 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const [cctUnlocked, setCctUnlocked] = useState(false);
   const [cctNudge, setCctNudge] = useState(false);
   const [amberBanner, setAmberBanner] = useState(false);
+  const [cctContextCard, setCctContextCard] = useState<null | {
+    tone: "used" | "ignored" | "missed";
+    title: string;
+    body: string;
+  }>(null);
   // "off" and "suggested" — board always unlocked; "enforced" — locked until all 3 checked
   const cctComplete = cctMode === "off" || cctMode === "suggested" || cctUnlocked;
   const cctAllChecked = cctChecked.checks && cctChecked.captures && cctChecked.threats;
@@ -534,6 +539,21 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
     if (!isCorrect) {
       setStatus("failed");
       setMessage("✗ Wrong");
+      if (cctMode !== "off") {
+        if (!cctAnyClickedRef.current) {
+          setCctContextCard({
+            tone: "missed",
+            title: "Most players miss this by moving too fast",
+            body: "Before your next move, scan Checks → Captures → Threats first. That one habit catches more tactics than guessing ever will.",
+          });
+        } else {
+          setCctContextCard({
+            tone: "missed",
+            title: "Good — now use the scan more deliberately",
+            body: "You engaged with CCT. Next step: slow down and use Checks → Captures → Threats to confirm the tactic before moving.",
+          });
+        }
+      }
       if (!hasScoredRef.current) {
         hasScoredRef.current = true;
         if (!resultCalledRef.current) {
@@ -570,6 +590,21 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       if (nextIndex >= puzzleData.solution.length) {
         setStatus("solved");
         setMessage("Correct!");
+        if (cctMode !== "off") {
+          if (cctAnyClickedRef.current) {
+            setCctContextCard({
+              tone: "used",
+              title: "That’s CCT — you’re building the habit",
+              body: "You used Checks → Captures → Threats before moving. Keep doing that and the tactical patterns will get easier to spot.",
+            });
+          } else {
+            setCctContextCard({
+              tone: "ignored",
+              title: "Nice solve — now make it repeatable",
+              body: "Before your next move, try scanning Checks → Captures → Threats first. That’s the habit that separates improvers from guessers.",
+            });
+          }
+        }
         if (!resultCalledRef.current) {
           resultCalledRef.current = true;
           onResult(true);
@@ -626,7 +661,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
               </div>
               {!cctUnlocked && !cctAllChecked && (
                 <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.5rem", lineHeight: 1.4 }}>
-                  Scan for <span style={{ color: "#94a3b8" }}>Checks</span>, <span style={{ color: "#94a3b8" }}>Captures</span>, <span style={{ color: "#94a3b8" }}>Threats</span> before moving.
+                  Before you move, scan <span style={{ color: "#94a3b8" }}>Checks</span>, <span style={{ color: "#94a3b8" }}>Captures</span>, <span style={{ color: "#94a3b8" }}>Threats</span>.
                 </div>
               )}
               {cctUnlocked || cctAllChecked ? (
@@ -852,12 +887,68 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
           borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
           color: "#f59e0b", fontSize: "0.8rem", lineHeight: 1.5,
         }}>
-          💡 Tip: Scan Checks, Captures &amp; Threats before moving — it catches 80% of missed tactics
+          Before your next move, try scanning Checks → Captures → Threats first.
+        </div>
+      )}
+
+      {/* Contextual post-puzzle CCT reinforcement */}
+      {cctContextCard && (
+        <div style={{
+          width: boardWidth,
+          boxSizing: "border-box",
+          backgroundColor:
+            cctContextCard.tone === "used" ? "#0d2218" :
+            cctContextCard.tone === "ignored" ? "#1a1200" :
+            "#0d1a2a",
+          border: `1px solid ${
+            cctContextCard.tone === "used" ? "#4ade80" :
+            cctContextCard.tone === "ignored" ? "#f59e0b" :
+            "#60a5fa"
+          }`,
+          borderRadius: "10px",
+          padding: "0.85rem 1rem",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+        }}>
+          <div>
+            <div style={{
+              color:
+                cctContextCard.tone === "used" ? "#4ade80" :
+                cctContextCard.tone === "ignored" ? "#f59e0b" :
+                "#93c5fd",
+              fontSize: "0.84rem",
+              fontWeight: 700,
+              marginBottom: "0.25rem",
+            }}>
+              {cctContextCard.title}
+            </div>
+            <div style={{ color: "#cbd5e1", fontSize: "0.8rem", lineHeight: 1.55 }}>
+              {cctContextCard.body}
+            </div>
+          </div>
+          <button
+            onClick={() => setCctContextCard(null)}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#64748b",
+              fontSize: "1rem",
+              cursor: "pointer",
+              padding: 0,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
         </div>
       )}
 
       {/* CCT slide-up tip — shown after first wrong move, non-blocking */}
-      {showCCTSlideUp && (
+      {showCCTSlideUp && !cctContextCard && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
           backgroundColor: "#0d1a2a", border: "1px solid #2e75b6",
@@ -1450,6 +1541,11 @@ export default function TrainingSession() {
   const consecutiveMissesRef = useRef(0); // tracks consecutive wrong answers for miss-streak nudge
   const missStreakNudgeShownRef = useRef(false); // show miss-streak nudge at most once per session
   const [showMissStreakNudge, setShowMissStreakNudge] = useState(false);
+  const [cctContextCard, setCctContextCard] = useState<null | {
+    tone: "used" | "ignored" | "missed";
+    title: string;
+    body: string;
+  }>(null);
   const milestone5ShownRef = useRef(false); // show 5-puzzle milestone once per session
   const [showMilestone5, setShowMilestone5] = useState(false);
 
@@ -1660,6 +1756,7 @@ export default function TrainingSession() {
         return;
       }
       setFeedback(null);
+      setCctContextCard(null);
 
       const settings = getDailyTargetSettings();
 
