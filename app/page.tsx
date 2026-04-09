@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import MarketingNav from "@/components/MarketingNav";
 import PricingCard from "@/components/PricingCard";
 import TryAPuzzle from "@/components/TryAPuzzle";
@@ -161,6 +162,55 @@ export default function HomePage() {
 
       {/* Try a puzzle */}
       <TryAPuzzle />
+
+      {/* Personalized analysis */}
+      <section style={{ maxWidth: "1180px", margin: "0 auto", padding: "2.5rem 2rem 3.5rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.9rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+            See exactly where your tactics are breaking down
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: "1rem", maxWidth: "760px", margin: "0 auto", lineHeight: 1.7 }}>
+            We analyze your recent games, show which tactical patterns you&apos;re strongest and weakest at, and turn those blind spots into your training plan.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.5rem", marginBottom: "1.5rem" }}>
+          <div style={{ backgroundColor: "#15162b", border: "1px solid #2e3a5c", borderRadius: "18px", padding: "1rem" }}>
+            <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              Coach Analysis
+            </div>
+            <Image
+              src="/coach-analysis-homepage.jpg"
+              alt="Coach Analysis showing tactical strengths and weaknesses"
+              width={1336}
+              height={734}
+              className="w-full h-auto rounded-xl"
+            />
+          </div>
+
+          <div style={{ backgroundColor: "#15162b", border: "1px solid #2e3a5c", borderRadius: "18px", padding: "1rem" }}>
+            <div style={{ color: "#f59e0b", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              Where You Are Losing
+            </div>
+            <Image
+              src="/where-you-are-losing-homepage.jpg"
+              alt="Where You Are Losing analysis showing tactical weaknesses by pattern"
+              width={667}
+              height={370}
+              className="w-full h-auto rounded-xl"
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "0.75rem", color: "#94a3b8", fontSize: "0.9rem" }}>
+          {["Based on your recent games", "Pattern-specific strengths and weaknesses", "Training recommendations tied to your blind spots"].map((item) => (
+            <div key={item} style={{ display: "flex", alignItems: "center", gap: "0.45rem", backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "999px", padding: "0.55rem 0.9rem" }}>
+              <span style={{ color: "#4ade80" }}>•</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Feature cards */}
       <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "3rem 2rem" }}>

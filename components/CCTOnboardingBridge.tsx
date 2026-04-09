@@ -9,13 +9,15 @@ import {
   saveCCTOnboardingComplete,
   type CCTFamiliarity 
 } from "@/lib/storage";
+import LearnCCT from "./LearnCCT";
 
 type Screen = 
   | "segmentation" 
   | "beginner_intro" 
   | "why_it_works" 
   | "launch" 
-  | "refresher";
+  | "refresher"
+  | "learn_cct";
 
 export default function CCTOnboardingBridge() {
   const router = useRouter();
@@ -35,7 +37,7 @@ export default function CCTOnboardingBridge() {
       // Already segmented, skip to appropriate screen
       setFamiliarity(existing);
       if (existing === "new_to_cct") {
-        setScreen("beginner_intro");
+        setScreen("learn_cct");
       } else if (existing === "cct_inconsistent") {
         setScreen("refresher");
       } else {
@@ -52,7 +54,7 @@ export default function CCTOnboardingBridge() {
     saveCCTFamiliarity(selected);
     
     if (selected === "new_to_cct") {
-      setScreen("beginner_intro");
+      setScreen("learn_cct");
     } else if (selected === "cct_inconsistent") {
       setScreen("refresher");
     } else {
@@ -71,6 +73,11 @@ export default function CCTOnboardingBridge() {
       saveCCTOnboardingComplete(true);
       router.push("/app/cct-trainer");
     }
+  };
+
+  const handleLearnCCTComplete = () => {
+    saveCCTOnboardingComplete(true);
+    router.push("/app/cct-trainer");
   };
 
   const handleSkip = () => {
@@ -97,9 +104,9 @@ export default function CCTOnboardingBridge() {
   if (screen === "segmentation") {
     return (
       <div style={{
-        maxWidth: "600px",
+        maxWidth: "760px",
         margin: "0 auto",
-        padding: "2rem 1rem",
+        padding: "1.2rem 1.25rem 2rem",
         minHeight: "100vh",
         backgroundColor: "#0a0a0f",
         color: "#f1f5f9",
@@ -108,12 +115,12 @@ export default function CCTOnboardingBridge() {
       }}>
         <div style={{ marginBottom: "1.75rem" }}>
           <div style={{
-            color: "#64748b",
-            fontSize: "0.78rem",
+            color: "#f59e0b",
+            fontSize: "0.8rem",
             fontWeight: "700",
             letterSpacing: "0.08em",
             textTransform: "uppercase",
-            marginBottom: "0.6rem"
+            marginBottom: "0.65rem"
           }}>
             Step 1 of 2 · CCT Check
           </div>
@@ -140,8 +147,8 @@ export default function CCTOnboardingBridge() {
         <div style={{
           display: "flex",
           flexDirection: "column",
-          gap: "1rem",
-          marginBottom: "2rem",
+          gap: "1.25rem",
+          marginBottom: "2.4rem",
         }}>
           {[
             {
@@ -171,9 +178,9 @@ export default function CCTOnboardingBridge() {
               onClick={() => handleSegmentationSelect(option.value)}
               style={{
                 textAlign: "left",
-                padding: "1.2rem 1.25rem",
+                padding: "1.25rem 1.35rem",
                 backgroundColor: "#0f172a",
-                border: "1px solid #1e293b",
+                border: "1px solid #243044",
                 borderRadius: "14px",
                 cursor: "pointer",
                 transition: "all 0.2s",
@@ -182,14 +189,14 @@ export default function CCTOnboardingBridge() {
                 width: "100%",
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.backgroundColor = "#1a1f2e";
+                e.currentTarget.style.backgroundColor = "#151d2b";
                 e.currentTarget.style.borderColor = option.color;
                 e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = `0 10px 24px ${option.color}22`;
+                e.currentTarget.style.boxShadow = `0 12px 28px ${option.color}20`;
               }}
               onMouseLeave={e => {
                 e.currentTarget.style.backgroundColor = "#0f172a";
-                e.currentTarget.style.borderColor = "#1e293b";
+                e.currentTarget.style.borderColor = "#243044";
                 e.currentTarget.style.transform = "translateY(0)";
                 e.currentTarget.style.boxShadow = "none";
               }}
@@ -214,36 +221,16 @@ export default function CCTOnboardingBridge() {
                     {option.subtitle}
                   </div>
                   <div style={{
-                    color: "#94a3b8",
-                    fontSize: "0.8rem",
-                    lineHeight: 1.4,
+                    color: "#64748b",
+                    fontSize: "0.76rem",
+                    lineHeight: 1.35,
                   }}>
-                    → {option.next}
+                    Next: {option.next}
                   </div>
-                </div>
-                <div style={{
-                  width: "22px",
-                  height: "22px",
-                  borderRadius: "999px",
-                  border: `2px solid ${option.color}`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: option.color,
-                  flexShrink: 0,
-                  marginTop: "0.1rem",
-                  fontSize: "0.8rem",
-                  fontWeight: "700",
-                }}>
-                  ○
                 </div>
               </div>
             </button>
           ))}
-        </div>
-
-        <div style={{ color: "#64748b", fontSize: "0.78rem", textAlign: "center", marginBottom: "0.5rem" }}>
-          Choose one to personalize what happens next.
         </div>
 
         <button
@@ -254,8 +241,9 @@ export default function CCTOnboardingBridge() {
             border: "none",
             padding: "0.75rem",
             cursor: "pointer",
-            fontSize: "0.9rem",
+            fontSize: "0.88rem",
             alignSelf: "center",
+            marginTop: "0.75rem",
           }}
         >
           Skip CCT setup for now →
@@ -500,9 +488,9 @@ export default function CCTOnboardingBridge() {
 
     return (
       <div style={{
-        maxWidth: "600px",
+        maxWidth: "820px",
         margin: "0 auto",
-        padding: "2rem 1rem",
+        padding: "0.75rem 1.25rem 1.5rem",
         minHeight: "100vh",
         backgroundColor: "#0a0a0f",
         color: "#f1f5f9",
@@ -514,13 +502,13 @@ export default function CCTOnboardingBridge() {
           padding: "1.35rem 1.4rem",
           backgroundColor: "#0f172a",
           borderRadius: "14px",
-          borderLeft: "4px solid #f97316",
+          borderLeft: "4px solid #4ade80",
           marginBottom: "1.25rem",
         }}>
           <div style={{
             fontSize: "0.78rem",
             fontWeight: "700",
-            color: "#f97316",
+            color: "#4ade80",
             marginBottom: "0.5rem",
             textTransform: "uppercase",
             letterSpacing: "0.07em"
@@ -557,28 +545,28 @@ export default function CCTOnboardingBridge() {
         <button
           onClick={handleNext}
           style={{
-            backgroundColor: "#f97316",
-            color: "white",
+            backgroundColor: "#4ade80",
+            color: "#0f0f1a",
             border: "none",
-            padding: "0.95rem 1.4rem",
+            padding: "1rem 1.5rem",
             borderRadius: "10px",
             fontWeight: "700",
-            fontSize: "1rem",
+            fontSize: "1.125rem",
             cursor: "pointer",
             transition: "all 0.2s",
             width: "100%",
-            boxShadow: "0 2px 4px rgba(249, 115, 22, 0.2)",
+            boxShadow: "0 2px 4px rgba(74, 222, 128, 0.22)",
             marginBottom: "0.5rem",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.backgroundColor = "#ea580c";
+            e.currentTarget.style.backgroundColor = "#3fcb73";
             e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 4px 8px rgba(249, 115, 22, 0.3)";
+            e.currentTarget.style.boxShadow = "0 6px 14px rgba(74, 222, 128, 0.32)";
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.backgroundColor = "#f97316";
+            e.currentTarget.style.backgroundColor = "#4ade80";
             e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 2px 4px rgba(249, 115, 22, 0.2)";
+            e.currentTarget.style.boxShadow = "0 2px 4px rgba(74, 222, 128, 0.22)";
           }}
         >
           {cta}
@@ -592,14 +580,20 @@ export default function CCTOnboardingBridge() {
             border: "none",
             padding: "0.65rem 1rem",
             cursor: "pointer",
-            fontSize: "0.9rem",
+            fontSize: "0.84rem",
             alignSelf: "center",
+            marginTop: "1rem",
           }}
         >
           {isLaunch ? "Back" : "Skip for now"}
         </button>
       </div>
     );
+  }
+
+  // Learn CCT screen (new_to_cct only)
+  if (screen === "learn_cct") {
+    return <LearnCCT onComplete={handleLearnCCTComplete} />;
   }
 
   return null;

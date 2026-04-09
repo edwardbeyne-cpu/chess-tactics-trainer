@@ -178,13 +178,13 @@ export default function CCTTrainer() {
   const getPhaseInstructions = () => {
     switch (phase) {
       case "checks":
-        return "Find all checks for the moving side. Drag pieces to give check.";
+        return "Find every checking move for White. Then tap ‘No more checks’ when you think you found them all.";
       case "captures":
-        return "Find all captures for the moving side. Drag pieces to capture.";
+        return "Find every capture for White. Then tap ‘No more captures’ when you’re done.";
       case "threats":
-        return "Tap squares where the moving side's pieces are under attack.";
+        return "Tap the White pieces that Black is attacking. Then continue when you’ve identified the threats.";
       case "solve":
-        return "Find the best move in this position.";
+        return "Now play the best move in the position.";
       case "complete":
         return "Training complete! Review your stats below.";
       default:
@@ -462,15 +462,15 @@ export default function CCTTrainer() {
 
   return (
     <div style={{
-      maxWidth: "800px",
+      maxWidth: "720px",
       margin: "0 auto",
-      padding: "1rem",
+      padding: "0.75rem 1rem 1.25rem",
       display: "flex",
       flexDirection: "column",
       minHeight: "100vh",
     }}>
       {/* Header */}
-      <div style={{ marginBottom: "1.5rem" }}>
+      <div style={{ marginBottom: "1rem" }}>
         <h1 style={{ 
           fontSize: "1.75rem", 
           fontWeight: "800", 
@@ -482,8 +482,8 @@ export default function CCTTrainer() {
         </h1>
         <p style={{ 
           color: "#94a3b8", 
-          fontSize: "0.95rem",
-          marginBottom: "1rem"
+          fontSize: "0.9rem",
+          marginBottom: "0.75rem"
         }}>
           Build the Checks, Captures, Threats scanning habit
         </p>
@@ -524,10 +524,10 @@ export default function CCTTrainer() {
 
       {/* Coaching cue / instruction area */}
       <div style={{ 
-        marginBottom: "1rem",
-        padding: "0.75rem",
+        marginBottom: "0.75rem",
+        padding: "0.85rem 0.9rem",
         backgroundColor: "#0f172a",
-        borderRadius: "8px",
+        borderRadius: "10px",
         borderLeft: "3px solid #f97316",
       }}>
         <div style={{
@@ -538,25 +538,28 @@ export default function CCTTrainer() {
           textTransform: "uppercase",
           letterSpacing: "0.05em"
         }}>
-          Puzzle {puzzleIdx + 1} of {POSITIONS.length} • {phase.charAt(0).toUpperCase() + phase.slice(1)}
+          Step {(["checks", "captures", "threats", "solve"] as Phase[]).indexOf(phase) + 1} of 4 · Puzzle {puzzleIdx + 1} of {POSITIONS.length} · {phase.charAt(0).toUpperCase() + phase.slice(1)}
         </div>
         <div style={{ 
           color: "#e2e8f0", 
           fontSize: "1rem",
           fontWeight: "500",
-          lineHeight: 1.4
+          lineHeight: 1.45,
+          marginBottom: "0.35rem"
         }}>
           {getPhaseInstructions()}
+        </div>
+        <div style={{ color: "#64748b", fontSize: "0.8rem" }}>
+          White to move
         </div>
       </div>
 
       {/* Board as hero */}
       <div style={{
         position: "relative",
-        marginBottom: "1.5rem",
+        marginBottom: "0.75rem",
         display: "flex",
         justifyContent: "center",
-        flex: 1,
       }}>
         <div
           style={{
@@ -608,15 +611,14 @@ export default function CCTTrainer() {
       {/* Integrated bottom strip */}
       <div style={{
         backgroundColor: "#0f172a",
-        padding: "1rem",
+        padding: "0.9rem 1rem",
         borderRadius: "12px",
         border: "1px solid #1e293b",
         display: "flex",
         flexWrap: "wrap",
         justifyContent: "space-between",
         alignItems: "center",
-        gap: "1rem",
-        marginTop: "auto",
+        gap: "0.9rem",
       }}>
         {/* Left: Progress and status */}
         <div style={{ 
@@ -651,13 +653,13 @@ export default function CCTTrainer() {
               minWidth: "140px",
             }}>
               {phase === "checks" && (
-                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> of {allChecks.length} checks</>
+                <>Checks found: <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> / {allChecks.length}</>
               )}
               {phase === "captures" && (
-                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> of {allCaptures.length} captures</>
+                <>Captures found: <span style={{ color: "#4ade80", fontWeight: "600" }}>{foundMoves.length}</span> / {allCaptures.length}</>
               )}
               {phase === "threats" && (
-                <>Found <span style={{ color: "#4ade80", fontWeight: "600" }}>{threatSquares.length}</span> threats</>
+                <>Threats found: <span style={{ color: "#4ade80", fontWeight: "600" }}>{threatSquares.length}</span></>
               )}
             </div>
           )}
