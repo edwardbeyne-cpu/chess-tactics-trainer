@@ -2052,49 +2052,43 @@ export default function TrainingSession() {
         )}
       </div>
 
-      {/* ── Mastery dots + Analysis ──────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", flexDirection: "column", alignItems: "center", gap: "0.4rem",
-        backgroundColor: "#13132b", border: "1px solid #1e2a3a",
-        borderRadius: "10px", padding: "0.75rem",
-      }}>
-        {reviewMode && (
-          <div style={{ color: "#f59e0b", fontSize: "0.72rem", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.2rem" }}>
-            Review Mode — Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
-          </div>
-        )}
-        <MasteryDots hits={puzzle.masteryHits} size={14} />
-        <div style={{ color: "#475569", fontSize: "0.75rem" }}>
-          Solve in under 10s to earn a mastery point
-        </div>
-        {/* Stockfish analysis button */}
+      {/* Analyze with Engine */}
+      <div style={{ display: "flex", justifyContent: "center" }}>
         <button
           onClick={() => {
             if (phase === "solving") {
-              // Opening engine before attempting = gave up = score as wrong
-              handleResult(false);
+              handleResultRef.current(false);
             }
             setShowAnalysis((v) => !v);
           }}
           style={{
-            marginTop: "0.25rem",
             backgroundColor: "transparent", border: "1px solid #2e3a5c",
-            borderRadius: "6px", padding: "0.3rem 0.75rem",
+            borderRadius: "6px", padding: "0.35rem 0.75rem",
             color: "#475569", fontSize: "0.72rem", cursor: "pointer",
           }}
         >
           {showAnalysis ? "Hide Analysis" : "🔍 Analyze with Engine"}
         </button>
-        {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
-          <div style={{ width: "100%", marginTop: "0.5rem" }}>
-            <StockfishAnalysis
-              fen={(puzzle.puzzleData as {fen: string}).fen}
-              orientation={(puzzle.puzzleData as {fen: string}).fen.includes(" b ") ? "black" : "white"}
-              onClose={() => setShowAnalysis(false)}
-            />
-          </div>
-        )}
       </div>
+      {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
+        <div style={{ maxWidth: "900px" }}>
+          <StockfishAnalysis
+            fen={(puzzle.puzzleData as {fen: string}).fen}
+            orientation={(puzzle.puzzleData as {fen: string}).fen.includes(" b ") ? "black" : "white"}
+            onClose={() => setShowAnalysis(false)}
+          />
+        </div>
+      )}
+
+      {/* Review mode indicator */}
+      {reviewMode && (
+        <div style={{
+          textAlign: "center", color: "#f59e0b", fontSize: "0.72rem", fontWeight: "700",
+          textTransform: "uppercase", letterSpacing: "0.06em", padding: "0.4rem",
+        }}>
+          Review Mode — Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
+        </div>
+      )}
     </div>
   );
 }
