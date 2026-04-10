@@ -62,43 +62,9 @@ function PatternMasteryTierDisplay() {
   const tiers = getPatternMasteryTiers();
   const totalMastered = tiers.beginner + tiers.intermediate + tiers.advanced + tiers.elite;
   
-  // Show motivational onboarding prompt for new users instead of hiding
+  // Hide Pattern Mastery until the user has actually started building pattern progress.
   if (totalMastered === 0) {
-    return (
-      <div style={{
-        backgroundColor: "#0d1a2a",
-        border: "1px solid #2e75b6",
-        borderRadius: "10px",
-        padding: "0.9rem 1rem",
-        marginTop: "0.75rem",
-      }}>
-        <div style={{ color: "#2e75b6", fontWeight: "600", fontSize: "0.82rem", marginBottom: "0.4rem" }}>
-          🎯 Start Your Pattern Journey
-        </div>
-        <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginBottom: "0.75rem", lineHeight: 1.5 }}>
-          Begin with <strong>Fork</strong> or <strong>Pin</strong> — the most common tactical patterns. 
-          Each pattern you master builds your tactical instincts.
-        </div>
-        <Link
-          href="/app/puzzles?pattern=fork&index=1"
-          style={{
-            display: "inline-block",
-            backgroundColor: "#2e75b6",
-            color: "white",
-            padding: "0.4rem 0.9rem",
-            borderRadius: "6px",
-            fontSize: "0.75rem",
-            fontWeight: "600",
-            textDecoration: "none",
-            transition: "background-color 0.2s",
-          }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = "#1e5a96"}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = "#2e75b6"}
-        >
-          Start with Fork →
-        </Link>
-      </div>
-    );
+    return null;
   }
   const tierItems = [
     { label: "Beginner", count: tiers.beginner, color: "#94a3b8", dot: "#94a3b8" },
@@ -1435,25 +1401,62 @@ export default function TrainingPlan() {
         })()}
 
         {/* ── Why this training is personalized ───────────────────────────── */}
-        <div style={{
-          backgroundColor: "#0d1621",
-          border: "1px solid #1e3a5c",
-          borderRadius: "16px",
-          padding: "1.25rem 1.4rem",
-          marginBottom: "1rem",
-        }}>
-          <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
-            Why this training is personalized
-          </div>
-          <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
-            This queue is built to emphasize the tactical patterns you miss most often.
-          </div>
-          <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
-            {username
-              ? `We analyzed your recent ${platform === "lichess" ? "Lichess" : "Chess.com"} games, identified the patterns costing you the most, and weighted this training set toward those weaknesses at your current level.`
-              : "As you train, the system tracks what you miss, what you master, and what needs more repetition — then builds your queue to target those weaknesses instead of giving you random puzzles."}
-          </div>
-        </div>
+        {(() => {
+          // Read game analysis weakness data for specific messaging
+          let topWeakness = "";
+          let weaknessList: string[] = [];
+          let hasGameData = false;
+          let weakRatio = 50;
+          try {
+            const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+            if (raw) {
+              const data = JSON.parse(raw) as { weaknesses?: Array<{ pattern: string; share: number }> };
+              if (data.weaknesses?.length) {
+                hasGameData = true;
+                weakRatio = 70;
+                topWeakness = data.weaknesses[0].pattern;
+                weaknessList = data.weaknesses.slice(0, 3).map((w) => w.pattern);
+              }
+            }
+          } catch { /* ignore */ }
+
+          // Calculate approximate puzzle breakdown
+          const weakCount = Math.round(masterySetSize * (weakRatio / 100));
+          const spreadCount = masterySetSize - weakCount;
+
+          return (
+            <div style={{
+              backgroundColor: "#0d1621",
+              border: "1px solid #1e3a5c",
+              borderRadius: "16px",
+              padding: "1.25rem 1.4rem",
+              marginBottom: "1rem",
+            }}>
+              <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                How your set is built
+              </div>
+              {hasGameData && topWeakness ? (
+                <>
+                  <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
+                    {weakRatio}% of your set targets {topWeakness} — your most missed pattern.
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
+                    ~{weakCount} puzzles on {weaknessList.join(", ")}. {spreadCount} spread across other patterns for variety. Based on your real {platform === "lichess" ? "Lichess" : "Chess.com"} games.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
+                    Your set adapts to target the patterns you miss most.
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
+                    As you train, we track what you miss and what you master — then rebuild your queue around your real weaknesses. Connect Chess.com for even faster personalization.
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{
@@ -1582,12 +1585,10 @@ export default function TrainingPlan() {
             </div>
 
             {/* Set context */}
-            <div style={{ marginTop: "1rem", padding: "0.75rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.78rem", color: "#64748b", lineHeight: 1.6 }}>
-              <div style={{ marginBottom: "0.35rem" }}>
-                <span style={{ color: "#94a3b8" }}>Mastery rule:</span> Solve any puzzle correctly in under 10 seconds — 3 separate times — to master it. Spaced across sessions.
-              </div>
-              <div style={{ marginBottom: "0.35rem" }}>
-                <span style={{ color: "#94a3b8" }}>Your set:</span> {masterySetSize} puzzles weighted toward your weakest patterns at your calibration level.
+            <div style={{ marginTop: "1rem", padding: "0.85rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.82rem", color: "#64748b", lineHeight: 1.7 }}>
+              <div style={{ marginBottom: "0.5rem" }}>
+                <div style={{ color: "#94a3b8", fontWeight: 600, marginBottom: "0.2rem" }}>Mastery rule</div>
+                Solve any puzzle correctly in under 10 seconds — 3 separate times, spaced across sessions — to master it.
               </div>
               <div>
                 <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal)))} {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))) === 1 ? "day" : "days"}.
