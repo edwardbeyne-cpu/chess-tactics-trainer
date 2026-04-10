@@ -1091,179 +1091,6 @@ export default function TrainingPlan() {
               : "Start Training →"}
           </a>
 
-          {/* ── Coach Analysis ──────────────────────────────────────────────── */}
-          <div style={{
-            marginTop: "1rem",
-            padding: "0.9rem 1rem",
-            backgroundColor: "#0a1520",
-            border: "1px solid #1e3a5c",
-            borderRadius: "10px",
-            fontSize: "0.82rem",
-            lineHeight: 1.65,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-              <div style={{ color: "#4ade80", fontWeight: "700", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Coach Analysis
-              </div>
-              {username && (
-                <button
-                  onClick={() => {
-                    const plat = (localStorage.getItem("ctt_custom_platform") as "chesscom" | "lichess") ?? "chesscom";
-                    runGameAnalysis(username, plat).then(() => loadData());
-                  }}
-                  style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.72rem", cursor: "pointer", padding: 0 }}
-                >
-                  Refresh game analysis →
-                </button>
-              )}
-            </div>
-            {(() => {
-              // Check for Chess.com game analysis data
-              const gameAnalysis = (() => {
-                try {
-                  const raw = localStorage.getItem("ctt_custom_analysis") || localStorage.getItem("ctt_game_analysis");
-                  if (!raw) return null;
-                  const data = JSON.parse(raw) as {
-                    missedTactics: Array<{ pattern: string; fen: string }>;
-                    strengths?: Array<{ pattern: string; count: number; share: number }>;
-                    weaknesses?: Array<{ pattern: string; count: number; share: number }>;
-                    recommendation?: string;
-                    platform: string;
-                    username: string;
-                    gameCount?: number;
-                  };
-                  if (!data.missedTactics?.length && !(data.weaknesses?.length)) return null;
-                  return data;
-                } catch { return null; }
-              })();
-
-              const hasPatternData = patternStats.filter(s => s.totalAttempts >= 5).length >= 3;
-
-              // LOADING: Analysis is running in the background
-              const analysisStatus = (() => {
-                try { return localStorage.getItem("ctt_analysis_status"); } catch { return null; }
-              })();
-              if (!gameAnalysis && analysisStatus === "running") {
-                return (
-                  <>
-                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
-                      Analyzing your games...
-                    </div>
-                    <div style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.7 }}>
-                      We&apos;re analyzing your recent games for tactical patterns. This takes a few seconds — refresh the page in a moment to see your results.
-                    </div>
-                  </>
-                );
-              }
-
-              // BEST: Chess.com game analysis available
-              if (gameAnalysis) {
-                const weakPatterns = (gameAnalysis.weaknesses || []).slice(0, 3);
-                const strengthPatterns = (gameAnalysis.strengths || []).slice(0, 3);
-                return (
-                  <>
-                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
-                      Based on your last {gameAnalysis.gameCount || 0} {gameAnalysis.platform === "chesscom" ? "Chess.com" : "Lichess"} games
-                    </div>
-                    {strengthPatterns.length > 0 && (
-                      <div style={{ marginBottom: "0.6rem" }}>
-                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Tactical strengths</div>
-                        {strengthPatterns.map((p) => (
-                          <div key={p.pattern} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p.pattern}</div>
-                        ))}
-                      </div>
-                    )}
-                    {weakPatterns.length > 0 && (
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Tactical weaknesses</div>
-                        {weakPatterns.map((p) => (
-                          <div key={p.pattern} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {p.pattern} <span style={{ color: "#64748b" }}>({Math.round(p.share * 100)}%)</span></div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
-                      {gameAnalysis.recommendation || "The puzzles below are designed around your biggest tactical weaknesses."}
-                    </div>
-                  </>
-                );
-              }
-
-              // GOOD: Has pattern data from training
-              if (hasPatternData) {
-                const sorted = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => a.solveRate - b.solveRate);
-                const weakest = sorted.slice(0, 3);
-                const strongest = [...patternStats].filter(s => s.totalAttempts >= 5).sort((a, b) => b.solveRate - a.solveRate).slice(0, 3);
-                return (
-                  <>
-                    {strongest.length > 0 && (
-                      <div style={{ marginBottom: "0.6rem" }}>
-                        <div style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✓ Your Strengths</div>
-                        {strongest.map(s => (
-                          <div key={s.theme} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {s.theme.charAt(0).toUpperCase() + s.theme.slice(1).toLowerCase()}</div>
-                        ))}
-                      </div>
-                    )}
-                    {weakest.length > 0 && (
-                      <div style={{ marginBottom: "0.75rem" }}>
-                        <div style={{ color: "#ef4444", fontWeight: "600", fontSize: "0.8rem", marginBottom: "0.3rem" }}>✗ Your Weaknesses</div>
-                        {weakest.map(w => (
-                          <div key={w.theme} style={{ color: "#94a3b8", fontSize: "0.85rem", paddingLeft: "0.5rem" }}>— {w.theme.charAt(0).toUpperCase() + w.theme.slice(1).toLowerCase()}</div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{ color: "#e2e8f0", fontSize: "0.85rem", lineHeight: 1.6 }}>
-                      The puzzles below are designed around your weaknesses. Master them and you will improve at chess.
-                    </div>
-                  </>
-                );
-              }
-
-              // FALLBACK: No Chess.com connection — prompt to connect
-              if (!username) {
-                return (
-                  <>
-                    <div style={{ color: "#f59e0b", fontWeight: "600", fontSize: "0.88rem", marginBottom: "0.5rem" }}>
-                      Connect your Chess.com account to unlock personalized coaching
-                    </div>
-                    <div style={{ color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.7, marginBottom: "0.75rem" }}>
-                      We&apos;ll analyze your last 50 games to find the exact tactical patterns you&apos;re missing — then build your training plan around them. No guessing, no generic advice.
-                    </div>
-                    <a href="/app/calibration" style={{ color: "#4ade80", fontWeight: "600", fontSize: "0.85rem", textDecoration: "none" }}>
-                      Connect Chess.com →
-                    </a>
-                  </>
-                );
-              }
-
-              // Connected but no analysis data yet — generic coaching
-              const tier = tacticsRating >= 1800 ? "elite" : tacticsRating >= 1400 ? "advanced" : tacticsRating >= 1000 ? "intermediate" : "beginner";
-              const tierMessages: Record<string, { headline: string; body: string }> = {
-                beginner: {
-                  headline: "Master these puzzles and you will start winning material in every game.",
-                  body: "These aren't random puzzles — they are the exact patterns that decide games at your level. Forks, pins, back rank mates. Your opponents won't see them. You will.",
-                },
-                intermediate: {
-                  headline: "Master these puzzles and your opponents will start making mistakes you instantly punish.",
-                  body: "The difference between winning and losing at your level isn't knowing tactics — it's seeing them fast enough to use them. These puzzles drill the patterns until your brain recognizes them automatically.",
-                },
-                advanced: {
-                  headline: "Master these puzzles and you will solve in seconds what used to take minutes.",
-                  body: "Speed is the final frontier at your level. You already know the patterns — the goal now is making them instant. These puzzles are calibrated to your exact rating.",
-                },
-                elite: {
-                  headline: "Master these puzzles and the positions that slow you down now will never slow you down again.",
-                  body: "At your level, every second you spend on something familiar is a second stolen from something complex. These puzzles find the patterns in your blind spots.",
-                },
-              };
-              const msg = tierMessages[tier];
-              return (
-                <>
-                  <div style={{ color: "#e2e8f0", fontWeight: "600", fontSize: "0.88rem", marginBottom: "0.5rem" }}>{msg.headline}</div>
-                  <div style={{ color: "#94a3b8", lineHeight: 1.7 }}>{msg.body}</div>
-                </>
-              );
-            })()}
-          </div>
         </div>
 
         {/* ── FIX 1: Chess.com connect banner — single location ─────────────── */}
@@ -1359,7 +1186,36 @@ export default function TrainingPlan() {
               borderRadius: "16px",
               padding: "1.5rem",
             }}>
-              <div style={sectionHeaderStyle}>Where You Are Losing</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                <div style={sectionHeaderStyle}>Coach Analysis</div>
+                {username && (
+                  <button
+                    onClick={() => {
+                      const plat = (localStorage.getItem("ctt_custom_platform") as "chesscom" | "lichess") ?? "chesscom";
+                      runGameAnalysis(username, plat).then(() => loadData());
+                    }}
+                    style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.68rem", cursor: "pointer", padding: 0 }}
+                  >
+                    Refresh →
+                  </button>
+                )}
+              </div>
+
+              {/* Context line */}
+              {(() => {
+                try {
+                  const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+                  if (raw) {
+                    const d = JSON.parse(raw) as { gameCount?: number; platform?: string };
+                    return (
+                      <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.75rem" }}>
+                        Based on your last {d.gameCount || 0} {d.platform === "lichess" ? "Lichess" : "Chess.com"} games
+                      </div>
+                    );
+                  }
+                } catch { /* ignore */ }
+                return null;
+              })()}
 
               {displayPatterns.length === 0 ? (
                 <div style={{ color: "#475569", fontSize: "0.88rem", textAlign: "center", padding: "0.75rem 0" }}>
@@ -1426,10 +1282,35 @@ export default function TrainingPlan() {
                          );
                        })}
                        <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.5rem", fontStyle: "italic" }}>
-                         Master these patterns and they'll become automatic recognition instead of calculation.
+                         Master these patterns and they&apos;ll become automatic recognition instead of calculation.
                        </div>
                      </div>
                   </div>
+
+                  {/* Recommendation takeaway */}
+                  {(() => {
+                    try {
+                      const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+                      if (raw) {
+                        const d = JSON.parse(raw) as { recommendation?: string; strengths?: Array<{ pattern: string }> };
+                        return (
+                          <>
+                            {d.recommendation && (
+                              <div style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: 600, lineHeight: 1.5, marginTop: "0.75rem" }}>
+                                {d.recommendation}
+                              </div>
+                            )}
+                            {d.strengths && d.strengths.length > 0 && (
+                              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.5rem" }}>
+                                Your strengths: {d.strengths.map((s) => s.pattern).join(", ")}
+                              </div>
+                            )}
+                          </>
+                        );
+                      }
+                    } catch { /* ignore */ }
+                    return null;
+                  })()}
                 </>
               )}
             </div>
