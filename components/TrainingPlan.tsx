@@ -1458,6 +1458,29 @@ export default function TrainingPlan() {
           );
         })()}
 
+        {/* ── Quick Start CTA ──────────────────────────────────────────────── */}
+        <a
+          href="/app/training"
+          style={{
+            display: "block",
+            backgroundColor: "#4ade80",
+            color: "#0f1a0a",
+            textAlign: "center",
+            padding: "0.9rem",
+            borderRadius: "12px",
+            fontSize: "0.95rem",
+            fontWeight: "bold",
+            textDecoration: "none",
+            marginBottom: "1rem",
+          }}
+        >
+          {masteryDailyCompleted > 0 && masteryDailyCompleted < dailyGoal
+            ? "Continue Training →"
+            : masteryDailyCompleted >= dailyGoal
+            ? "Keep Training →"
+            : "Start Training →"}
+        </a>
+
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{
             backgroundColor: "#13132b",
