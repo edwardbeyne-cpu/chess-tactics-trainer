@@ -710,6 +710,19 @@ export default function TrainingPlan() {
     };
   }, [loadData]);
 
+  // Auto-retry game analysis if connected but no data
+  useEffect(() => {
+    if (!username || !platform) return;
+    const hasAnalysis = !!localStorage.getItem("ctt_game_analysis") || !!localStorage.getItem("ctt_custom_analysis");
+    const status = localStorage.getItem("ctt_analysis_status");
+    if (!hasAnalysis && status !== "running") {
+      console.log("[CTT] Connected but no analysis data — auto-triggering analysis");
+      runGameAnalysis(username, platform).then(() => {
+        loadData(); // refresh UI with new data
+      });
+    }
+  }, [username, platform, loadData]);
+
   // Fetch Chess.com avatar
   useEffect(() => {
     if (!username || platform !== "chesscom") return;
