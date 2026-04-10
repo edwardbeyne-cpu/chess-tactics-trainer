@@ -562,7 +562,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
         }
       }
       // Show CCT slide-up tip on first wrong move if tutorial not yet seen
-      if (cctMode !== "off") {
+      if (cctMode !== "off" && !cctContextCard) {
         try {
           if (!localStorage.getItem("ctt_cct_tutorial_seen")) {
             setShowCCTSlideUp(true);
@@ -577,14 +577,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       const promotion = expectedUci.length === 5 ? expectedUci[4] : undefined;
       chess.move({ from, to, promotion });
       const newFen = chess.fen();
-      // Update lastMove immediately for visual highlighting
+      // Update board state immediately so the piece does not snap back first.
       setLastMove([from, to]);
-      // Delay FEN update to let drag animation complete (300ms)
-      // Prevents flicker: piece animates to destination, then FEN update
-      // might cause Chessground to reset during animation
-      setTimeout(() => {
-        setFen(newFen);
-      }, 300);
+      setFen(newFen);
 
       const nextIndex = moveIndex + 1;
       if (nextIndex >= puzzleData.solution.length) {
@@ -656,12 +651,12 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
               minHeight: "160px", display: "flex", flexDirection: "column", justifyContent: "flex-start",
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ CCT</div>
+                <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ Scan Before You Move</div>
                 {cctMode === "enforced" && !cctUnlocked && <div style={{ color: "#334155", fontSize: "0.65rem" }}>Board locked</div>}
               </div>
               {!cctUnlocked && !cctAllChecked && (
-                <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.5rem", lineHeight: 1.4 }}>
-                  Before you move, scan <span style={{ color: "#94a3b8" }}>Checks</span>, <span style={{ color: "#94a3b8" }}>Captures</span>, <span style={{ color: "#94a3b8" }}>Threats</span>.
+                <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.5rem", lineHeight: 1.45 }}>
+                  Before you move, ask: <span style={{ color: "#94a3b8" }}>Can I give check?</span> <span style={{ color: "#94a3b8" }}>Can I capture something?</span> <span style={{ color: "#94a3b8" }}>Is anything under threat?</span>
                 </div>
               )}
               {cctUnlocked || cctAllChecked ? (
@@ -880,7 +875,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
       )}
 
       {/* Amber banner — suggested mode, user moved without scanning CCT */}
-      {amberBanner && (
+      {amberBanner && !cctContextCard && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
           backgroundColor: "#1a1200", border: "1px solid #f59e0b",
@@ -1593,18 +1588,42 @@ export default function TrainingSession() {
       saveMasteryProgress(progress);
     }
 
+    // ── Daily refresh: swap mastered puzzles for new ones ──────────────
+    // If it's a new day, carry forward unmastered puzzles and fill the
+    // remaining slots with new puzzles. This gives the behavior:
+    // "Master 4 today → tomorrow get 4 new + the 6 you missed"
+    const today = new Date().toISOString().slice(0, 10);
+    const lastSessionDate = progress.dailySessionDate || "";
+    if (lastSessionDate && lastSessionDate !== today && set && !set.completedAt) {
+      const unmastered = set.puzzles.filter((p) => p.masteryHits < 3);
+      if (unmastered.length < set.puzzles.length) {
+        // Some puzzles were mastered — refresh the set
+        const nextSetNumber = set.setNumber + 1;
+        const nextSet = generateMasterySet(nextSetNumber, unmastered);
+        const updatedSet = { ...set, completedAt: Date.now() };
+        progress = {
+          ...progress,
+          sets: [...progress.sets.map((s) => s.setNumber === set!.setNumber ? updatedSet : s), nextSet],
+          currentSetNumber: nextSetNumber,
+          dailySessionCompleted: 0,
+          dailySessionDate: today,
+        };
+        saveMasteryProgress(progress);
+        set = nextSet;
+      }
+    }
+
     setMasteryProgress(progress);
     setCurrentSet(set);
 
-    // Check if the set was already completed (e.g. loaded with stale/old data)
+    // Check if the set was already completed (all mastered)
     if (set.completedAt || isSetComplete()) {
-      // Generate next set if not already done
       const updatedSet = { ...set, completedAt: set.completedAt ?? Date.now() };
       const nextSetNumber = set.setNumber + 1;
       const nextSet = generateMasterySet(nextSetNumber, []);
       const updatedProgress = {
         ...progress,
-        sets: [...progress.sets.map((s) => s.setNumber === set.setNumber ? updatedSet : s), nextSet],
+        sets: [...progress.sets.map((s) => s.setNumber === set!.setNumber ? updatedSet : s), nextSet],
         currentSetNumber: nextSetNumber,
       };
       saveMasteryProgress(updatedProgress);
@@ -1616,7 +1635,6 @@ export default function TrainingSession() {
     }
 
     // Check if daily session already done
-    const today = new Date().toISOString().slice(0, 10);
     const todayCompleted = progress.dailySessionDate === today ? progress.dailySessionCompleted : 0;
     if (todayCompleted >= settings.dailyGoal) {
       setPhase("session_complete");
