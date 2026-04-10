@@ -3350,26 +3350,12 @@ export function recordMasteryAttempt(
     }
 
     if (solveTimeMs < 10000 && puzzle.masteryHits < 3) {
-      // First-try under 10s = instant master (true automaticity)
-      if (puzzle.attempts === 1 && puzzle.correctAttempts === 1) {
-        puzzle.masteryHits = 3;
-        puzzle.lastSolvedAt.push(Date.now());
-        puzzle.lastMasteryHitCounter = currentCounter;
-        masteryAwarded = true;
-        progress.totalMastered += 1;
-      } else {
-        // Subsequent attempts: non-consecutive rule applies
-        const isNonConsecutive = currentCounter > puzzle.lastMasteryHitCounter + 1;
-        if (isNonConsecutive) {
-          puzzle.masteryHits = Math.min(3, puzzle.masteryHits + 1);
-          puzzle.lastSolvedAt.push(Date.now());
-          puzzle.lastMasteryHitCounter = currentCounter;
-          masteryAwarded = true;
-          if (puzzle.masteryHits === 3) {
-            progress.totalMastered += 1;
-          }
-        }
-      }
+      // Solve correctly under 10 seconds = mastered
+      puzzle.masteryHits = 3;
+      puzzle.lastSolvedAt.push(Date.now());
+      puzzle.lastMasteryHitCounter = currentCounter;
+      masteryAwarded = true;
+      progress.totalMastered += 1;
     }
   } else {
     // Wrong answer: reset mastery

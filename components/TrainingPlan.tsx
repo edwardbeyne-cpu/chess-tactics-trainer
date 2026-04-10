@@ -1611,7 +1611,7 @@ export default function TrainingPlan() {
             <div style={{ marginTop: "1rem", padding: "0.85rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.82rem", color: "#64748b", lineHeight: 1.7 }}>
               <div style={{ marginBottom: "0.5rem" }}>
                 <div style={{ color: "#94a3b8", fontWeight: 600, marginBottom: "0.2rem" }}>Mastery rule</div>
-                Solve any puzzle correctly in under 10 seconds — 3 separate times, spaced across sessions — to master it.
+                Solve any puzzle correctly in under 10 seconds to master it.
               </div>
               <div>
                 <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal)))} {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))) === 1 ? "day" : "days"}.
