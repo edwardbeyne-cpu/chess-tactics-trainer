@@ -713,13 +713,25 @@ export default function TrainingPlan() {
   // Auto-retry game analysis if connected but no data
   useEffect(() => {
     if (!username || !platform) return;
-    const hasAnalysis = !!localStorage.getItem("ctt_game_analysis") || !!localStorage.getItem("ctt_custom_analysis");
+    const hasAnalysis = (() => {
+      try {
+        const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        // Check if the data actually has useful content
+        return data.missedTactics?.length > 0 || data.weaknesses?.length > 0;
+      } catch { return false; }
+    })();
     const status = localStorage.getItem("ctt_analysis_status");
     if (!hasAnalysis && status !== "running") {
-      console.log("[CTT] Connected but no analysis data — auto-triggering analysis");
-      runGameAnalysis(username, platform).then(() => {
-        loadData(); // refresh UI with new data
-      });
+      console.log("[CTT] Connected but no useful analysis data — auto-triggering analysis");
+      // Use setTimeout to yield main thread so UI renders first
+      setTimeout(() => {
+        runGameAnalysis(username, platform).then((success) => {
+          console.log("[CTT] Auto-retry analysis result:", success);
+          loadData(); // refresh UI with new data
+        });
+      }, 500);
     }
   }, [username, platform, loadData]);
 

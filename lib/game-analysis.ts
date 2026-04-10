@@ -501,6 +501,14 @@ export async function runGameAnalysis(
 
     const games = await fetchRecentGames(username, platform);
     console.log("[CTT] Fetched", games.length, "games");
+    if (games.length > 0) {
+      // Debug: show first game's PGN length and first 100 chars
+      const firstPgn = games[0].pgn;
+      console.log("[CTT] First game PGN length:", firstPgn.length, "preview:", firstPgn.slice(0, 100));
+      // Debug: test parsing on first game
+      const testMoves = parsePgnMoves(firstPgn);
+      console.log("[CTT] First game parsed moves:", testMoves.length, "sample:", testMoves.slice(0, 5));
+    }
     if (games.length === 0) {
       localStorage.setItem("ctt_analysis_status", "done");
       return false;
@@ -508,6 +516,13 @@ export async function runGameAnalysis(
 
     const missed = analyzeGamesForQueue(games);
     console.log("[CTT] Analysis complete. Missed tactics:", missed.length);
+
+    // If no missed tactics found, don't store empty data — let auto-retry handle it
+    if (missed.length === 0) {
+      console.warn("[CTT] No missed tactics detected — skipping localStorage write so auto-retry can re-analyze");
+      localStorage.setItem("ctt_analysis_status", "empty");
+      return false;
+    }
     const { strengths, weaknesses, recommendation } =
       buildPatternSummaries(missed);
 
