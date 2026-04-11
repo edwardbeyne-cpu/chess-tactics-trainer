@@ -721,41 +721,58 @@ export default function TrainingPlan() {
     };
   }, [loadData]);
 
+  // Debug log state for mobile visibility
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const addDebug = useCallback((msg: string) => {
+    console.log(msg);
+    setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${msg}`]);
+  }, []);
+
   // Auto-retry game analysis if connected but no data
   useEffect(() => {
-    if (!username || !platform) return;
+    addDebug(`[CTT] Auto-retry check: username=${username}, platform=${platform}`);
+    if (!username || !platform) {
+      addDebug("[CTT] Skipping — no username or platform");
+      return;
+    }
     const hasAnalysis = (() => {
       try {
         const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
-        if (!raw) return false;
+        if (!raw) { addDebug("[CTT] No analysis key in localStorage"); return false; }
         const data = JSON.parse(raw);
-        // Check if the data actually has useful content
-        return data.missedTactics?.length > 0 || data.weaknesses?.length > 0;
-      } catch { return false; }
+        const hasMissed = data.missedTactics?.length > 0;
+        const hasWeak = data.weaknesses?.length > 0;
+        addDebug(`[CTT] Analysis data: missed=${data.missedTactics?.length || 0}, weak=${data.weaknesses?.length || 0}`);
+        return hasMissed || hasWeak;
+      } catch { addDebug("[CTT] Error parsing analysis data"); return false; }
     })();
     const status = localStorage.getItem("ctt_analysis_status");
+    addDebug(`[CTT] hasAnalysis=${hasAnalysis}, status=${status}`);
     if (!hasAnalysis && status !== "running") {
-      console.log("[CTT] Connected but no useful analysis data — auto-triggering analysis for", username, platform);
-      // Use setTimeout to yield main thread so UI renders first
+      addDebug("[CTT] Triggering auto-analysis...");
       setTimeout(() => {
+        addDebug("[CTT] Running runGameAnalysis...");
         runGameAnalysis(username, platform).then((success) => {
-          console.log("[CTT] Auto-retry analysis result:", success);
+          addDebug(`[CTT] Analysis result: ${success}`);
           if (success) {
-            loadData(); // refresh UI with new data
+            loadData();
           } else {
-            // If analysis failed, try once more after 3 seconds
-            console.log("[CTT] First auto-retry failed, retrying in 3s...");
+            addDebug("[CTT] First retry failed, trying again in 3s...");
             setTimeout(() => {
               runGameAnalysis(username!, platform!).then((s2) => {
-                console.log("[CTT] Second auto-retry result:", s2);
+                addDebug(`[CTT] Second retry result: ${s2}`);
                 if (s2) loadData();
               });
             }, 3000);
           }
+        }).catch((err) => {
+          addDebug(`[CTT] Analysis error: ${err?.message || err}`);
         });
       }, 500);
+    } else {
+      addDebug("[CTT] Analysis data exists or running — no retry needed");
     }
-  }, [username, platform, loadData]);
+  }, [username, platform, loadData, addDebug]);
 
   // Fetch Chess.com avatar
   useEffect(() => {
@@ -841,6 +858,17 @@ export default function TrainingPlan() {
 
   return (
     <>
+      {/* TEMPORARY: Debug panel for mobile diagnosis */}
+      {debugLog.length > 0 && (
+        <div style={{
+          backgroundColor: "#000", border: "1px solid #333", borderRadius: "8px",
+          padding: "0.5rem", margin: "0 1rem 0.5rem", fontSize: "0.65rem",
+          fontFamily: "monospace", color: "#0f0", maxHeight: "120px", overflow: "auto",
+        }}>
+          {debugLog.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
+
       {/* Pulse animation for near-diagnosis progress bar */}
       <style>{`
         @keyframes pulsebar {
