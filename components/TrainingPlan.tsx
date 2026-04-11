@@ -756,7 +756,14 @@ export default function TrainingPlan() {
         try {
           setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] setTimeout fired, calling runGameAnalysis(${capturedUser}, ${capturedPlat})`]);
           const success = await runGameAnalysis(capturedUser, capturedPlat);
-          setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] Analysis result: ${success}`]);
+          // Read internal debug from game-analysis.ts
+          try {
+            const internalDebug = JSON.parse(localStorage.getItem("ctt_analysis_debug") || "[]") as string[];
+            for (const line of internalDebug) {
+              setDebugLog((prev) => [...prev.slice(-14), `${new Date().toLocaleTimeString()}: ${line}`]);
+            }
+          } catch { /* ignore */ }
+          setDebugLog((prev) => [...prev.slice(-14), `${new Date().toLocaleTimeString()}: [CTT] Analysis result: ${success}`]);
           if (success) {
             loadData();
           } else {
@@ -864,7 +871,7 @@ export default function TrainingPlan() {
         <div style={{
           backgroundColor: "#000", border: "1px solid #333", borderRadius: "8px",
           padding: "0.5rem", margin: "0 1rem 0.5rem", fontSize: "0.65rem",
-          fontFamily: "monospace", color: "#0f0", maxHeight: "120px", overflow: "auto",
+          fontFamily: "monospace", color: "#0f0", maxHeight: "200px", overflow: "auto",
         }}>
           {debugLog.map((line, i) => <div key={i}>{line}</div>)}
         </div>

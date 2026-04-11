@@ -494,13 +494,15 @@ export async function runGameAnalysis(
   platform: Platform = "chesscom"
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
+  const debugLines: string[] = [];
+  const dbg = (msg: string) => { debugLines.push(msg); console.log(msg); localStorage.setItem("ctt_analysis_debug", JSON.stringify(debugLines)); };
   try {
     // Signal that analysis is in progress so UI can show loading state
     localStorage.setItem("ctt_analysis_status", "running");
-    console.log("[CTT] Starting game analysis for", username, platform);
+    dbg(`[CTT] Starting game analysis for ${username} ${platform}`);
 
     const games = await fetchRecentGames(username, platform);
-    console.log("[CTT] Fetched", games.length, "games");
+    dbg(`[CTT] Fetched ${games.length} games`);
     if (games.length > 0) {
       // Debug: show first game's PGN length and first 100 chars
       const firstPgn = games[0].pgn;
@@ -556,7 +558,8 @@ export async function runGameAnalysis(
     console.log("[CTT] Analysis saved to localStorage successfully");
     return true;
   } catch (err) {
-    console.error("[CTT] Game analysis failed:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    dbg(`[CTT] Game analysis FAILED: ${errMsg}`);
     localStorage.setItem("ctt_analysis_status", "error");
     return false;
   }
