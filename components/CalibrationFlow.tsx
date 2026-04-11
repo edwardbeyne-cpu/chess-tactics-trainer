@@ -31,10 +31,21 @@ interface AllRatings {
   main: number | null;
 }
 
+async function fetchWithRetry(url: string, opts: RequestInit = {}): Promise<Response> {
+  const fetchOpts = { ...opts, redirect: "follow" as RequestRedirect };
+  try {
+    return await fetch(url, fetchOpts);
+  } catch {
+    // Retry once after 1 second — handles transient mobile network issues
+    await new Promise((r) => setTimeout(r, 1000));
+    return await fetch(url, fetchOpts);
+  }
+}
+
 async function fetchAllRatings(platform: Platform, username: string): Promise<AllRatings | null> {
   try {
     if (platform === "chesscom") {
-      const res = await fetch(
+      const res = await fetchWithRetry(
         `https://api.chess.com/pub/player/${username.toLowerCase()}/stats`,
         { headers: { Accept: "application/json" } }
       );
@@ -46,7 +57,7 @@ async function fetchAllRatings(platform: Platform, username: string): Promise<Al
       const rapid: number | null = data?.chess_rapid?.last?.rating ?? null;
       return { bullet, blitz, rapid, main: rapid ?? blitz ?? bullet };
     } else {
-      const res = await fetch(
+      const res = await fetchWithRetry(
         `https://lichess.org/api/user/${username}`,
         { headers: { Accept: "application/json" } }
       );

@@ -433,9 +433,20 @@ export function ConnectModal({ onClose, onConnected }: {
     setConnecting(true);
     setError(null);
     try {
-      const res = await fetch(`https://api.chess.com/pub/player/${uname.toLowerCase()}/stats`, {
-        headers: { Accept: "application/json" },
-      });
+      let res: Response;
+      try {
+        res = await fetch(`https://api.chess.com/pub/player/${uname.toLowerCase()}/stats`, {
+          headers: { Accept: "application/json" },
+          redirect: "follow",
+        });
+      } catch {
+        // Retry once after 1 second — handles transient mobile network issues
+        await new Promise((r) => setTimeout(r, 1000));
+        res = await fetch(`https://api.chess.com/pub/player/${uname.toLowerCase()}/stats`, {
+          headers: { Accept: "application/json" },
+          redirect: "follow",
+        });
+      }
       if (!res.ok) {
         setError(`Username "${uname}" not found on Chess.com.`);
         setConnecting(false);
