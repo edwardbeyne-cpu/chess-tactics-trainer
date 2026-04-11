@@ -749,37 +749,26 @@ export default function TrainingPlan() {
     const status = localStorage.getItem("ctt_analysis_status");
     addDebug(`[CTT] hasAnalysis=${hasAnalysis}, status=${status}`);
     if (!hasAnalysis && status !== "running") {
-      addDebug("[CTT] Triggering auto-analysis...");
-      setTimeout(() => {
-        // Temporarily intercept console.log to capture game-analysis.ts logs
-        const origLog = console.log;
-        const origWarn = console.warn;
-        const origErr = console.error;
-        console.log = (...args: unknown[]) => { origLog(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
-        console.warn = (...args: unknown[]) => { origWarn(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
-        console.error = (...args: unknown[]) => { origErr(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
-
-        addDebug("[CTT] Running runGameAnalysis...");
-        runGameAnalysis(username, platform).then((success) => {
-          // Restore original console
-          console.log = origLog;
-          console.warn = origWarn;
-          console.error = origErr;
-          addDebug(`[CTT] Analysis result: ${success}`);
+      addDebug("[CTT] Triggering auto-analysis in 500ms...");
+      const capturedUser = username;
+      const capturedPlat = platform;
+      setTimeout(async () => {
+        try {
+          setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] setTimeout fired, calling runGameAnalysis(${capturedUser}, ${capturedPlat})`]);
+          const success = await runGameAnalysis(capturedUser, capturedPlat);
+          setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] Analysis result: ${success}`]);
           if (success) {
             loadData();
           } else {
-            addDebug("[CTT] First retry failed, trying again in 3s...");
-            setTimeout(() => {
-              runGameAnalysis(username!, platform!).then((s2) => {
-                addDebug(`[CTT] Second retry result: ${s2}`);
-                if (s2) loadData();
-              });
-            }, 3000);
+            setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] First retry failed, trying again in 3s...`]);
+            await new Promise((r) => setTimeout(r, 3000));
+            const s2 = await runGameAnalysis(capturedUser, capturedPlat);
+            setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] Second retry result: ${s2}`]);
+            if (s2) loadData();
           }
-        }).catch((err) => {
-          addDebug(`[CTT] Analysis error: ${err?.message || err}`);
-        });
+        } catch (err) {
+          setDebugLog((prev) => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: [CTT] Analysis error: ${err instanceof Error ? err.message : String(err)}`]);
+        }
       }, 500);
     } else {
       addDebug("[CTT] Analysis data exists or running — no retry needed");
