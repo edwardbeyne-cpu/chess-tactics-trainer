@@ -420,7 +420,7 @@ export async function fetchRecentGames(
   if (platform === "chesscom") {
     const archivesRes = await fetch(
       `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
-      { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } }
+      { headers: { Accept: "application/json" }, redirect: "follow" }
     );
     if (!archivesRes.ok) return [];
     const { archives } = (await archivesRes.json()) as { archives: string[] };
@@ -432,7 +432,7 @@ export async function fetchRecentGames(
     for (const archive of reversed) {
       if (allGames.length >= 50) break;
       const res = await fetch(archive, {
-        headers: { "User-Agent": "ChessTacticsTrainer/1.0" },
+        headers: { Accept: "application/json" }, redirect: "follow",
       });
       if (!res.ok) continue;
       const { games } = (await res.json()) as {
