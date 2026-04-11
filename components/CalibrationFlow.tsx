@@ -985,7 +985,13 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
             transition: "all 0.3s ease",
           }}
         >
-          {connectingPhase === "analyzing" ? "Analyzing your games… hang tight" : "Continue →"}
+          {connectingPhase === "analyzing" ? (
+            <>
+              <span style={{ display: "inline-block", animation: "spin 1s linear infinite", marginRight: "0.5rem" }}>⟳</span>
+              Analyzing your games… hang tight
+              <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            </>
+          ) : "Continue →"}
         </button>
 
         {!connected && (
