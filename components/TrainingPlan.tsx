@@ -751,8 +751,20 @@ export default function TrainingPlan() {
     if (!hasAnalysis && status !== "running") {
       addDebug("[CTT] Triggering auto-analysis...");
       setTimeout(() => {
+        // Temporarily intercept console.log to capture game-analysis.ts logs
+        const origLog = console.log;
+        const origWarn = console.warn;
+        const origErr = console.error;
+        console.log = (...args: unknown[]) => { origLog(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
+        console.warn = (...args: unknown[]) => { origWarn(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
+        console.error = (...args: unknown[]) => { origErr(...args); const msg = args.map(String).join(" "); if (msg.includes("[CTT]")) addDebug(msg); };
+
         addDebug("[CTT] Running runGameAnalysis...");
         runGameAnalysis(username, platform).then((success) => {
+          // Restore original console
+          console.log = origLog;
+          console.warn = origWarn;
+          console.error = origErr;
           addDebug(`[CTT] Analysis result: ${success}`);
           if (success) {
             loadData();
