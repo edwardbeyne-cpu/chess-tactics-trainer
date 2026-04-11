@@ -866,17 +866,6 @@ export default function TrainingPlan() {
 
   return (
     <>
-      {/* TEMPORARY: Debug panel for mobile diagnosis */}
-      {debugLog.length > 0 && (
-        <div style={{
-          backgroundColor: "#000", border: "1px solid #333", borderRadius: "8px",
-          padding: "0.5rem", margin: "0 1rem 0.5rem", fontSize: "0.65rem",
-          fontFamily: "monospace", color: "#0f0", maxHeight: "200px", overflow: "auto",
-        }}>
-          {debugLog.map((line, i) => <div key={i}>{line}</div>)}
-        </div>
-      )}
-
       {/* Pulse animation for near-diagnosis progress bar */}
       <style>{`
         @keyframes pulsebar {
