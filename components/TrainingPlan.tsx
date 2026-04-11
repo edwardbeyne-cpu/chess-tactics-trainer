@@ -735,12 +735,23 @@ export default function TrainingPlan() {
     })();
     const status = localStorage.getItem("ctt_analysis_status");
     if (!hasAnalysis && status !== "running") {
-      console.log("[CTT] Connected but no useful analysis data — auto-triggering analysis");
+      console.log("[CTT] Connected but no useful analysis data — auto-triggering analysis for", username, platform);
       // Use setTimeout to yield main thread so UI renders first
       setTimeout(() => {
         runGameAnalysis(username, platform).then((success) => {
           console.log("[CTT] Auto-retry analysis result:", success);
-          loadData(); // refresh UI with new data
+          if (success) {
+            loadData(); // refresh UI with new data
+          } else {
+            // If analysis failed, try once more after 3 seconds
+            console.log("[CTT] First auto-retry failed, retrying in 3s...");
+            setTimeout(() => {
+              runGameAnalysis(username!, platform!).then((s2) => {
+                console.log("[CTT] Second auto-retry result:", s2);
+                if (s2) loadData();
+              });
+            }, 3000);
+          }
         });
       }, 500);
     }
