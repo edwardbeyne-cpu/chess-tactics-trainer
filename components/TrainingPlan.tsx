@@ -1315,84 +1315,57 @@ export default function TrainingPlan() {
                   </div>
 
                   {/* How your training fixes this */}
-                  <div style={{
-                    backgroundColor: "#0a1520",
-                    border: "1px solid #1e3a5c",
-                    borderRadius: "10px",
-                    padding: "0.85rem 1rem",
-                  }}>
-                    <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
-                      How your training fixes this
-                    </div>
-<div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                       {(() => {
-                         // Top weakness name + puzzle count from mastery set
-                         const topPattern = displayPatterns[0]?.pattern ?? "";
-                         const topLabel = topPattern
-                           ? topPattern.charAt(0).toUpperCase() + topPattern.slice(1).toLowerCase()
-                           : "";
-                         const topCount = masterySet && topPattern
-                           ? masterySet.puzzles.filter((p) => {
-                               const theme = p.puzzleData?.theme ?? p.puzzleData?.patternTag ?? "";
-                               return typeof theme === "string" && theme.toLowerCase() === topPattern.toLowerCase();
-                             }).length
-                           : (masterySet ? masterySet.puzzles.length : 0);
-                         // Remaining weaknesses (everything after top)
-                         const remaining = displayPatterns
-                           .slice(1)
-                           .map(({ pattern }) => pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase());
-                         return (
-                           <>
-                             <div style={{ color: "#e2e8f0", fontSize: "0.84rem", lineHeight: 1.5 }}>
-                               <span style={{ color: "#4ade80", fontWeight: "bold" }}>
-                                 {topCount > 0 ? topCount : masterySet?.puzzles.length ?? 0} of your {masterySet?.puzzles.length ?? dailyGoal} daily puzzles
-                               </span>{" "}
-                               target{" "}
-                               {topLabel ? (
-                                 <span style={{ color: "#f8fafc", fontWeight: 600 }}>{topLabel} patterns</span>
-                               ) : "your biggest weakness"}{" "}
-                               — your biggest weakness — at your exact rating level.
-                             </div>
-                             {remaining.length > 0 && (
-                               <div style={{ color: "#94a3b8", fontSize: "0.81rem", lineHeight: 1.5 }}>
-                                 As you master {topLabel || "this pattern"}, your set automatically shifts to{" "}
-                                 <span style={{ color: "#cbd5e1" }}>{remaining.join(" and ")}</span>.
-                               </div>
-                             )}
-                             {remaining.length === 0 && (
-                               <div style={{ color: "#94a3b8", fontSize: "0.81rem", lineHeight: 1.5 }}>
-                                 As you master {topLabel || "this pattern"}, your set automatically rebuilds around your next weakness.
-                               </div>
-                             )}
-                           </>
-                         );
-                       })()}
-                     </div>
-                  </div>
-
-                  {/* Recommendation takeaway */}
                   {(() => {
+                    const topPattern = displayPatterns[0]?.pattern ?? "";
+                    const topLabel = topPattern
+                      ? topPattern.charAt(0).toUpperCase() + topPattern.slice(1).toLowerCase()
+                      : "";
+                    const remaining = displayPatterns
+                      .slice(1)
+                      .map(({ pattern }) => pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase());
+                    let strengths: string[] = [];
                     try {
                       const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
                       if (raw) {
-                        const d = JSON.parse(raw) as { recommendation?: string; strengths?: Array<{ pattern: string }> };
-                        return (
-                          <>
-                            {d.recommendation && (
-                              <div style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: 600, lineHeight: 1.5, marginTop: "0.75rem" }}>
-                                {d.recommendation}
-                              </div>
-                            )}
-                            {d.strengths && d.strengths.length > 0 && (
-                              <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.5rem" }}>
-                                Your strengths: {d.strengths.map((s) => s.pattern).join(", ")}
-                              </div>
-                            )}
-                          </>
-                        );
+                        const d = JSON.parse(raw) as { strengths?: Array<{ pattern: string }> };
+                        if (d.strengths?.length) strengths = d.strengths.map((s) => s.pattern);
                       }
                     } catch { /* ignore */ }
-                    return null;
+                    return (
+                      <div style={{
+                        backgroundColor: "#0a1520",
+                        border: "1px solid #1e3a5c",
+                        borderRadius: "10px",
+                        padding: "0.9rem 1rem",
+                      }}>
+                        <div style={{ color: "#4ade80", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.65rem" }}>
+                          Your daily training — built from your games
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                          <div style={{ color: "#e2e8f0", fontSize: "0.84rem", lineHeight: 1.55 }}>
+                            Every puzzle in your set comes from patterns you&apos;ve missed in real games — not random practice.{" "}
+                            {topLabel ? (
+                              <>Your set hammers <span style={{ color: "#f8fafc", fontWeight: 600 }}>{topLabel}</span> — the pattern costing you the most rating points right now.</>
+                            ) : (
+                              <>Your set targets the exact patterns costing you rating points right now.</>
+                            )}
+                          </div>
+                          <div style={{ color: "#94a3b8", fontSize: "0.81rem", lineHeight: 1.55 }}>
+                            Train daily and these blind spots become automatic recognition.{" "}
+                            {remaining.length > 0 ? (
+                              <>Master {topLabel || "this pattern"} and the system shifts your focus to <span style={{ color: "#cbd5e1" }}>{remaining.join(" and ")}</span> — always targeting what matters most.</>
+                            ) : (
+                              <>The system adapts as you improve — master one weakness, it moves to the next.</>
+                            )}
+                          </div>
+                          {strengths.length > 0 && (
+                            <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.25rem", borderTop: "1px solid #1a2a3a", paddingTop: "0.5rem" }}>
+                              Your strengths: {strengths.join(", ")}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
                   })()}
                 </>
               )}
@@ -1400,63 +1373,7 @@ export default function TrainingPlan() {
           );
         })()}
 
-        {/* ── Why this training is personalized ───────────────────────────── */}
-        {(() => {
-          // Read game analysis weakness data for specific messaging
-          let topWeakness = "";
-          let weaknessList: string[] = [];
-          let hasGameData = false;
-          let weakRatio = 50;
-          try {
-            const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
-            if (raw) {
-              const data = JSON.parse(raw) as { weaknesses?: Array<{ pattern: string; share: number }> };
-              if (data.weaknesses?.length) {
-                hasGameData = true;
-                weakRatio = 70;
-                topWeakness = data.weaknesses[0].pattern;
-                weaknessList = data.weaknesses.slice(0, 3).map((w) => w.pattern);
-              }
-            }
-          } catch { /* ignore */ }
 
-          // Calculate approximate puzzle breakdown
-          const weakCount = Math.round(masterySetSize * (weakRatio / 100));
-          const spreadCount = masterySetSize - weakCount;
-
-          return (
-            <div style={{
-              backgroundColor: "#0d1621",
-              border: "1px solid #1e3a5c",
-              borderRadius: "16px",
-              padding: "1.25rem 1.4rem",
-              marginBottom: "1rem",
-            }}>
-              <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
-                How your set is built
-              </div>
-              {hasGameData && topWeakness ? (
-                <>
-                  <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
-                    {weakRatio}% of your set targets {topWeakness} — your most missed pattern.
-                  </div>
-                  <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
-                    ~{weakCount} puzzles on {weaknessList.join(", ")}. {spreadCount} spread across other patterns for variety. Based on your real {platform === "lichess" ? "Lichess" : "Chess.com"} games.
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div style={{ color: "#e2e8f0", fontSize: "0.95rem", fontWeight: 700, marginBottom: "0.55rem", lineHeight: 1.45 }}>
-                    Your set adapts to target the patterns you miss most.
-                  </div>
-                  <div style={{ color: "#94a3b8", fontSize: "0.86rem", lineHeight: 1.65 }}>
-                    As you train, we track what you miss and what you master — then rebuild your queue around your real weaknesses. Connect Chess.com for even faster personalization.
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })()}
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{
@@ -1564,42 +1481,7 @@ export default function TrainingPlan() {
             </>)}
           </div>
 
-        {/* Sprint 36 - Drill Tactics Recommendation */}
-        {top3Weaknesses.length > 0 && (
-          <div style={{
-            backgroundColor: "#13132b",
-            border: "1px solid #2e3a5c",
-            borderRadius: "16px",
-            padding: "1.25rem 1.5rem",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
-              <div>
-                <div style={{ color: "#94a3b8", fontSize: "0.78rem", marginBottom: "0.25rem" }}>
-                  Weakest pattern
-                </div>
-                <div style={{ color: "#e2e8f0", fontWeight: "bold", fontSize: "0.95rem" }}>
-                  {top3Weaknesses[0].theme.charAt(0).toUpperCase() + top3Weaknesses[0].theme.slice(1).toLowerCase()}{" "}
-                  <span style={{ color: "#ef4444", fontWeight: "normal", fontSize: "0.85rem" }}>
-                    ({Math.round(top3Weaknesses[0].solveRate * 100)}% accuracy)
-                  </span>
-                </div>
-                <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "0.2rem" }}>
-                  Consider extra Drill Tactics time on this pattern
-                </div>
-              </div>
-              <button
-                onClick={() => router.push(`/app/patterns/${top3Weaknesses[0].theme.toLowerCase()}`)}
-                style={{
-                  backgroundColor: "transparent", border: "1px solid #2e3a5c",
-                  borderRadius: "8px", padding: "0.5rem 1rem",
-                  color: "#60a5fa", fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap",
-                }}
-              >
-                Drill {top3Weaknesses[0].theme.charAt(0).toUpperCase() + top3Weaknesses[0].theme.slice(1).toLowerCase()} →
-              </button>
-            </div>
-          </div>
-        )}
+
 
         {/* CCT Training Card — shown for new_to_cct and cct_inconsistent users who haven't completed first session */}
         {(() => {
