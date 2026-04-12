@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Sprint 36 — Mastery Set Training System
+ * Sprint 36 - Mastery Set Training System
  * 100-puzzle sets; each puzzle needs 3 correct solves under 10s (non-consecutive) to master.
  * Mix of tactic puzzles (~80%) and blunder-resistance positions (~20%).
  */
@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js";
 import ChessBoard from "@/components/ChessBoard";
 import StockfishAnalysis from "@/components/StockfishAnalysis";
+import { loadPuzzleSettings, savePuzzleSettings, type PuzzleSettings } from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import {
   getAllPatternStats,
@@ -111,14 +112,14 @@ interface BlunderData {
 }
 
 const BLUNDER_EXPLANATIONS: Record<string, string[]> = {
-  fork: ["Taking that piece walks into a knight fork — you'd lose material", "Capturing there allows a fork on the next move"],
-  pin: ["That move abandons the pinned piece — the opponent takes for free", "Moving that way walks into an absolute pin"],
-  skewer: ["That move allows a skewer — your king runs, opponent takes the piece behind", "Retreating there sets up a skewer"],
-  backRankMate: ["That greedy capture removes the back rank defender — checkmate follows", "Moving that piece exposes a back rank mate"],
-  deflection: ["That move deflects your defender — leaving a key square unprotected"],
-  overloading: ["That move overloads your piece — it can't defend two targets at once"],
+  fork: ["Taking that piece walks into a knight fork - you'd lose material", "Capturing there allows a fork on the next move"],
+  pin: ["That move abandons the pinned piece - the opponent takes for free", "Moving that way walks into an absolute pin"],
+  skewer: ["That move allows a skewer - your king runs, opponent takes the piece behind", "Retreating there sets up a skewer"],
+  backRankMate: ["That greedy capture removes the back rank defender - checkmate follows", "Moving that piece exposes a back rank mate"],
+  deflection: ["That move deflects your defender - leaving a key square unprotected"],
+  overloading: ["That move overloads your piece - it can't defend two targets at once"],
   default: [
-    "That greedy capture walks into a tactic — always check your opponent's responses",
+    "That greedy capture walks into a tactic - always check your opponent's responses",
     "Taking the material is tempting but creates a losing position",
     "The greedy capture ignores your opponent's tactical threat",
   ],
@@ -190,7 +191,7 @@ function buildBlunderData(raw: LichessCachedPuzzle): BlunderData | null {
 
 function computeBlunderRatio(): number {
   try {
-    // Check calibration rating — high-rated players get fewer blunders
+    // Check calibration rating - high-rated players get fewer blunders
     const calibRaw = localStorage.getItem("ctt_calibration_rating");
     if (calibRaw) {
       const calib = parseInt(calibRaw, 10);
@@ -210,7 +211,7 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
   const targetELO = calibrationRating + (setNumber - 1) * 50;
-  // Blunder puzzles removed from training set — standalone feature only
+  // Blunder puzzles removed from training set - standalone feature only
   const blunderCount = 0;
   const SET_SIZE = Math.min(30, Math.max(5, getDailyTargetSettings().dailyGoal));
   const newTacticCount = Math.max(0, SET_SIZE - carriedPuzzles.length);
@@ -237,7 +238,7 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   };
 
   // Primary: use Chess.com game analysis weaknesses if available
-  // This is the real-game data — what patterns the player actually misses
+  // This is the real-game data - what patterns the player actually misses
   let weakestThemes: string[] = [];
   try {
     const gameAnalysisRaw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
@@ -362,7 +363,7 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
     ...p, masteryHits: 0, lastSolvedAt: [], lastMasteryHitCounter: 0, attempts: 0, correctAttempts: 0,
   }));
 
-  // Hard cap — never exceed SET_SIZE regardless of what loops produced
+  // Hard cap - never exceed SET_SIZE regardless of what loops produced
   const finalPuzzles = [...resetCarried, ...shuffleArray(puzzles)].slice(0, SET_SIZE);
 
   return {
@@ -390,10 +391,10 @@ function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, seenIds:
     .filter(({ p }) => p.masteryHits < 3 && p.id !== lastShownId && !seenIds.has(p.id));
 
   if (candidates.length === 0) {
-    // All (other) puzzles mastered — check if last puzzle is also mastered
+    // All (other) puzzles mastered - check if last puzzle is also mastered
     const allMastered = set.puzzles.every((p) => p.masteryHits >= 3);
     if (allMastered) return -1;
-    // Only one unmastered puzzle left — show it even if it was just shown
+    // Only one unmastered puzzle left - show it even if it was just shown
     const last = set.puzzles.findIndex((p) => p.masteryHits < 3);
     return last;
   }
@@ -454,7 +455,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
   const sideToMove = puzzleData.fen.includes(" b ") ? "Black" : "White";
-  const [message, setMessage] = useState(`${sideToMove} to move — find the tactic`);
+  const [message, setMessage] = useState(`${sideToMove} to move - find the tactic`);
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
@@ -463,7 +464,18 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
   // Sidebar settings popup state
   const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
 
-  // CCT Mode — Checks, Captures, Threats
+  // Puzzle settings (for timer)
+  const [puzzleSettings, setPuzzleSettings] = useState<PuzzleSettings>(() => loadPuzzleSettings());
+
+  // Timer state - mirrors Drill Tactics implementation
+  const timerLimit = puzzleSettings.timeLimit > 0 ? puzzleSettings.timeLimit : 0;
+  const [timeLeft, setTimeLeft] = useState(timerLimit);
+  const [timerActive, setTimerActive] = useState(timerLimit > 0);
+  const timerColor = timerLimit > 0
+    ? (timeLeft / timerLimit <= 0.2 ? "#ef4444" : timeLeft / timerLimit <= 0.5 ? "#f59e0b" : "#4ade80")
+    : "#4ade80";
+
+  // CCT Mode - Checks, Captures, Threats
   const [cctMode] = useState<CCTMode>(() => getCCTMode());
   const [cctChecked, setCctChecked] = useState({ checks: false, captures: false, threats: false });
   const [cctUnlocked, setCctUnlocked] = useState(false);
@@ -474,7 +486,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
     title: string;
     body: string;
   }>(null);
-  // "off" and "suggested" — board always unlocked; "enforced" — locked until all 3 checked
+  // "off" and "suggested" - board always unlocked; "enforced" - locked until all 3 checked
   const cctComplete = cctMode === "off" || cctMode === "suggested" || cctUnlocked;
   const cctAllChecked = cctChecked.checks && cctChecked.captures && cctChecked.threats;
   const cctAnyClickedRef = useRef(false); // tracks if user clicked any CCT button before moving
@@ -492,6 +504,82 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
       setCctUnlocked(true); // visual state: show "✓ Scanned"
     }
   }, [cctAllChecked, cctMode, cctUnlocked, onCctUnlocked]);
+
+  // Re-sync puzzleSettings when localStorage changes (e.g. SidebarPuzzleSettings saves)
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === "ctt_puzzle_settings") {
+        setPuzzleSettings(loadPuzzleSettings());
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    function onCustom() { setPuzzleSettings(loadPuzzleSettings()); }
+    window.addEventListener("ctt_puzzle_settings_changed", onCustom);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("ctt_puzzle_settings_changed", onCustom);
+    };
+  }, []);
+
+  // Reset timer when puzzle changes
+  useEffect(() => {
+    const t = puzzleSettings.timeLimit > 0 ? puzzleSettings.timeLimit : 0;
+    setTimeLeft(t);
+    setTimerActive(t > 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puzzleData.fen]);
+
+  // Re-sync when settings change
+  useEffect(() => {
+    if (status === "solve") {
+      const t = puzzleSettings.timeLimit > 0 ? puzzleSettings.timeLimit : 0;
+      setTimeLeft(t);
+      setTimerActive(t > 0 && !sidebarSettingsOpen);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [puzzleSettings.timeLimit]);
+
+  // Pause timer when settings open
+  useEffect(() => {
+    if (sidebarSettingsOpen) {
+      setTimerActive(false);
+    } else if (timerLimit > 0 && status === "solve" && timeLeft > 0) {
+      setTimerActive(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarSettingsOpen]);
+
+  // Countdown tick
+  useEffect(() => {
+    if (!timerActive || timeLeft <= 0 || timerLimit === 0) return;
+    const id = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          setTimerActive(false);
+          setStatus("failed");
+          setMessage("Time's up!");
+          if (!resultCalledRef.current) {
+            resultCalledRef.current = true;
+            hasScoredRef.current = true;
+            onResult(false); // treat as wrong - resets mastery
+          }
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerActive, timerLimit]);
+
+  // Auto-advance 1.5s after time expires
+  useEffect(() => {
+    if (status === "failed" && timeLeft === 0 && timerLimit > 0) {
+      const id = setTimeout(() => onAdvance(), 1500);
+      return () => clearTimeout(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, timeLeft]);
 
   const [isDesktop, setIsDesktop] = useState(false);
   const [boardWidth, setBoardWidth] = useState(460);
@@ -542,6 +630,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
     const isCorrect = from === expFrom && to === expTo;
 
     if (!isCorrect) {
+      setTimerActive(false);
       setStatus("failed");
       setMessage("✗ Wrong");
       if (cctMode !== "off") {
@@ -554,7 +643,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
         } else {
           setCctContextCard({
             tone: "missed",
-            title: "Good — now use the scan more deliberately",
+            title: "Good - now use the scan more deliberately",
             body: "You engaged with CCT. Next step: slow down and use Checks → Captures → Threats to confirm the tactic before moving.",
           });
         }
@@ -588,20 +677,21 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
 
       const nextIndex = moveIndex + 1;
       if (nextIndex >= puzzleData.solution.length) {
+        setTimerActive(false);
         setStatus("solved");
         setMessage("Correct!");
         if (cctMode !== "off") {
           if (cctAnyClickedRef.current) {
             setCctContextCard({
               tone: "used",
-              title: "That’s CCT — you’re building the habit",
+              title: "That's CCT — you're building the habit",
               body: "You used Checks → Captures → Threats before moving. Keep doing that and the tactical patterns will get easier to spot.",
             });
           } else {
             setCctContextCard({
               tone: "ignored",
               title: "Nice solve — now make it repeatable",
-              body: "Before your next move, try scanning Checks → Captures → Threats first. That’s the habit that separates improvers from guessers.",
+              body: "Before your next move, try scanning Checks → Captures → Threats first. That's the habit that separates improvers from guessers.",
             });
           }
         }
@@ -621,7 +711,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
           setFen(chess2.fen());
           setLastMove([oppUci.slice(0, 2), oppUci.slice(2, 4)]);
           setMoveIndex(nextIndex + 1);
-          setMessage("Keep going — find the next move!");
+          setMessage("Keep going - find the next move!");
         } catch {
           setStatus("solved");
           setMessage("Correct!");
@@ -648,7 +738,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
       {/* LEFT COLUMN: CCT + info (desktop only) */}
       {isDesktop && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "220px", flexShrink: 0, paddingTop: "0.25rem" }}>
-          {/* CCT Panel — fixed min-height so board never jumps */}
+          {/* CCT Panel - fixed min-height so board never jumps */}
           {cctMode !== "off" && status === "solve" && (
             <div style={{
               backgroundColor: "#0d1621", border: `1px solid ${cctUnlocked ? "#4ade80" : "#2e3a5c"}`,
@@ -697,7 +787,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
               )}
             </div>
           )}
-          {/* Analyze with Engine — sidebar button */}
+          {/* Analyze with Engine - sidebar button */}
           <button
             onClick={() => onAnalyzeClick?.()}
             style={{
@@ -711,8 +801,42 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
             🔍 {showAnalysis ? "Hide Analysis" : "Analyze with Engine"}
           </button>
 
-          {/* Puzzle Settings — sidebar button + inline popup */}
+          {/* Puzzle Settings - sidebar button + inline popup */}
           <SidebarPuzzleSettings />
+
+          {/* Timer display */}
+          {timerLimit > 0 && status === "solve" && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.4rem",
+              backgroundColor: "#0f1621",
+              border: `1px solid ${timerColor}`,
+              borderRadius: "6px",
+              padding: "0.4rem 0.6rem",
+              transition: "border-color 0.3s",
+            }}>
+              <span style={{ fontSize: "0.75rem" }}>⏱</span>
+              <span style={{ color: timerColor, fontSize: "1.1rem", fontWeight: "bold", fontFamily: "monospace", transition: "color 0.3s" }}>
+                {timeLeft}s
+              </span>
+              {timeLeft <= 3 && timeLeft > 0 && (
+                <span style={{ color: "#ef4444", fontSize: "0.7rem", fontWeight: 600 }}>hurry!</span>
+              )}
+            </div>
+          )}
+          {timerLimit > 0 && status !== "solve" && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "0.4rem",
+              backgroundColor: "#0f1621",
+              border: "1px solid #2e3a5c",
+              borderRadius: "6px",
+              padding: "0.4rem 0.6rem",
+            }}>
+              <span style={{ fontSize: "0.75rem" }}>⏱</span>
+              <span style={{ color: "#475569", fontSize: "1.1rem", fontWeight: "bold", fontFamily: "monospace" }}>
+                {timeLeft}s
+              </span>
+            </div>
+          )}
 
           {/* Puzzle info */}
           <div style={{ color: "#475569", fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
@@ -747,7 +871,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
           orientation={orientation as "white" | "black"}
         />
 
-        {/* Wrong Answer Overlay — centered on board */}
+        {/* Wrong Answer Overlay - centered on board */}
         {status === "failed" && (
           <div style={{
             position: "absolute", inset: 0,
@@ -761,7 +885,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
             <div style={{ color: "#ef4444", fontSize: "1.5rem", fontWeight: "900", marginBottom: "0.25rem" }}>✗</div>
             <div style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "700", marginBottom: "0.15rem" }}>Missed this one</div>
             <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "1.25rem", textAlign: "center" }}>
-              You&apos;ll see it again — spaced repetition brings it back.
+              You&apos;ll see it again - spaced repetition brings it back.
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", width: "100%", maxWidth: "220px" }}>
               <button
@@ -771,13 +895,17 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
                   setFen(puzzleData.fen);
                   setMoveIndex(0);
                   setStatus("solve");
-                  setMessage(`${sideToMove} to move — find the tactic`);
+                  setMessage(`${sideToMove} to move - find the tactic`);
                   setLastMove(undefined);
-                  // Require CCT scan again on retry — missed puzzle = scan again
+                  // Require CCT scan again on retry - missed puzzle = scan again
                   setCctChecked({ checks: false, captures: false, threats: false });
                   setCctUnlocked(false);
                   cctAnyClickedRef.current = false;
                   amberShownRef.current = false;
+                  // Restart timer on retry
+                  const t = puzzleSettings.timeLimit > 0 ? puzzleSettings.timeLimit : 0;
+                  setTimeLeft(t);
+                  setTimerActive(t > 0);
                   onRetry(); // set retryPendingRef to block any queued advance
                 }}
                 style={{ backgroundColor: "#0a1f12", border: "1px solid #4ade80", borderRadius: "8px", padding: "0.55rem 1rem", color: "#4ade80", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
@@ -810,7 +938,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
       )}
       </div>
 
-      {/* CCT Panel — mobile only (desktop uses left column), stacked below board */}
+      {/* CCT Panel - mobile only (desktop uses left column), stacked below board */}
       {cctMode !== "off" && status === "solve" && !isDesktop && (
         <div style={{
           width: "100%", maxWidth: `${boardWidth}px`, boxSizing: "border-box",
@@ -820,7 +948,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
             <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.65rem" : "0.72rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>
-              ⚡ CCT — Scan before you move
+              ⚡ CCT - Scan before you move
             </div>
             {cctMode === "enforced" && !cctUnlocked && (
               <div style={{ color: "#334155", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem" }}>Board locked</div>
@@ -833,7 +961,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
           )}
           {cctUnlocked || cctAllChecked ? (
             <div style={{ color: "#4ade80", fontSize: boardWidth < 360 ? "0.78rem" : "0.85rem", fontWeight: 600, textAlign: "center", padding: "0.3rem 0", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-              <span>✓</span> {cctMode === "enforced" ? "Board unlocked — make your move" : "Scanned"}
+              <span>✓</span> {cctMode === "enforced" ? "Board unlocked - make your move" : "Scanned"}
             </div>
           ) : (
             <>
@@ -877,14 +1005,14 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
                 })}
               </div>
               <div style={{ color: "#475569", fontSize: boardWidth < 360 ? "0.62rem" : "0.7rem", textAlign: "center" }}>
-                {cctMode === "enforced" ? "Tap each after mentally scanning — board unlocks when all 3 confirmed" : "Tap each after mentally scanning"}
+                {cctMode === "enforced" ? "Tap each after mentally scanning - board unlocks when all 3 confirmed" : "Tap each after mentally scanning"}
               </div>
             </>
           )}
         </div>
       )}
 
-      {/* CCT nudge — flashes when they try to move before completing CCT (enforced mode) */}
+      {/* CCT nudge - flashes when they try to move before completing CCT (enforced mode) */}
       {cctNudge && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
@@ -892,11 +1020,11 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
           borderRadius: "8px", padding: "0.5rem 1rem", textAlign: "center",
           color: "#f59e0b", fontSize: "0.82rem", fontWeight: "700",
         }}>
-          ⚡ Complete CCT first — tap Checks, Captures, and Threats below
+          ⚡ Complete CCT first - tap Checks, Captures, and Threats below
         </div>
       )}
 
-      {/* Amber banner — suggested mode, user moved without scanning CCT */}
+      {/* Amber banner - suggested mode, user moved without scanning CCT */}
       {amberBanner && !cctContextCard && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
@@ -964,7 +1092,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
         </div>
       )}
 
-      {/* CCT slide-up tip — shown after first wrong move, non-blocking */}
+      {/* CCT slide-up tip - shown after first wrong move, non-blocking */}
       {showCCTSlideUp && !cctContextCard && (
         <div style={{
           width: boardWidth, boxSizing: "border-box",
@@ -976,7 +1104,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
             <div style={{ color: "#93c5fd", fontSize: "0.82rem", lineHeight: 1.6 }}>
               💡 Top players scan <span style={{ color: "#e2e8f0" }}>Checks</span>,{" "}
               <span style={{ color: "#e2e8f0" }}>Captures</span> &amp;{" "}
-              <span style={{ color: "#e2e8f0" }}>Threats</span> before moving — it catches patterns like this one.
+              <span style={{ color: "#e2e8f0" }}>Threats</span> before moving - it catches patterns like this one.
               Try the CCT buttons above before your next move.
             </div>
           </div>
@@ -1079,12 +1207,12 @@ function BlunderBoard({ puzzleData, onResult }: BlunderBoardProps) {
         </div>
         <div style={{ color: "#64748b", fontSize: "0.78rem" }}>
           {revealed
-            ? isCorrect ? "✓ Safe move — you avoided the blunder" : `✗ That's the blunder — ${puzzleData.blunderExplanation}`
-            : "Tap the square you would play to — one of these moves loses material"}
+            ? isCorrect ? "✓ Safe move - you avoided the blunder" : `✗ That's the blunder - ${puzzleData.blunderExplanation}`
+            : "Tap the square you would play to - one of these moves loses material"}
         </div>
       </div>
 
-      {/* Board with highlighted destination squares — user clicks a square */}
+      {/* Board with highlighted destination squares - user clicks a square */}
       <div style={{ display: "flex", justifyContent: "center" }}>
         <ChessBoard
           fen={puzzleData.fen}
@@ -1148,13 +1276,13 @@ function CorrectBanner({ masteryAwarded, overTimeLimit, newMasteryHits }: Omit<F
       borderRadius: "10px", padding: "0.65rem 1rem", textAlign: "center",
       color: "#4ade80", fontWeight: "700", fontSize: "0.95rem",
     }}>
-      ✓ {overTimeLimit ? "Correct — solve faster for mastery" : "Correct!"}
+      ✓ {overTimeLimit ? "Correct - solve faster for mastery" : "Correct!"}
     </div>
   );
 }
 
 function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHits }: FeedbackOverlayProps) {
-  // Slim banner — no modal, no text wall
+  // Slim banner - no modal, no text wall
   const isFullMastery = masteryAwarded && newMasteryHits >= 3;
 
   if (!correct) {
@@ -1215,16 +1343,33 @@ function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHit
 function SidebarPuzzleSettings() {
   const [open, setOpen] = useState(false);
   const [cctMode, setCctModeState] = useState<CCTMode>(() => getCCTMode());
+  const [timerLimit, setTimerLimitState] = useState<number>(() => loadPuzzleSettings().timeLimit);
 
   function handleCCTMode(v: CCTMode) {
     setCctModeState(v);
     saveCCTMode(v);
   }
 
+  function handleTimerLimit(v: number) {
+    setTimerLimitState(v);
+    const current = loadPuzzleSettings();
+    savePuzzleSettings({ ...current, timeLimit: v });
+    // Notify TacticBoard in same tab
+    window.dispatchEvent(new CustomEvent("ctt_puzzle_settings_changed"));
+  }
+
   const cctOptions: Array<{ value: CCTMode; label: string }> = [
     { value: "off", label: "Off" },
     { value: "suggested", label: "Suggested" },
     { value: "enforced", label: "Enforced" },
+  ];
+
+  const timerOptions: Array<{ value: number; label: string }> = [
+    { value: 0, label: "Off" },
+    { value: 5, label: "5s" },
+    { value: 10, label: "10s" },
+    { value: 15, label: "15s" },
+    { value: 30, label: "30s" },
   ];
 
   return (
@@ -1275,6 +1420,35 @@ function SidebarPuzzleSettings() {
                 ))}
               </div>
             </div>
+            {/* Timer setting */}
+            <div style={{ marginTop: "0.65rem", paddingTop: "0.65rem", borderTop: "1px solid #1e2a3a" }}>
+              <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "600", marginBottom: "0.15rem" }}>Timer</div>
+              <div style={{ color: "#475569", fontSize: "0.72rem", marginBottom: "0.5rem" }}>Countdown per puzzle</div>
+              <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap" }}>
+                {timerOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleTimerLimit(opt.value)}
+                    style={{
+                      padding: "0.3rem 0.4rem", borderRadius: "5px", fontSize: "0.72rem",
+                      fontWeight: timerLimit === opt.value ? 700 : 400,
+                      cursor: "pointer",
+                      backgroundColor: timerLimit === opt.value ? "rgba(74,222,128,0.15)" : "transparent",
+                      color: timerLimit === opt.value ? "#4ade80" : "#64748b",
+                      border: `1px solid ${timerLimit === opt.value ? "#4ade80" : "#2e3a5c"}`,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {timerLimit === 10 && (
+                <div style={{ color: "#475569", fontSize: "0.68rem", marginTop: "0.35rem" }}>
+                  ⭐ 10s = mastery standard
+                </div>
+              )}
+            </div>
+
             <div style={{ borderTop: "1px solid #1e2a3a", marginTop: "0.65rem", paddingTop: "0.65rem" }}>
               <a href="/app/settings" style={{ color: "#4ade80", fontSize: "0.78rem", textDecoration: "none" }}>
                 All Settings →
@@ -1400,7 +1574,7 @@ function SessionCompleteScreen({
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      {/* Summary card — celebratory */}
+      {/* Summary card - celebratory */}
       <div style={{
         backgroundColor: "#0d2218", border: "1px solid #4ade80",
         borderRadius: "16px", padding: "2rem", textAlign: "center",
@@ -1611,7 +1785,7 @@ export default function TrainingSession() {
   const [streak, setStreak] = useState(0);
 
   // Session stats (reset each session)
-  // Session stats — read from localStorage so they survive navigation within same day
+  // Session stats - read from localStorage so they survive navigation within same day
   const [sessionCorrect, setSessionCorrect] = useState(() => {
     try { const d = localStorage.getItem("ctt_session_stats"); return d ? JSON.parse(d).correct ?? 0 : 0; } catch { return 0; }
   });
@@ -1703,7 +1877,7 @@ export default function TrainingSession() {
     if (lastSessionDate && lastSessionDate !== today && set && !set.completedAt) {
       const unmastered = set.puzzles.filter((p) => p.masteryHits < 3);
       if (unmastered.length < set.puzzles.length) {
-        // Some puzzles were mastered — refresh the set
+        // Some puzzles were mastered - refresh the set
         const nextSetNumber = set.setNumber + 1;
         const nextSet = generateMasterySet(nextSetNumber, unmastered);
         const updatedSet = { ...set, completedAt: Date.now() };
@@ -1751,7 +1925,7 @@ export default function TrainingSession() {
     sessionSeenPuzzleIdsRef.current = new Set();
     const idx = pickNextPuzzleIdx(set, null, sessionSeenPuzzleIdsRef.current);
     if (idx === -1) {
-      // All mastered — mark set complete
+      // All mastered - mark set complete
       markSetComplete(progress, set);
       return;
     }
@@ -1840,7 +2014,7 @@ export default function TrainingSession() {
           return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
         });
       } else if (isRetry) {
-        // Solved on retry — remove from missed list
+        // Solved on retry - remove from missed list
         setSessionMissedPuzzles((prev) => prev.filter((p) => p.id !== puzzle.id));
       }
     }
@@ -1892,7 +2066,7 @@ export default function TrainingSession() {
         return;
       }
 
-      // Check daily session complete — skip if user chose "Keep going anyway"
+      // Check daily session complete - skip if user chose "Keep going anyway"
       if (newDailyCount >= settings.dailyGoal && !keepGoing) {
         setPhase("session_complete");
         return;
@@ -1934,15 +2108,15 @@ export default function TrainingSession() {
 
   // ── Handle retry (called by TacticBoard review panel) ─────────────────────
   function handleRetry() {
-    // Clear any pending auto-advance timeout — must happen before anything else
+    // Clear any pending auto-advance timeout - must happen before anything else
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     feedbackTimeoutRef.current = null;
-    // Set retry mode — handleResult will skip mastery recording on next solve
+    // Set retry mode - handleResult will skip mastery recording on next solve
     retryModeRef.current = true;
     // Clear feedback overlay
     setFeedback(null);
     setPhase("solving");
-    // DO NOT bump puzzleKey — TacticBoard's onClick already resets its own internal state
+    // DO NOT bump puzzleKey - TacticBoard's onClick already resets its own internal state
     // (fen, moveIndex, status, resultCalledRef, hasScoredRef) before calling onRetry()
     // Bumping puzzleKey causes a remount which races with the internal reset
   }
@@ -2059,7 +2233,7 @@ export default function TrainingSession() {
           </div>
         </div>
       )}
-      {/* Feedback overlay — rendered inside puzzle card below */}
+      {/* Feedback overlay - rendered inside puzzle card below */}
 
       {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <div style={{
@@ -2110,7 +2284,7 @@ export default function TrainingSession() {
         {/* Quick Settings moved to left sidebar */}
       </div>
 
-      {/* Miss-streak nudge — shown when user gets 3+ wrong in a row (suggested mode only) */}
+      {/* Miss-streak nudge - shown when user gets 3+ wrong in a row (suggested mode only) */}
       {showMissStreakNudge && (
         <div style={{
           backgroundColor: "#0d1621", border: "1px solid #f59e0b",
@@ -2118,7 +2292,7 @@ export default function TrainingSession() {
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
         }}>
           <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5 }}>
-            💡 Try enabling CCT scanning — it helps catch these patterns before you move.
+            💡 Try enabling CCT scanning - it helps catch these patterns before you move.
           </div>
           <button
             onClick={() => setShowMissStreakNudge(false)}
@@ -2130,7 +2304,7 @@ export default function TrainingSession() {
       )}
 
       {/* ── Puzzle area ──────────────────────────────────────────────────────── */}
-      {/* Correct feedback — solid bar ABOVE the board card, fully visible */}
+      {/* Correct feedback - solid bar ABOVE the board card, fully visible */}
       {phase === "feedback" && feedback && feedback.correct && (
         <CorrectBanner
           masteryAwarded={feedback.masteryAwarded}
@@ -2168,7 +2342,7 @@ export default function TrainingSession() {
         )}
       </div>
 
-      {/* Analyze with Engine — moved to left sidebar on desktop */}
+      {/* Analyze with Engine - moved to left sidebar on desktop */}
       {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
         <div style={{ maxWidth: "900px" }}>
           <StockfishAnalysis
@@ -2185,7 +2359,7 @@ export default function TrainingSession() {
           textAlign: "center", color: "#f59e0b", fontSize: "0.72rem", fontWeight: "700",
           textTransform: "uppercase", letterSpacing: "0.06em", padding: "0.4rem",
         }}>
-          Review Mode — Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
+          Review Mode - Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
         </div>
       )}
     </div>
