@@ -438,6 +438,165 @@ function MasteryDots({ hits, size = 14 }: { hits: number; size?: number }) {
   );
 }
 
+// ── CCT Info Modal ──────────────────────────────────────────────────────────
+interface CCTInfoModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+function CCTInfoModal({ open, onClose }: CCTInfoModalProps) {
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          zIndex: 999,
+        }}
+      />
+      {/* Modal */}
+      <div
+        style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          backgroundColor: "#13132b",
+          border: "1px solid #2e3a5c",
+          borderRadius: "12px",
+          padding: "1.5rem",
+          maxWidth: "500px",
+          width: "90vw",
+          maxHeight: "80vh",
+          overflowY: "auto",
+          zIndex: 1000,
+          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.8)",
+        }}
+      >
+        {/* Close button */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "1rem",
+          }}
+        >
+          <h2 style={{ color: "#4ade80", fontSize: "1.2rem", fontWeight: "bold", margin: 0 }}>
+            Checks, Captures &amp; Threats
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#64748b",
+              fontSize: "1.5rem",
+              cursor: "pointer",
+              padding: "0",
+              lineHeight: 1,
+            }}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem", color: "#e2e8f0", lineHeight: 1.6 }}>
+          {/* What is CCT */}
+          <div>
+            <div style={{ color: "#4ade80", fontSize: "0.9rem", fontWeight: "bold", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              What is CCT?
+            </div>
+            <p style={{ margin: 0, fontSize: "0.9rem", color: "#cbd5e1" }}>
+              Before making a move, scan the board for <strong>Checks</strong>, <strong>Captures</strong>, and <strong>Threats</strong>. This builds the habit of seeing tactical opportunities before they pass.
+            </p>
+          </div>
+
+          {/* The three modes */}
+          <div>
+            <div style={{ color: "#4ade80", fontSize: "0.9rem", fontWeight: "bold", marginBottom: "0.35rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Three Modes
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {/* Off */}
+              <div
+                style={{
+                  backgroundColor: "#0d1621",
+                  border: "1px solid #1e3a5c",
+                  borderRadius: "8px",
+                  padding: "0.75rem",
+                }}
+              >
+                <div style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: "700", marginBottom: "0.25rem" }}>
+                  ⊘ Off
+                </div>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>
+                  No CCT prompts. Solve freely without scanning.
+                </p>
+              </div>
+
+              {/* Suggested */}
+              <div
+                style={{
+                  backgroundColor: "#0d2218",
+                  border: "1px solid #2d5f1f",
+                  borderRadius: "8px",
+                  padding: "0.75rem",
+                }}
+              >
+                <div style={{ color: "#4ade80", fontSize: "0.9rem", fontWeight: "700", marginBottom: "0.25rem" }}>
+                  💡 Suggested
+                </div>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>
+                  CCT buttons appear as a reminder, but you can move anytime. Great for building the habit at your own pace.
+                </p>
+              </div>
+
+              {/* Enforced */}
+              <div
+                style={{
+                  backgroundColor: "#0d1a2a",
+                  border: "1px solid #1e3a5c",
+                  borderRadius: "8px",
+                  padding: "0.75rem",
+                }}
+              >
+                <div style={{ color: "#60a5fa", fontSize: "0.9rem", fontWeight: "700", marginBottom: "0.25rem" }}>
+                  🔒 Enforced
+                </div>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>
+                  You must check all three (Checks, Captures, Threats) before the board unlocks for your move. Most powerful for skill building.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Info box */}
+          <div
+            style={{
+              backgroundColor: "#0d1621",
+              border: "1px solid #2e3a5c",
+              borderRadius: "8px",
+              padding: "0.75rem",
+            }}
+          >
+            <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>
+              💡 You can change your CCT mode anytime in <strong>Puzzle Settings</strong> below the board.
+            </p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Tactic Board ────────────────────────────────────────────────────────────
 
 interface TacticBoardProps {
@@ -463,6 +622,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
 
   // Sidebar settings popup state
   const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
+
+  // CCT info modal state
+  const [cctInfoOpen, setCctInfoOpen] = useState(false);
 
   // Puzzle settings (for timer)
   const [puzzleSettings, setPuzzleSettings] = useState<PuzzleSettings>(() => loadPuzzleSettings());
@@ -746,7 +908,40 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
               minHeight: "160px", display: "flex", flexDirection: "column", justifyContent: "flex-start",
             }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.4rem" }}>
-                <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ Scan Before You Move</div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>⚡ Scan Before You Move</div>
+                  <button
+                    onClick={() => setCctInfoOpen(true)}
+                    title="Learn about CCT"
+                    style={{
+                      background: "none",
+                      border: "1px solid #3a4a6a",
+                      borderRadius: "50%",
+                      width: "18px",
+                      height: "18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#64748b",
+                      fontSize: "0.75rem",
+                      cursor: "pointer",
+                      padding: 0,
+                      lineHeight: 1,
+                      flexShrink: 0,
+                      transition: "all 0.2s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = "#60a5fa";
+                      (e.currentTarget as HTMLButtonElement).style.color = "#60a5fa";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.borderColor = "#3a4a6a";
+                      (e.currentTarget as HTMLButtonElement).style.color = "#64748b";
+                    }}
+                  >
+                    ⓘ
+                  </button>
+                </div>
                 {cctMode === "enforced" && !cctUnlocked && <div style={{ color: "#334155", fontSize: "0.65rem" }}>Board locked</div>}
               </div>
               {!cctUnlocked && !cctAllChecked && (
@@ -1134,6 +1329,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, 
         </div>
       )}
       </div>{/* end right column */}
+
+      {/* CCT Info Modal */}
+      <CCTInfoModal open={cctInfoOpen} onClose={() => setCctInfoOpen(false)} />
     </div>
   );
 }
