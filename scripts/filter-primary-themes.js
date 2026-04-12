@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Filter lichess-puzzles.ts to only include puzzles where the target pattern
- * is in a PRIMARY position (themes[0], themes[1], or themes[2]).
+ * is the FIRST TACTICAL theme (ignoring positional/length tags).
+ *
+ * Non-tactical tags (skipped): short, long, middlegame, endgame, master, crushing,
+ * advantage, oneMove, veryLong, superGM, masterVsMaster, knightEndgame,
+ * queenEndgame, rookEndgame, bishopEndgame, pawnEndgame, queenRookEndgame, hangingPiece
  *
  * Fallback rule (from task spec):
  *   If fewer than 50 puzzles would remain after filtering → keep ALL puzzles
@@ -20,6 +24,13 @@ const PATTERNS = [
   'deflection','interference','overloading','zugzwang','attraction','clearance',
   'trappedPiece','doubleCheck','discoveredCheck','kingsideAttack','queensideAttack'
 ];
+
+const NON_TACTICAL_TAGS = new Set([
+  'short', 'long', 'middlegame', 'endgame', 'master', 'crushing',
+  'advantage', 'oneMove', 'veryLong', 'superGM', 'masterVsMaster',
+  'knightEndgame', 'queenEndgame', 'rookEndgame', 'bishopEndgame',
+  'pawnEndgame', 'queenRookEndgame', 'hangingPiece'
+]);
 
 const PRIMARY_THRESHOLD = 50; // keep all if filtered result < this
 
@@ -46,13 +57,15 @@ for (const pattern of PATTERNS) {
   const original = puzzlesByPattern[pattern];
   const before = original.length;
 
-  // Apply pos 0-2 filter
+  // Filter themes to remove non-tactical tags, then check if pattern is first
   const primaryFiltered = original.filter(line => {
     const m = line.match(/themes:\s*\[([^\]]+)\]/);
     if (!m) return false;
     const themes = (m[1].match(/"([^"]+)"/g) || []).map(s => s.replace(/"/g, ''));
-    const idx = themes.indexOf(pattern);
-    return idx >= 0 && idx <= 2;
+    // Remove non-tactical tags
+    const tacticalThemes = themes.filter(t => !NON_TACTICAL_TAGS.has(t));
+    // Check if target pattern is the first tactical theme
+    return tacticalThemes.length > 0 && tacticalThemes[0] === pattern;
   });
 
   let final;
@@ -91,7 +104,7 @@ const maxCount = Math.max(...Object.values(stats).map(s => s.after));
 const header = `// Auto-generated from Lichess puzzle database — Sprint 11 Curriculum
 // Source: https://database.lichess.org/lichess_db_puzzle.csv.zst
 // Generated: ${new Date().toISOString().slice(0, 10)}
-// Filtered: puzzles where target theme is in positions 0-2 of themes[] (primary/secondary)
+// Filtered: puzzles where target theme is the first tactical theme (ignoring positional/length tags)
 // Fallback: patterns with <${PRIMARY_THRESHOLD} qualifying puzzles retain all originals
 
 export interface LichessCachedPuzzle {
