@@ -1324,25 +1324,49 @@ export default function TrainingPlan() {
                     <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.6rem" }}>
                       How your training fixes this
                     </div>
-<div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                       {displayPatterns.map(({ pattern, missRate }) => {
-                         const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
-                         // Count puzzles in mastery set matching this pattern
-                         const count = masterySet
+<div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                       {(() => {
+                         // Top weakness name + puzzle count from mastery set
+                         const topPattern = displayPatterns[0]?.pattern ?? "";
+                         const topLabel = topPattern
+                           ? topPattern.charAt(0).toUpperCase() + topPattern.slice(1).toLowerCase()
+                           : "";
+                         const topCount = masterySet && topPattern
                            ? masterySet.puzzles.filter((p) => {
                                const theme = p.puzzleData?.theme ?? p.puzzleData?.patternTag ?? "";
-                               return typeof theme === "string" && theme.toLowerCase() === pattern.toLowerCase();
+                               return typeof theme === "string" && theme.toLowerCase() === topPattern.toLowerCase();
                              }).length
-                           : 0;
+                           : (masterySet ? masterySet.puzzles.length : 0);
+                         // Remaining weaknesses (everything after top)
+                         const remaining = displayPatterns
+                           .slice(1)
+                           .map(({ pattern }) => pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase());
                          return (
-                           <div key={pattern} style={{ color: "#94a3b8", fontSize: "0.82rem" }}>
-                             <span style={{ color: "#4ade80", fontWeight: "bold" }}>{count}</span> {label} puzzles in your mastery set target this weakness at your exact rating level.
-                           </div>
+                           <>
+                             <div style={{ color: "#e2e8f0", fontSize: "0.84rem", lineHeight: 1.5 }}>
+                               <span style={{ color: "#4ade80", fontWeight: "bold" }}>
+                                 {topCount > 0 ? topCount : masterySet?.puzzles.length ?? 0} of your {masterySet?.puzzles.length ?? dailyGoal} daily puzzles
+                               </span>{" "}
+                               target{" "}
+                               {topLabel ? (
+                                 <span style={{ color: "#f8fafc", fontWeight: 600 }}>{topLabel} patterns</span>
+                               ) : "your biggest weakness"}{" "}
+                               — your biggest weakness — at your exact rating level.
+                             </div>
+                             {remaining.length > 0 && (
+                               <div style={{ color: "#94a3b8", fontSize: "0.81rem", lineHeight: 1.5 }}>
+                                 As you master {topLabel || "this pattern"}, your set automatically shifts to{" "}
+                                 <span style={{ color: "#cbd5e1" }}>{remaining.join(" and ")}</span>.
+                               </div>
+                             )}
+                             {remaining.length === 0 && (
+                               <div style={{ color: "#94a3b8", fontSize: "0.81rem", lineHeight: 1.5 }}>
+                                 As you master {topLabel || "this pattern"}, your set automatically rebuilds around your next weakness.
+                               </div>
+                             )}
+                           </>
                          );
-                       })}
-                       <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.5rem", fontStyle: "italic" }}>
-                         Master these patterns and they&apos;ll become automatic recognition instead of calculation.
-                       </div>
+                       })()}
                      </div>
                   </div>
 
