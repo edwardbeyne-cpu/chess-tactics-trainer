@@ -1551,39 +1551,6 @@ export default function TrainingPlan() {
               {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : masteryDailyCompleted === 0 ? "Start Training →" : "Continue Training →"}
             </button>
 
-            {/* 100-puzzle dot grid */}
-            <div style={{ marginTop: "1.25rem" }}>
-              <div style={{ color: "#475569", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
-                Set {masterySetNumber} — Puzzle Progress
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "0.75rem" }}>
-                {Array.from({ length: masterySetSize }).map((_, i) => (
-                  <div key={i} style={{
-                    width: "10px", height: "10px", borderRadius: "2px",
-                    backgroundColor: i < masteredCount ? "#4ade80" : "#1e2a3a",
-                    border: i < masteredCount ? "none" : "1px solid #2e3a5c",
-                    transition: "background-color 0.2s",
-                  }} />
-                ))}
-              </div>
-              {masteredCount === 0 ? (
-                <div style={{ fontSize: "0.75rem", color: "#475569", textAlign: "center" }}>
-                  Complete a training session to start tracking progress
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: "1.5rem", fontSize: "0.75rem", color: "#64748b" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                    <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#4ade80", flexShrink: 0 }} />
-                    {masteredCount} mastered
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                    <div style={{ width: "10px", height: "10px", borderRadius: "2px", backgroundColor: "#1e2a3a", border: "1px solid #2e3a5c", flexShrink: 0 }} />
-                    {masterySetSize - masteredCount} remaining
-                  </span>
-                </div>
-              )}
-            </div>
-
             {/* Set context */}
             <div style={{ marginTop: "1rem", padding: "0.85rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.82rem", color: "#64748b", lineHeight: 1.7 }}>
               <div style={{ marginBottom: "0.5rem" }}>
