@@ -381,13 +381,13 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
  * Pick the next puzzle to show from the set.
  * - Skip mastered puzzles (masteryHits === 3)
  * - Prefer lowest masteryHits (0 → 1 → 2)
- * - Avoid the puzzle that was just shown
+ * - Avoid puzzles already shown in the current session
  * Returns the index into set.puzzles, or -1 if all mastered.
  */
-function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null): number {
+function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, seenIds: Set<string> = new Set()): number {
   const candidates = set.puzzles
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.masteryHits < 3 && p.id !== lastShownId);
+    .filter(({ p }) => p.masteryHits < 3 && p.id !== lastShownId && !seenIds.has(p.id));
 
   if (candidates.length === 0) {
     // All (other) puzzles mastered — check if last puzzle is also mastered
@@ -445,9 +445,11 @@ interface TacticBoardProps {
   onAdvance: () => void;
   onRetry: () => void;
   onCctUnlocked?: () => void; // called when CCT completes so parent resets timer
+  showAnalysis?: boolean;
+  onAnalyzeClick?: () => void;
 }
 
-function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }: TacticBoardProps) {
+function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, showAnalysis = false, onAnalyzeClick }: TacticBoardProps) {
   const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");
@@ -457,6 +459,9 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
   const resultCalledRef = useRef(false);
   const hasScoredRef = useRef(false);
   const retryModeRef = useRef(false);
+
+  // Sidebar settings popup state
+  const [sidebarSettingsOpen, setSidebarSettingsOpen] = useState(false);
 
   // CCT Mode — Checks, Captures, Threats
   const [cctMode] = useState<CCTMode>(() => getCCTMode());
@@ -692,6 +697,23 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
               )}
             </div>
           )}
+          {/* Analyze with Engine — sidebar button */}
+          <button
+            onClick={() => onAnalyzeClick?.()}
+            style={{
+              backgroundColor: "transparent", border: "1px solid #2e3a5c",
+              borderRadius: "6px", padding: "0.45rem 0.6rem",
+              color: showAnalysis ? "#60a5fa" : "#475569",
+              fontSize: "0.78rem", cursor: "pointer", textAlign: "left",
+              width: "100%",
+            }}
+          >
+            🔍 {showAnalysis ? "Hide Analysis" : "Analyze with Engine"}
+          </button>
+
+          {/* Puzzle Settings — sidebar button + inline popup */}
+          <SidebarPuzzleSettings />
+
           {/* Puzzle info */}
           <div style={{ color: "#475569", fontSize: "0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
             <div>Rating: <span style={{ color: "#94a3b8" }}>{puzzleData.rating}</span></div>
@@ -765,7 +787,7 @@ function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked }
               <button
                 onClick={() => {
                   const encodedFen = encodeURIComponent(puzzleData.fen);
-                  window.open(`https://lichess.org/analysis/${encodedFen}`, "_blank");
+                  window.open(`https://lichess.org/analysis?fen=${encodedFen}`, "_blank");
                   setTimeout(() => onAdvance(), 500);
                 }}
                 style={{ backgroundColor: "#0a1228", border: "1px solid #60a5fa", borderRadius: "8px", padding: "0.55rem 1rem", color: "#60a5fa", fontSize: "0.85rem", fontWeight: "600", cursor: "pointer" }}
@@ -1189,9 +1211,92 @@ function FeedbackOverlay({ correct, masteryAwarded, overTimeLimit, newMasteryHit
   );
 }
 
-// ── Quick Settings Popup ────────────────────────────────────────────────────
-function QuickSettings() {
+// ── Sidebar Puzzle Settings Button + Popup ──────────────────────────────────
+function SidebarPuzzleSettings() {
   const [open, setOpen] = useState(false);
+  const [cctMode, setCctModeState] = useState<CCTMode>(() => getCCTMode());
+
+  function handleCCTMode(v: CCTMode) {
+    setCctModeState(v);
+    saveCCTMode(v);
+  }
+
+  const cctOptions: Array<{ value: CCTMode; label: string }> = [
+    { value: "off", label: "Off" },
+    { value: "suggested", label: "Suggested" },
+    { value: "enforced", label: "Enforced" },
+  ];
+
+  return (
+    <div style={{ position: "relative", width: "100%" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          backgroundColor: "transparent", border: "1px solid #2e3a5c",
+          borderRadius: "6px", padding: "0.45rem 0.6rem",
+          color: open ? "#4ade80" : "#475569",
+          fontSize: "0.78rem", cursor: "pointer", textAlign: "left",
+          width: "100%",
+        }}
+      >
+        ⚙ Puzzle Settings
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0,
+            backgroundColor: "#13132b", border: "1px solid #2e3a5c",
+            borderRadius: "10px", padding: "0.85rem 1rem", zIndex: 100,
+            minWidth: "220px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{ color: "#94a3b8", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.5rem" }}>
+              Puzzle Settings
+            </div>
+            <div style={{ marginBottom: "0.5rem" }}>
+              <div style={{ color: "#e2e8f0", fontSize: "0.82rem", fontWeight: "600", marginBottom: "0.15rem" }}>CCT Mode</div>
+              <div style={{ color: "#475569", fontSize: "0.72rem", marginBottom: "0.5rem" }}>Checks · Captures · Threats</div>
+              <div style={{ display: "flex", gap: "0.3rem" }}>
+                {cctOptions.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleCCTMode(opt.value)}
+                    style={{
+                      flex: 1, padding: "0.3rem 0.25rem", borderRadius: "5px", fontSize: "0.72rem",
+                      fontWeight: cctMode === opt.value ? 700 : 400,
+                      cursor: "pointer",
+                      backgroundColor: cctMode === opt.value ? (opt.value === "suggested" ? "rgba(74,222,128,0.15)" : "rgba(46,117,182,0.2)") : "transparent",
+                      color: cctMode === opt.value ? (opt.value === "suggested" ? "#4ade80" : "#60a5fa") : "#64748b",
+                      border: `1px solid ${cctMode === opt.value ? (opt.value === "suggested" ? "#4ade80" : "#2e75b6") : "#2e3a5c"}`,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid #1e2a3a", marginTop: "0.65rem", paddingTop: "0.65rem" }}>
+              <a href="/app/settings" style={{ color: "#4ade80", fontSize: "0.78rem", textDecoration: "none" }}>
+                All Settings →
+              </a>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Quick Settings Popup ────────────────────────────────────────────────────
+interface QuickSettingsProps {
+  open?: boolean;
+  setOpen?: (v: boolean) => void;
+  anchorLeft?: boolean;
+}
+function QuickSettings({ open: openProp, setOpen: setOpenProp, anchorLeft }: QuickSettingsProps = {}) {
+  const [openInternal, setOpenInternal] = useState(false);
+  const open = openProp !== undefined ? openProp : openInternal;
+  const setOpen = setOpenProp ?? setOpenInternal;
   const [cctMode, setCctModeState] = useState<CCTMode>(() => getCCTMode());
 
   function handleCCTMode(v: CCTMode) {
@@ -1208,7 +1313,7 @@ function QuickSettings() {
   return (
     <div style={{ position: "relative", flexShrink: 0 }}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         title="Quick Settings"
         style={{ background: "none", border: "none", color: open ? "#4ade80" : "#475569", fontSize: "1rem", cursor: "pointer", padding: "0.2rem", lineHeight: 1 }}
       >
@@ -1220,7 +1325,7 @@ function QuickSettings() {
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
           {/* Popup */}
           <div style={{
-            position: "absolute", top: "calc(100% + 6px)", right: 0,
+            position: "absolute", top: "calc(100% + 6px)", ...(anchorLeft ? { left: 0 } : { right: 0 }),
             backgroundColor: "#13132b", border: "1px solid #2e3a5c",
             borderRadius: "10px", padding: "0.85rem 1rem", zIndex: 100,
             minWidth: "230px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
@@ -1533,6 +1638,7 @@ export default function TrainingSession() {
   const handleResultRef = useRef<(correct: boolean) => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
   const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
+  const sessionSeenPuzzleIdsRef = useRef<Set<string>>(new Set());
   const consecutiveMissesRef = useRef(0); // tracks consecutive wrong answers for miss-streak nudge
   const missStreakNudgeShownRef = useRef(false); // show miss-streak nudge at most once per session
   const [showMissStreakNudge, setShowMissStreakNudge] = useState(false);
@@ -1642,7 +1748,8 @@ export default function TrainingSession() {
     }
 
     // Pick first puzzle
-    const idx = pickNextPuzzleIdx(set, null);
+    sessionSeenPuzzleIdsRef.current = new Set();
+    const idx = pickNextPuzzleIdx(set, null, sessionSeenPuzzleIdsRef.current);
     if (idx === -1) {
       // All mastered — mark set complete
       markSetComplete(progress, set);
@@ -1650,6 +1757,7 @@ export default function TrainingSession() {
     }
     setCurrentPuzzleIdx(idx);
     lastShownIdRef.current = set.puzzles[idx].id;
+    sessionSeenPuzzleIdsRef.current.add(set.puzzles[idx].id);
     setPuzzleStartTime(Date.now());
     setPhase("solving");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1791,12 +1899,13 @@ export default function TrainingSession() {
       }
 
       // Load next puzzle
-      const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current);
+      const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current, sessionSeenPuzzleIdsRef.current);
       if (nextIdx === -1) {
         markSetComplete(freshProgress, freshSet);
         return;
       }
       lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
+      sessionSeenPuzzleIdsRef.current.add(freshSet.puzzles[nextIdx].id);
       setCurrentPuzzleIdx(nextIdx);
       setPuzzleKey((k) => k + 1);
       setPuzzleStartTime(Date.now());
@@ -1843,12 +1952,13 @@ export default function TrainingSession() {
     if (!currentSet || !masteryProgress) return;
     setKeepGoing(true); // bypass daily goal for rest of session
     const freshSet = getCurrentMasterySet() ?? currentSet;
-    const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current);
+    const nextIdx = pickNextPuzzleIdx(freshSet, lastShownIdRef.current, sessionSeenPuzzleIdsRef.current);
     if (nextIdx === -1) {
       markSetComplete(masteryProgress, freshSet);
       return;
     }
     lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
+    sessionSeenPuzzleIdsRef.current.add(freshSet.puzzles[nextIdx].id);
     setCurrentPuzzleIdx(nextIdx);
     setPuzzleKey((k) => k + 1);
     setPuzzleStartTime(Date.now());
@@ -1997,8 +2107,7 @@ export default function TrainingSession() {
           <ProgressBar value={masteredCount} max={totalPuzzles} color="#4ade80" />
         </div>
 
-        {/* Quick Settings popup */}
-        <QuickSettings />
+        {/* Quick Settings moved to left sidebar */}
       </div>
 
       {/* Miss-streak nudge — shown when user gets 3+ wrong in a row (suggested mode only) */}
@@ -2042,6 +2151,13 @@ export default function TrainingSession() {
             onAdvance={handleAdvance}
             onRetry={handleRetry}
             onCctUnlocked={() => setPuzzleStartTime(Date.now())}
+            showAnalysis={showAnalysis}
+            onAnalyzeClick={() => {
+              if (phase === "solving") {
+                handleResultRef.current(false);
+              }
+              setShowAnalysis((v) => !v);
+            }}
           />
         ) : (
           <BlunderBoard
@@ -2052,24 +2168,7 @@ export default function TrainingSession() {
         )}
       </div>
 
-      {/* Analyze with Engine */}
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <button
-          onClick={() => {
-            if (phase === "solving") {
-              handleResultRef.current(false);
-            }
-            setShowAnalysis((v) => !v);
-          }}
-          style={{
-            backgroundColor: "transparent", border: "1px solid #2e3a5c",
-            borderRadius: "6px", padding: "0.35rem 0.75rem",
-            color: "#475569", fontSize: "0.72rem", cursor: "pointer",
-          }}
-        >
-          {showAnalysis ? "Hide Analysis" : "🔍 Analyze with Engine"}
-        </button>
-      </div>
+      {/* Analyze with Engine — moved to left sidebar on desktop */}
       {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
         <div style={{ maxWidth: "900px" }}>
           <StockfishAnalysis
