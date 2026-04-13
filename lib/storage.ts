@@ -3513,3 +3513,137 @@ export function getCCTTrainerFirstVisit(): boolean {
 export function saveCCTTrainerFirstVisit(visited: boolean): void {
   try { localStorage.setItem(CCT_TRAINER_FIRST_VISIT_KEY, visited ? "true" : "false"); } catch { /* ignore */ }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature: Pattern Recognition Speed Tracking & Pattern Mastery Progression
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PatternSolveTimeEntry {
+  timestamp: number; // Date.now()
+  solveTimeMs: number;
+}
+
+const PATTERN_SOLVE_TIMES_KEY = "ctt_pattern_solve_times"; // Record<pattern, PatternSolveTimeEntry[]>
+const PATTERN_MASTERY_TOTALS_KEY = "ctt_pattern_mastery_totals"; // Record<pattern, number>
+
+/**
+ * Record a solve time for a pattern (called after puzzle completion in TrainingSession)
+ */
+export function recordPatternSolveTime(pattern: string, solveTimeMs: number): void {
+  if (typeof window === "undefined" || !pattern) return;
+  try {
+    const raw = localStorage.getItem(PATTERN_SOLVE_TIMES_KEY);
+    const data: Record<string, PatternSolveTimeEntry[]> = raw ? JSON.parse(raw) : {};
+    if (!data[pattern]) data[pattern] = [];
+    data[pattern].push({ timestamp: Date.now(), solveTimeMs });
+    // Keep last 100 entries per pattern to avoid bloat
+    if (data[pattern].length > 100) {
+      data[pattern] = data[pattern].slice(-100);
+    }
+    localStorage.setItem(PATTERN_SOLVE_TIMES_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Get average solve time for a pattern over the last N days (0 = all time)
+ */
+export function getPatternAverageSolveTime(pattern: string, lastNDays: number = 30): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PATTERN_SOLVE_TIMES_KEY);
+    if (!raw) return null;
+    const data: Record<string, PatternSolveTimeEntry[]> = JSON.parse(raw);
+    const entries = data[pattern] || [];
+    if (entries.length === 0) return null;
+
+    const now = Date.now();
+    const cutoffMs = lastNDays > 0 ? lastNDays * 86400000 : 0;
+    const filtered = cutoffMs > 0
+      ? entries.filter((e) => now - e.timestamp <= cutoffMs)
+      : entries;
+
+    if (filtered.length === 0) return null;
+    const avg = filtered.reduce((s, e) => s + e.solveTimeMs, 0) / filtered.length;
+    return avg;
+  } catch { return null; }
+}
+
+/**
+ * Get average solve time over two periods to calculate trend
+ */
+export function getPatternSolveTimeTrend(
+  pattern: string,
+  recentDays: number = 7,
+  olderDays: number = 30
+): { recent: number | null; older: number | null; improvement: number | null } {
+  const recent = getPatternAverageSolveTime(pattern, recentDays);
+  const older = getPatternAverageSolveTime(pattern, olderDays);
+
+  let improvement: number | null = null;
+  if (recent !== null && older !== null && older > 0) {
+    improvement = Math.round(((older - recent) / older) * 100);
+  }
+
+  return { recent, older, improvement };
+}
+
+/**
+ * Get all patterns with solve time data
+ */
+export function getAllPatternSolveTimes(): Record<string, number | null> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(PATTERN_SOLVE_TIMES_KEY);
+    if (!raw) return {};
+    const data: Record<string, PatternSolveTimeEntry[]> = JSON.parse(raw);
+    const result: Record<string, number | null> = {};
+    for (const [pattern, entries] of Object.entries(data)) {
+      result[pattern] = entries.length > 0
+        ? entries.reduce((s, e) => s + e.solveTimeMs, 0) / entries.length
+        : null;
+    }
+    return result;
+  } catch { return {}; }
+}
+
+/**
+ * Increment total mastered puzzles for a pattern
+ */
+export function incrementPatternMasteryTotal(pattern: string): void {
+  if (typeof window === "undefined" || !pattern) return;
+  try {
+    const raw = localStorage.getItem(PATTERN_MASTERY_TOTALS_KEY);
+    const data: Record<string, number> = raw ? JSON.parse(raw) : {};
+    data[pattern] = (data[pattern] || 0) + 1;
+    localStorage.setItem(PATTERN_MASTERY_TOTALS_KEY, JSON.stringify(data));
+  } catch { /* ignore */ }
+}
+
+/**
+ * Get mastery total for a pattern
+ */
+export function getPatternMasteryTotal(pattern: string): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(PATTERN_MASTERY_TOTALS_KEY);
+    if (!raw) return 0;
+    const data: Record<string, number> = JSON.parse(raw);
+    return data[pattern] || 0;
+  } catch { return 0; }
+}
+
+/**
+ * Get all pattern mastery totals, sorted by count descending
+ */
+export function getAllPatternMasteryTotals(): Array<{ pattern: string; count: number }> {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PATTERN_MASTERY_TOTALS_KEY);
+    if (!raw) return [];
+    const data: Record<string, number> = JSON.parse(raw);
+    return Object.entries(data)
+      .map(([pattern, count]) => ({ pattern, count }))
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count);
+  } catch { return []; }
+}

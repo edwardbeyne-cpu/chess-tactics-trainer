@@ -212,6 +212,56 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* CCT feature */}
+      <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 2rem 3.5rem" }}>
+        <div style={{ textAlign: "center", marginBottom: "2.2rem" }}>
+          <h2 style={{ color: "#e2e8f0", fontSize: "1.9rem", fontWeight: "bold", marginBottom: "0.75rem" }}>
+            Train the scan strong players use before every move
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: "1rem", maxWidth: "760px", margin: "0 auto", lineHeight: 1.7 }}>
+            Checks, Captures, Threats helps you slow down, find forcing moves first, and stop missing tactics because you moved before scanning the position.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
+          {[
+            {
+              title: "Checks",
+              color: "#f59e0b",
+              body: "Can I attack the king right now? Strong players look for forcing moves first because checks change everything immediately.",
+            },
+            {
+              title: "Captures",
+              color: "#60a5fa",
+              body: "Can I win material right now? Captures often reveal the tactical move hiding in plain sight.",
+            },
+            {
+              title: "Threats",
+              color: "#facc15",
+              body: "Is anything hanging or under attack? This is where blunders get caught before you commit to a move.",
+            },
+          ].map((item) => (
+            <div key={item.title} style={{ backgroundColor: "#15162b", border: "1px solid #2e3a5c", borderRadius: "18px", padding: "1.25rem" }}>
+              <div style={{ color: item.color, fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
+                {item.title}
+              </div>
+              <div style={{ color: "#cbd5e1", fontSize: "0.92rem", lineHeight: 1.65 }}>
+                {item.body}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "18px", padding: "1.25rem 1.4rem" }}>
+          <div style={{ color: "#4ade80", fontSize: "0.82rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "0.65rem" }}>
+            Why it matters
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: "0.95rem", lineHeight: 1.7 }}>
+            Most players don&apos;t lose tactics because they can&apos;t calculate. They lose them because they move before they scan. CCT turns that scan into a repeatable habit, so your puzzle training transfers into real games.
+          </div>
+        </div>
+      </section>
+
       {/* Feature cards */}
       <section style={{ maxWidth: "1100px", margin: "0 auto", padding: "3rem 2rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1.75rem", fontWeight: "bold", textAlign: "center", marginBottom: "3rem" }}>

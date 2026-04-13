@@ -31,6 +31,8 @@ import {
   incrementCCTNudgeCount,
   getCCTSessionCount,
   incrementCCTSessionCount,
+  recordPatternSolveTime,
+  incrementPatternMasteryTotal,
   type CCTMode,
   type MasteryPuzzle,
   type MasterySet,
@@ -2175,6 +2177,16 @@ export default function TrainingSession() {
     const result = recordMasteryAttempt(puzzle.id, correct, solveTimeMs);
     masteryHits = result.masteryHits;
     masteryAwarded = result.masteryAwarded;
+
+    // Track solve time and mastery for pattern analytics
+    if (puzzle.type === "tactic" && puzzle.puzzleData) {
+      const pd = puzzle.puzzleData as { fen: string; solution: string[]; rating: number; theme: string };
+      recordPatternSolveTime(pd.theme, solveTimeMs);
+      // Increment mastery total when puzzle reaches 3 hits
+      if (masteryAwarded && masteryHits === 3) {
+        incrementPatternMasteryTotal(pd.theme);
+      }
+    }
 
     // Update local set state from storage
     const fp = getMasteryProgress();

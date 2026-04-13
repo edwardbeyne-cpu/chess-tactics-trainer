@@ -1293,6 +1293,7 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
 
   const puzzleSubscriptionTier = typeof window !== "undefined" ? getPercentileTier() : "free";
   const [currentPuzzle, setCurrentPuzzle] = useState<AppPuzzle | null>(null);
+  const [repeatNonce, setRepeatNonce] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [levelUpModal, setLevelUpModal] = useState<number | null>(null);
@@ -1864,15 +1865,18 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
       setCurrentPuzzle(prev.puzzle);
       setCurrentPuzzleIndex(prev.index);
       setMixedRevealedPattern(null);
+      setRepeatNonce((n) => n + 1);
       previousPuzzleRef.current = null;
     } else if (currentPuzzle) {
       // Reload the current puzzle from scratch (no rating update)
       isRepeatAttemptRef.current = true;
       if (mode === "lichess" && selectedPattern) {
+        setRepeatNonce((n) => n + 1);
         loadCurriculumPuzzle(selectedPattern, currentPuzzleIndex);
       } else if (mode === "mixed" || mode === "drillAll") {
-        // For mixed/drillAll, just re-show the same puzzle
+        // For mixed/drillAll, re-show the same puzzle and force a clean reset.
         setCurrentPuzzle({ ...currentPuzzle });
+        setRepeatNonce((n) => n + 1);
       }
     }
   }
@@ -1969,7 +1973,7 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
 
       {/* Mode toggle — only show when not in a dedicated single-mode page */}
       {!defaultMode && (
-        <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", alignItems: "center", flexWrap: "wrap", maxWidth: boardWidth, marginLeft: "auto", marginRight: "auto" }}>
           <div style={{ display: "flex", backgroundColor: "#1a1a2e", border: "1px solid #2e3a5c", borderRadius: "8px", overflow: "hidden" }}>
             {(["lichess", "mixed"] as PuzzleMode[]).map((m) => {
               const isMixedLocked = m === "mixed" && puzzleSubscriptionTier === "free";
@@ -1999,7 +2003,7 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
               );
             })}
           </div>
-          <span style={{ color: "#64748b", fontSize: "0.8rem" }}>
+          <span style={{ color: "#94a3b8", fontSize: "0.95rem", lineHeight: 1.35 }}>
             {mode === "mixed"
               ? "Random puzzles at your rating — adaptive difficulty"
               : "Select a pattern to fetch live puzzles"}

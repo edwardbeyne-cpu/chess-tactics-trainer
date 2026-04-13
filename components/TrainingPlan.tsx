@@ -24,6 +24,8 @@ import {
   getCCTFamiliarity,
   getCCTFirstSessionComplete,
   saveCCTFirstSessionComplete,
+  getPatternSolveTimeTrend,
+  getAllPatternMasteryTotals,
   type PatternStat,
   type FailureModeStats,
 } from "@/lib/storage";
@@ -96,6 +98,175 @@ function PatternMasteryTierDisplay() {
             <span style={{ color: tier.color, fontWeight: "bold", fontSize: "0.82rem" }}>{tier.count}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Feature 1: Recognition Speed Tracking ──────────────────────────────────
+function RecognitionSpeedCard() {
+  const [mounted, setMounted] = useState(false);
+  const [patterns, setPatterns] = useState<Array<{ pattern: string; recent: number | null; older: number | null; improvement: number | null }>>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    const PATTERNS_LIST = ["fork", "pin", "skewer", "discoveredAttack", "backRankMate", "deflection"];
+    const data: typeof patterns = [];
+    for (const p of PATTERNS_LIST) {
+      const trend = getPatternSolveTimeTrend(p, 7, 30);
+      if (trend.recent !== null) {
+        data.push({ pattern: p, ...trend });
+      }
+    }
+    setPatterns(data);
+  }, []);
+
+  if (!mounted || patterns.length === 0) return null;
+
+  const getPrettyPattern = (p: string) => {
+    const map: Record<string, string> = {
+      fork: "Fork", pin: "Pin", skewer: "Skewer", discoveredAttack: "Discovered Attack",
+      backRankMate: "Back Rank Mate", deflection: "Deflection",
+    };
+    return map[p] || p;
+  };
+
+  return (
+    <div style={{
+      backgroundColor: "#13132b",
+      border: "1px solid #2e3a5c",
+      borderRadius: "16px",
+      padding: "1.5rem",
+      marginBottom: "1rem",
+    }}>
+      <div style={{ color: "#94a3b8", fontSize: "0.72rem", textTransform: "uppercase", marginBottom: "1rem", fontWeight: "600", letterSpacing: "0.05em" }}>
+        Recognition Speed (Last 30 Days)
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        {patterns.map((item) => {
+          const recentSec = item.recent ? (item.recent / 1000).toFixed(1) : null;
+          const olderSec = item.older ? (item.older / 1000).toFixed(1) : null;
+          const improving = item.improvement !== null && item.improvement > 0;
+          const color = improving ? "#4ade80" : item.improvement === 0 ? "#f59e0b" : "#ef4444";
+          const arrow = improving ? "↓" : item.improvement === 0 ? "→" : "↑";
+
+          return (
+            <div key={item.pattern} style={{
+              backgroundColor: "#0d1621",
+              border: "1px solid #1e3a5c",
+              borderRadius: "8px",
+              padding: "0.65rem 0.85rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600", minWidth: "120px" }}>
+                  {getPrettyPattern(item.pattern)}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "1rem", textAlign: "right" }}>
+                {olderSec && <span style={{ color: "#64748b", fontSize: "0.78rem" }}>{olderSec}s</span>}
+                <span style={{ color: "#e2e8f0", fontSize: "0.8rem", fontWeight: "600" }}>→</span>
+                {recentSec && <span style={{ color: "#e2e8f0", fontSize: "0.78rem", fontWeight: "700" }}>{recentSec}s</span>}
+                {item.improvement !== null && (
+                  <span style={{ color, fontSize: "0.8rem", fontWeight: "700", minWidth: "45px", textAlign: "right" }}>
+                    {arrow} {Math.abs(item.improvement)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Feature 2: Pattern Mastery Progression ──────────────────────────────────
+function PatternMasteryProgressionCard() {
+  const [mounted, setMounted] = useState(false);
+  const [patterns, setPatterns] = useState<Array<{ pattern: string; count: number }>>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    const data = getAllPatternMasteryTotals();
+    setPatterns(data);
+  }, []);
+
+  if (!mounted || patterns.length === 0) return null;
+
+  const getPrettyPattern = (p: string) => {
+    const map: Record<string, string> = {
+      fork: "Fork", pin: "Pin", skewer: "Skewer", discoveredAttack: "Discovered Attack",
+      backRankMate: "Back Rank Mate", smotheredMate: "Smothered Mate",
+      deflection: "Deflection", interference: "Interference", overloading: "Overloading",
+      zugzwang: "Zugzwang", attraction: "Attraction", clearance: "Clearance",
+      trappedPiece: "Trapped Piece", doubleCheck: "Double Check", discoveredCheck: "Discovered Check",
+      kingsideAttack: "Kingside Attack", queensideAttack: "Queenside Attack",
+    };
+    return map[p] || p;
+  };
+
+  const totalMastered = patterns.reduce((s, p) => s + p.count, 0);
+  const maxCount = patterns[0]?.count || 1;
+
+  return (
+    <div style={{
+      backgroundColor: "#13132b",
+      border: "1px solid #2e3a5c",
+      borderRadius: "16px",
+      padding: "1.5rem",
+      marginBottom: "1rem",
+    }}>
+      <div style={{ color: "#94a3b8", fontSize: "0.72rem", textTransform: "uppercase", marginBottom: "1rem", fontWeight: "600", letterSpacing: "0.05em" }}>
+        Pattern Mastery Progression
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1rem" }}>
+        {patterns.map((item) => (
+          <div key={item.pattern}>
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.35rem",
+            }}>
+              <span style={{ color: "#94a3b8", fontSize: "0.85rem", fontWeight: "600" }}>
+                {getPrettyPattern(item.pattern)}
+              </span>
+              <span style={{ color: "#4ade80", fontSize: "0.88rem", fontWeight: "700" }}>
+                {item.count}
+              </span>
+            </div>
+            <div style={{
+              backgroundColor: "#0f0f1a",
+              borderRadius: "999px",
+              height: "6px",
+              overflow: "hidden",
+              border: "1px solid #1e2a3a",
+            }}>
+              <div style={{
+                height: "100%",
+                backgroundColor: "#4ade80",
+                borderRadius: "999px",
+                width: `${Math.max(3, (item.count / maxCount) * 100)}%`,
+                transition: "width 0.3s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{
+        backgroundColor: "#0d1621",
+        border: "1px solid #1e3a5c",
+        borderRadius: "8px",
+        padding: "0.75rem 1rem",
+        textAlign: "center",
+      }}>
+        <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.2rem" }}>Total Mastered</div>
+        <div style={{ color: "#4ade80", fontSize: "1.3rem", fontWeight: "bold" }}>
+          {totalMastered} positions
+        </div>
       </div>
     </div>
   );
@@ -1374,6 +1545,12 @@ export default function TrainingPlan() {
         })()}
 
 
+
+        {/* ── Feature 1: Recognition Speed Tracking ──────────────────────────── */}
+        <RecognitionSpeedCard />
+
+        {/* ── Feature 2: Pattern Mastery Progression ────────────────────────── */}
+        <PatternMasteryProgressionCard />
 
         {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
         <div style={{
