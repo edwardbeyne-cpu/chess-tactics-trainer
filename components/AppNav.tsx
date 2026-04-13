@@ -9,6 +9,7 @@ const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
   { href: "/app/training-plan", label: "Training Plan" },
   { href: "/app/training", label: "Training" },
   { href: "/app/patterns", label: "Drill Tactics" },
+
   { href: "/app/custom-puzzles", label: "Custom Puzzles", pro: true },
   { href: "/app/tools", label: "Tools" },
 ];

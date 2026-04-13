@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import UpgradeModal from "./UpgradeModal";
+import { generateCustomPuzzlesFromMissedTactics, type GeneratedCustomPuzzle } from "@/lib/custom-puzzle-generator";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const CUSTOM_QUEUE_KEY = "ctt_custom_queue";
+const CUSTOM_GENERATED_PUZZLES_KEY = "ctt_custom_puzzles_generated";
 const CUSTOM_ANALYSIS_KEY = "ctt_custom_analysis";
 const CUSTOM_USERNAME_KEY = "ctt_custom_username";
 const CUSTOM_PLATFORM_KEY = "ctt_custom_platform";
@@ -67,7 +69,9 @@ interface AnalysisResult {
 }
 
 interface StoredAnalysis extends AnalysisResult {
-  customQueue: string[]; // puzzle IDs
+  customQueue: string[]; // fallback Lichess puzzle IDs
+  generatedCount?: number;
+  generationMode?: 'stockfish' | 'fallback';
 }
 
 // ── Utility: check Pro tier ─────────────────────────────────────────────────
@@ -987,22 +991,28 @@ function ResultsState({
 
 function CustomQueueTraining({ onBack }: { onBack: () => void }) {
   const [puzzleIds, setPuzzleIds] = useState<string[]>([]);
+  const [generatedPuzzles, setGeneratedPuzzles] = useState<GeneratedCustomPuzzle[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     try {
       const queue = JSON.parse(localStorage.getItem(CUSTOM_QUEUE_KEY) || '[]') as string[];
+      const generated = JSON.parse(localStorage.getItem(CUSTOM_GENERATED_PUZZLES_KEY) || '[]') as GeneratedCustomPuzzle[];
       setPuzzleIds(queue);
+      setGeneratedPuzzles(Array.isArray(generated) ? generated : []);
     } catch {
       setPuzzleIds([]);
+      setGeneratedPuzzles([]);
     }
     setLoaded(true);
   }, []);
 
   if (!loaded) return null;
 
-  if (puzzleIds.length === 0) {
+  const totalPuzzles = generatedPuzzles.length || puzzleIds.length;
+
+  if (totalPuzzles === 0) {
     return (
       <div style={{ textAlign: 'center', padding: '3rem' }}>
         <p style={{ color: '#94a3b8' }}>No custom queue found. Please analyze your games first.</p>
@@ -1014,11 +1024,11 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
   }
 
   const currentId = puzzleIds[currentIndex];
+  const currentGeneratedPuzzle = generatedPuzzles[currentIndex];
   const handleNext = () => {
-    if (currentIndex < puzzleIds.length - 1) {
+    if (currentIndex < totalPuzzles - 1) {
       setCurrentIndex(i => i + 1);
     } else {
-      // Done!
       onBack();
     }
   };
@@ -1041,7 +1051,7 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           ← Back to Results
         </button>
         <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-          Custom Queue · Puzzle {currentIndex + 1} of {puzzleIds.length}
+          Custom Queue · Puzzle {currentIndex + 1} of {totalPuzzles}
         </div>
         <div style={{
           backgroundColor: '#0d1f16',
@@ -1058,9 +1068,10 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
 
       <CustomQueuePuzzleBoard
         puzzleId={currentId}
+        generatedPuzzle={currentGeneratedPuzzle}
         onNext={handleNext}
         puzzleIndex={currentIndex + 1}
-        totalPuzzles={puzzleIds.length}
+        totalPuzzles={totalPuzzles}
       />
     </div>
   );
@@ -1070,29 +1081,47 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
 
 function CustomQueuePuzzleBoard({
   puzzleId,
+  generatedPuzzle,
   onNext,
   puzzleIndex,
   totalPuzzles,
 }: {
-  puzzleId: string;
+  puzzleId?: string;
+  generatedPuzzle?: GeneratedCustomPuzzle;
   onNext: () => void;
   puzzleIndex: number;
   totalPuzzles: number;
 }) {
   const [puzzle, setPuzzle] = useState<{
+    id?: string;
     fen: string;
     moves: string[];
     rating: number;
     themes: string[];
-  } | null>(null);
+    sourceGame?: number;
+    sourceType?: 'generated';
+  } | null>(generatedPuzzle ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
+
+    if (generatedPuzzle) {
+      setPuzzle(generatedPuzzle);
+      setLoading(false);
+      return;
+    }
+
+    if (!puzzleId) {
+      setPuzzle(null);
+      setError('Puzzle not found in local database.');
+      setLoading(false);
+      return;
+    }
+
     import('@/data/lichess-puzzles').then(({ cachedPuzzlesByTheme }) => {
-      // Search all themes for this ID
       let found = null;
       for (const puzzles of Object.values(cachedPuzzlesByTheme)) {
         const p = puzzles.find(x => x.id === puzzleId);
@@ -1105,7 +1134,7 @@ function CustomQueuePuzzleBoard({
       }
       setLoading(false);
     });
-  }, [puzzleId]);
+  }, [generatedPuzzle, puzzleId]);
 
   if (loading) return <div style={{ color: '#94a3b8', textAlign: 'center', padding: '2rem' }}>Loading puzzle...</div>;
   if (error || !puzzle) return (
@@ -1121,7 +1150,7 @@ function CustomQueuePuzzleBoard({
       moves={puzzle.moves}
       rating={puzzle.rating}
       themes={puzzle.themes}
-      puzzleId={puzzleId}
+      puzzleId={puzzle?.id || puzzleId || 'custom-generated'}
       puzzleIndex={puzzleIndex}
       totalPuzzles={totalPuzzles}
       onNext={onNext}
@@ -1152,7 +1181,7 @@ function CustomPuzzleSolver({
 }) {
   // Apply first move (opponent's) to get actual puzzle start
   const { startFen, solution } = (() => {
-    if (!moves || moves.length < 2) return { startFen: initialFen, solution: moves };
+    if (!moves || moves.length < 2 || puzzleId.startsWith('custom-')) return { startFen: initialFen, solution: moves };
     try {
       const chess = new Chess(initialFen);
       const m = moves[0];
@@ -1303,7 +1332,11 @@ function CustomPuzzleSolver({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: '#64748b' }}>Source</span>
-              <a href={`https://lichess.org/training/${puzzleId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none' }}>Lichess ↗</a>
+              {puzzleId.startsWith('custom-') ? (
+                <span style={{ color: '#94a3b8' }}>Your games</span>
+              ) : (
+                <a href={`https://lichess.org/training/${puzzleId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none' }}>Lichess ↗</a>
+              )}
             </div>
           </div>
         </div>
@@ -1428,11 +1461,36 @@ export default function CustomPuzzles() {
       missedByPattern[tactic.pattern] = (missedByPattern[tactic.pattern] ?? 0) + 1;
     }
 
-    // Build custom queue
-    setStatusMsg('Building your custom puzzle queue...');
-    const customQueue = await buildCustomQueue(missedByPattern);
+    const generationCandidates = allMissed.slice(0, 12);
+    let generatedPuzzles: GeneratedCustomPuzzle[] = [];
+    let customQueue: string[] = [];
+    let generationMode: 'stockfish' | 'fallback' = 'stockfish';
 
-    // Save to localStorage
+    try {
+      setStatusMsg(`Analyzing your games... Building custom puzzles from ${generationCandidates.length} missed tactics found... (0/${generationCandidates.length} complete)`);
+      generatedPuzzles = await generateCustomPuzzlesFromMissedTactics(generationCandidates, {
+        onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
+          setStatusMsg(`Analyzing your games... Building custom puzzles from ${total} missed tactics found... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
+          try {
+            localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
+            localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
+          } catch {
+            // ignore storage errors during progressive generation
+          }
+        },
+      });
+    } catch {
+      generatedPuzzles = [];
+    }
+
+    if (generatedPuzzles.length === 0) {
+      generationMode = 'fallback';
+      setStatusMsg('Stockfish unavailable — building fallback custom queue...');
+      customQueue = await buildCustomQueue(missedByPattern);
+    } else {
+      customQueue = generatedPuzzles.map((p) => p.id);
+    }
+
     const result: StoredAnalysis = {
       missedByPattern,
       total: games.length,
@@ -1440,11 +1498,14 @@ export default function CustomPuzzles() {
       username: uname,
       analyzedAt: new Date().toISOString(),
       customQueue,
+      generatedCount: generatedPuzzles.length,
+      generationMode,
     };
 
     try {
       localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
       localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
+      localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
       localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
       localStorage.setItem(CUSTOM_PLATFORM_KEY, plat);
     } catch {
@@ -1470,6 +1531,8 @@ export default function CustomPuzzles() {
     setPageState('connect');
     try {
       localStorage.removeItem(CUSTOM_ANALYSIS_KEY);
+      localStorage.removeItem(CUSTOM_QUEUE_KEY);
+      localStorage.removeItem(CUSTOM_GENERATED_PUZZLES_KEY);
     } catch { /**/ }
   }, []);
 
