@@ -16,7 +16,7 @@ export const DEFAULT_PUZZLE_SETTINGS: PuzzleSettings = {
   minRating: 600,
   maxRating: 2400,
   timeLimit: 0,
-  autoAdvance: false,
+  autoAdvance: true,
   timeStandard: 30,
 };
 
