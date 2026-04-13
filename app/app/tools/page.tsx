@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import CalculationGym from "@/components/CalculationGym";
 import BlunderSimulation from "@/components/BlunderSimulation";
 
@@ -82,6 +83,26 @@ export default function ToolsPage() {
           </div>
           <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.5rem" }}>Best for: all levels</div>
         </button>
+
+        {/* CCT Trainer */}
+        <Link
+          href="/app/cct-trainer"
+          style={{
+            backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "14px",
+            padding: "1.25rem 1.5rem", textAlign: "left", cursor: "pointer", width: "100%",
+            transition: "border-color 0.15s", display: "block", textDecoration: "none",
+          }}
+          onMouseOver={(e) => (e.currentTarget.style.borderColor = "#60a5fa")}
+          onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2e3a5c")}
+        >
+          <div style={{ color: "#60a5fa", fontWeight: "700", fontSize: "0.95rem", marginBottom: "0.4rem" }}>
+            ⚡ CCT Trainer — Scan Before You Move
+          </div>
+          <div style={{ color: "#94a3b8", fontSize: "0.82rem", lineHeight: 1.5 }}>
+            Practice the Checks, Captures, Threats scanning habit in a focused environment. Build the tactical pattern recognition that works in real games.
+          </div>
+          <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.5rem" }}>Best for: all levels</div>
+        </Link>
       </div>
     </div>
   );
