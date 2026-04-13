@@ -464,7 +464,7 @@ async function buildCustomQueue(
   missedByPattern: Record<string, number>
 ): Promise<string[]> {
   // Sort patterns by miss frequency
-  const sorted = Object.entries(missedByPattern)
+  const sorted = Object.entries(missedByPattern ?? {})
     .filter(([, count]) => count > 0)
     .sort(([, a], [, b]) => b - a);
 
@@ -834,12 +834,12 @@ function ResultsState({
   onStartTraining: () => void;
   onReanalyze: () => void;
 }) {
-  const { missedByPattern, total, platform, username, customQueue } = analysis;
+  const { missedByPattern, total, platform, username, customQueue } = analysis ?? {};
   const platformColor = platform === 'chesscom' ? '#4ade80' : '#a78bfa';
   const platformLabel = platform === 'chesscom' ? '♟ Chess.com' : '🐴 Lichess';
 
   // Sort patterns by miss count
-  const sorted = Object.entries(missedByPattern)
+  const sorted = Object.entries(missedByPattern ?? {})
     .filter(([, c]) => c > 0)
     .sort(([, a], [, b]) => b - a);
 
