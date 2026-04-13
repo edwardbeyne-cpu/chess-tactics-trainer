@@ -3,7 +3,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import UpgradeModal from "./UpgradeModal";
-import type { GeneratedCustomPuzzle } from "@/lib/custom-puzzle-generator";
+// GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
+interface GeneratedCustomPuzzle {
+  id: string;
+  fen: string;
+  moves: string[];
+  rating: number;
+  themes: string[];
+  pattern: string;
+  sourceGame: number;
+  generatedAt: string;
+  sourceType: 'generated';
+  evalGap: number;
+  bestEval: number | null;
+  secondEval: number | null;
+  depth: number;
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
