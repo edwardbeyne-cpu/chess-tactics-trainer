@@ -10,7 +10,6 @@ import {
   getFailureModeStats,
   getDominantFailureMode,
   getStreakData,
-  getSM2DuePuzzleIds,
   getTodayKey,
   getPuzzlesSolvedAllTime,
   getDailyTargetSettings,
@@ -832,7 +831,6 @@ export default function TrainingPlan() {
     const allPatternStats = getAllPatternStats();
     const failureModeStats = getFailureModeStats();
     const streakData = getStreakData();
-    const dueIds = getSM2DuePuzzleIds();
     const allTimeSolved = getPuzzlesSolvedAllTime();
     const startDate = getTrainingStartDate();
     const daysCount = getTrainingDaysCount();
@@ -849,7 +847,6 @@ export default function TrainingPlan() {
     setPatternStats(allPatternStats);
     setFailureStats(failureModeStats);
     setStreakDays(streakData.currentStreak ?? 0);
-    setReviewDueCount(dueIds.length);
     setTotalPuzzlesSolved(allTimeSolved);
     setTrainingStartDate(startDate);
     setTrainingDays(daysCount);
@@ -869,16 +866,9 @@ export default function TrainingPlan() {
     }
 
     // Build training tasks
-    const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, dueIds.length, userGoal ?? "structured_plan");
+    const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, userGoal ?? "structured_plan");
     setTasks(generatedTasks);
   }, []);
-
-  function dismissNudge() {
-    const today = new Date().toISOString().slice(0, 10);
-    const key = `ctt_review_nudge_dismissed_${today}`;
-    localStorage.setItem(key, "1");
-    setReviewNudgeDismissed(true);
-  }
 
   useEffect(() => {
     setMounted(true);
@@ -1101,60 +1091,7 @@ export default function TrainingPlan() {
           />
         )}
 
-        {/* ── Review Day Nudge ───────────────────────────────────────────────── */}
-        {reviewDueCount >= 15 && !reviewNudgeDismissed && (
-          <div style={{
-            backgroundColor: "#1a1200",
-            border: "1px solid #f59e0b",
-            borderRadius: "12px",
-            padding: "1rem 1.25rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}>
-            <div style={{ flex: 1, minWidth: "200px" }}>
-              <div style={{ color: "#f59e0b", fontWeight: 600, fontSize: "0.88rem", marginBottom: "0.25rem" }}>
-                You have {reviewDueCount} puzzles ready to review.
-              </div>
-              <div style={{ color: "#92681c", fontSize: "0.78rem" }}>
-                Spaced repetition works best when reviews happen on schedule.
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexShrink: 0 }}>
-              <a
-                href="/app/review"
-                style={{
-                  backgroundColor: "#f59e0b",
-                  color: "#000",
-                  borderRadius: "8px",
-                  padding: "0.45rem 0.9rem",
-                  fontSize: "0.82rem",
-                  fontWeight: 700,
-                  textDecoration: "none",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Start Review Session →
-              </a>
-              <button
-                onClick={dismissNudge}
-                style={{
-                  backgroundColor: "transparent",
-                  border: "none",
-                  color: "#92681c",
-                  fontSize: "1.1rem",
-                  cursor: "pointer",
-                  padding: "0.2rem",
-                  lineHeight: 1,
-                }}
-                aria-label="Dismiss"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
+
 
         {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
         <div style={{
@@ -1788,7 +1725,6 @@ export default function TrainingPlan() {
 function buildTrainingTasks(
   patternStats: PatternStat[],
   failureStats: FailureModeStats,
-  reviewDueCount: number,
   goal: string
 ): TrainingTask[] {
   const tasks: TrainingTask[] = [];
@@ -1865,20 +1801,6 @@ function buildTrainingTasks(
     };
   }
   tasks.push(task2);
-
-  // ── Task 3: Review queue ──────────────────────────────────────────────────
-  const reviewTarget = Math.max(5, Math.min(reviewDueCount, 20));
-  const reviewProgress = Math.max(0, reviewDueCount > 0 ? reviewTarget - reviewDueCount : reviewTarget);
-  tasks.push({
-    id: "task3",
-    priority: 3,
-    label: "Review Queue",
-    description: `→ Clear ${reviewTarget} due puzzles`,
-    target: reviewTarget,
-    progress: reviewProgress,
-    actionHref: "/app/review",
-    actionLabel: "Review →",
-  });
 
   return tasks;
 }

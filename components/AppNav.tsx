@@ -9,32 +9,12 @@ const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
   { href: "/app/training-plan", label: "Training Plan" },
   { href: "/app/training", label: "Training" },
   { href: "/app/patterns", label: "Drill Tactics" },
-  { href: "/app/review", label: "Review" },
   { href: "/app/custom-puzzles", label: "Custom Puzzles", pro: true },
   { href: "/app/tools", label: "Tools" },
 ];
 
 export default function AppNav() {
   const pathname = usePathname();
-  const [reviewCount, setReviewCount] = useState(0);
-
-  useEffect(() => {
-    function updateCount() {
-      try {
-        const queue = JSON.parse(localStorage.getItem("ctt_review_queue") || "[]") as string[];
-        setReviewCount(queue.length);
-      } catch {
-        setReviewCount(0);
-      }
-    }
-    updateCount();
-    window.addEventListener("storage", updateCount);
-    const interval = setInterval(updateCount, 10000);
-    return () => {
-      window.removeEventListener("storage", updateCount);
-      clearInterval(interval);
-    };
-  }, []);
 
   // Hide nav on calibration page — it's a full-screen flow
   if (pathname === "/app/calibration") return null;
@@ -77,7 +57,6 @@ export default function AppNav() {
           const isActive =
             pathname === item.href ||
             (item.href === "/app/patterns" && pathname.startsWith("/app/patterns"));
-          const isReview = item.href === "/app/review";
           const isPro = item.pro === true;
           return (
             <Link
@@ -100,23 +79,6 @@ export default function AppNav() {
               }}
             >
               {item.label}
-              {isReview && reviewCount > 0 && (
-                <span
-                  style={{
-                    backgroundColor: "#ef4444",
-                    color: "white",
-                    borderRadius: "999px",
-                    fontSize: "0.6rem",
-                    fontWeight: "bold",
-                    padding: "0.1rem 0.35rem",
-                    lineHeight: 1.4,
-                    minWidth: "16px",
-                    textAlign: "center",
-                  }}
-                >
-                  {reviewCount}
-                </span>
-              )}
               {isPro && (
                 <span
                   style={{
