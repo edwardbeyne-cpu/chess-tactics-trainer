@@ -1,8 +1,50 @@
 'use client';
 
-import { Suspense } from "react";
+import { Suspense, Component, type ReactNode } from "react";
 import CustomPuzzles from "@/components/CustomPuzzles";
 import { HelpModal, HelpBulletList } from "@/components/HelpModal";
+
+// Error boundary to catch and display runtime errors instead of crashing the page
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: "2rem", textAlign: "center" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⚠️</div>
+          <h2 style={{ color: "#e2e8f0", marginBottom: "0.5rem" }}>Custom Puzzles failed to load</h2>
+          <pre style={{
+            color: "#ef4444", fontSize: "0.8rem", backgroundColor: "#1a1a2e",
+            border: "1px solid #2e3a5c", borderRadius: "8px", padding: "1rem",
+            textAlign: "left", maxWidth: "600px", margin: "1rem auto", overflow: "auto",
+            whiteSpace: "pre-wrap", wordBreak: "break-word",
+          }}>
+            {this.state.error.message}
+            {"\n\n"}
+            {this.state.error.stack}
+          </pre>
+          <button
+            onClick={() => this.setState({ error: null })}
+            style={{
+              marginTop: "1rem", backgroundColor: "#4ade80", color: "#0f0f1a",
+              border: "none", borderRadius: "8px", padding: "0.6rem 1.5rem",
+              fontWeight: "bold", cursor: "pointer",
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function CustomPuzzlesContent() {
   return (
@@ -47,12 +89,14 @@ function CustomPuzzlesContent() {
 
 export default function CustomPuzzlesPage() {
   return (
-    <Suspense fallback={
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
-        <div style={{ color: "#94a3b8", fontSize: "1rem" }}>Loading...</div>
-      </div>
-    }>
-      <CustomPuzzlesContent />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "400px" }}>
+          <div style={{ color: "#94a3b8", fontSize: "1rem" }}>Loading...</div>
+        </div>
+      }>
+        <CustomPuzzlesContent />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
