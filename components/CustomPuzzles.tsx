@@ -834,7 +834,7 @@ function ResultsState({
   onStartTraining: () => void;
   onReanalyze: () => void;
 }) {
-  const { missedByPattern, total, platform, username, customQueue } = analysis ?? {};
+  const { missedByPattern, total = 0, platform = 'chesscom' as Platform, username = '', customQueue = [] } = analysis ?? {};
   const platformColor = platform === 'chesscom' ? '#4ade80' : '#a78bfa';
   const platformLabel = platform === 'chesscom' ? '♟ Chess.com' : '🐴 Lichess';
 
