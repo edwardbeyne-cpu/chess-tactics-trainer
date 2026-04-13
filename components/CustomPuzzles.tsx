@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import UpgradeModal from "./UpgradeModal";
-import { generateCustomPuzzlesFromMissedTactics, type GeneratedCustomPuzzle } from "@/lib/custom-puzzle-generator";
+import type { GeneratedCustomPuzzle } from "@/lib/custom-puzzle-generator";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -1468,6 +1468,7 @@ export default function CustomPuzzles() {
 
     try {
       setStatusMsg(`Analyzing your games... Building custom puzzles from ${generationCandidates.length} missed tactics found... (0/${generationCandidates.length} complete)`);
+      const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
       generatedPuzzles = await generateCustomPuzzlesFromMissedTactics(generationCandidates, {
         onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
           setStatusMsg(`Analyzing your games... Building custom puzzles from ${total} missed tactics found... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
