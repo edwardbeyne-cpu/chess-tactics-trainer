@@ -1315,20 +1315,82 @@ export default function CustomPuzzles() {
 
   useEffect(() => {
     setIsPro(isProUser());
-    // Load any existing analysis
-    try {
-      const stored = JSON.parse(localStorage.getItem(CUSTOM_ANALYSIS_KEY) || 'null') as StoredAnalysis | null;
-      if (stored) {
-        setAnalysis(stored);
-        setPageState('results');
-        const storedUsername = localStorage.getItem(CUSTOM_USERNAME_KEY) ?? '';
-        const storedPlatform = (localStorage.getItem(CUSTOM_PLATFORM_KEY) ?? 'chesscom') as Platform;
-        setUsername(storedUsername);
-        setPlatform(storedPlatform);
+    
+    // Load any existing analysis - check multiple sources
+    const loadAnalysis = async () => {
+      try {
+        // First, check if Custom Puzzles already has cached analysis
+        const customStored = JSON.parse(localStorage.getItem(CUSTOM_ANALYSIS_KEY) || 'null') as StoredAnalysis | null;
+        if (customStored) {
+          setAnalysis(customStored);
+          setPageState('results');
+          const storedUsername = localStorage.getItem(CUSTOM_USERNAME_KEY) ?? '';
+          const storedPlatform = (localStorage.getItem(CUSTOM_PLATFORM_KEY) ?? 'chesscom') as Platform;
+          setUsername(storedUsername);
+          setPlatform(storedPlatform);
+          return;
+        }
+
+        // Second, check if user connected during onboarding (Training Plan analysis exists)
+        const gameAnalysisRaw = localStorage.getItem('ctt_game_analysis');
+        const storedUsername = localStorage.getItem('ctt_custom_username') || localStorage.getItem('ctt_username') || '';
+        const storedPlatform = (localStorage.getItem('ctt_custom_platform') || localStorage.getItem('ctt_platform') || 'chesscom') as Platform;
+
+        if (gameAnalysisRaw && storedUsername) {
+          try {
+            const gameAnalysis: StoredGameAnalysis = JSON.parse(gameAnalysisRaw);
+            
+            // Build missedByPattern from shared analysis
+            const missedByPattern = gameAnalysis.weaknesses?.reduce((acc, w) => {
+              acc[w.pattern] = w.count || 0;
+              return acc;
+            }, {} as Record<string, number>) || {};
+
+            // Build custom queue from existing analysis
+            let customQueue: string[] = [];
+            try {
+              customQueue = await buildCustomQueue(missedByPattern);
+            } catch {
+              customQueue = [];
+            }
+
+            // Create analysis result from shared data
+            const result: StoredAnalysis = {
+              missedByPattern,
+              total: gameAnalysis.gameCount || 0,
+              platform: storedPlatform,
+              username: storedUsername,
+              analyzedAt: gameAnalysis.analyzedAt || new Date().toISOString(),
+              customQueue,
+              generatedCount: 0,
+              generationMode: 'fallback',
+            };
+
+            // Save for future use
+            try {
+              localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
+              localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
+              localStorage.setItem(CUSTOM_USERNAME_KEY, storedUsername);
+              localStorage.setItem(CUSTOM_PLATFORM_KEY, storedPlatform);
+            } catch {
+              // ignore storage errors
+            }
+
+            setAnalysis(result);
+            setUsername(storedUsername);
+            setPlatform(storedPlatform);
+            setPageState('results');
+            return;
+          } catch {
+            // If parsing or queue building fails, continue to connect screen
+          }
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
+    };
+
+    loadAnalysis();
   }, []);
 
   const runAnalysis = useCallback(async (plat: Platform, uname: string) => {
