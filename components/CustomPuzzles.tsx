@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
 import { getDailyTargetSettings, type MasteryPuzzle, type MasterySet } from "@/lib/storage";
+import { isBetaTester } from "@/lib/beta";
 import { TacticBoard, type TacticBoardProps, pickNextPuzzleIdx, MASTERY_TIME_LIMIT_MS } from "./TrainingSession";
 import UpgradeModal from "./UpgradeModal";
+import BetaSessionFeedbackPrompt from "./BetaSessionFeedbackPrompt";
 // GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
 interface GeneratedCustomPuzzle {
   id: string;
@@ -109,7 +111,7 @@ interface CustomMasteryProgress {
 
 function isProUser(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem("ctt_sub_tier") === "2";
+  return localStorage.getItem("ctt_sub_tier") === "2" || isBetaTester();
 }
 
 function todayIso() {
@@ -1184,6 +1186,7 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
   const [keepGoing, setKeepGoing] = useState(false);
   const [sessionSolved, setSessionSolved] = useState(0);
   const [sessionMasteredToday, setSessionMasteredToday] = useState(0);
+  const [showFeedbackPrompt, setShowFeedbackPrompt] = useState(true);
   const sessionSeenIdsRef = useRef<Set<string>>(new Set());
   const dailyGoal = getDailyTargetSettings().dailyGoal;
 
@@ -1352,6 +1355,7 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{masteredCount}/{totalPuzzles} mastered · Daily goal reached ({dailyGoal})</div>
           <button
             onClick={() => {
+              setShowFeedbackPrompt(false);
               setKeepGoing(true);
               const seen = new Set<string>();
               sessionSeenIdsRef.current = seen;
@@ -1363,6 +1367,9 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           >
             Session done — keep going anyway →
           </button>
+          {showFeedbackPrompt && (
+            <BetaSessionFeedbackPrompt page="custom-puzzles-session-complete" onClose={() => setShowFeedbackPrompt(false)} />
+          )}
         </div>
       </div>
     );

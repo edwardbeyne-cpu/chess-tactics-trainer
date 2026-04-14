@@ -8,6 +8,13 @@
 
 const FEEDBACK_KEY = "ctt_feedback_responses";
 
+export interface FeedbackResponseMetadata {
+  route: string;
+  userAgent: string;
+  screenSize: string;
+  betaTester: boolean;
+}
+
 export interface FeedbackResponse {
   id: string;
   submittedAt: string;
@@ -16,6 +23,7 @@ export interface FeedbackResponse {
   frustrated: string;
   patternDifference: string;
   wouldPay: string;
+  metadata?: FeedbackResponseMetadata;
 }
 
 export function getFeedbackResponses(): FeedbackResponse[] {

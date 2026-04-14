@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, Component, type ReactNode } from "react";
+import { Suspense, Component, type ReactNode, useEffect, useState } from "react";
 import CustomPuzzles from "@/components/CustomPuzzles";
 import { HelpModal, HelpBulletList } from "@/components/HelpModal";
+import { isBetaTester } from "@/lib/beta";
 
 // Error boundary to catch and display runtime errors instead of crashing the page
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -47,6 +48,12 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 function CustomPuzzlesContent() {
+  const [beta, setBeta] = useState(false);
+
+  useEffect(() => {
+    setBeta(isBetaTester());
+  }, []);
+
   return (
     <div>
       {/* Hide header when user is actively training — maximizes board space */}
@@ -55,6 +62,19 @@ function CustomPuzzlesContent() {
           <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: 0 }}>
             Custom Puzzles
           </h1>
+          {beta && (
+            <span style={{
+              backgroundColor: '#60a5fa',
+              color: '#08111f',
+              fontSize: '0.65rem',
+              fontWeight: 'bold',
+              padding: '0.2rem 0.5rem',
+              borderRadius: '999px',
+              letterSpacing: '0.05em',
+            }}>
+              BETA
+            </span>
+          )}
           <span style={{
             backgroundColor: '#a78bfa',
             color: '#1a0a2e',

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import AuthButton from "./AuthButton";
+import { isBetaTester } from "@/lib/beta";
 
 const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
   { href: "/app/training-plan", label: "Training Plan" },
@@ -16,6 +17,11 @@ const mainNavItems: Array<{ href: string; label: string; pro?: boolean }> = [
 
 export default function AppNav() {
   const pathname = usePathname();
+  const [beta, setBeta] = useState(false);
+
+  useEffect(() => {
+    setBeta(isBetaTester());
+  }, []);
 
   // Hide nav on calibration page — it's a full-screen flow
   if (pathname === "/app/calibration") return null;
@@ -81,25 +87,63 @@ export default function AppNav() {
             >
               {item.label}
               {isPro && (
-                <span
-                  style={{
-                    backgroundColor: "#a78bfa",
-                    color: "#1a0a2e",
-                    borderRadius: "999px",
-                    fontSize: "0.5rem",
-                    fontWeight: "bold",
-                    padding: "0.1rem 0.35rem",
-                    lineHeight: 1.4,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  PRO
-                </span>
+                <>
+                  {beta && (
+                    <span
+                      style={{
+                        backgroundColor: "#60a5fa",
+                        color: "#08111f",
+                        borderRadius: "999px",
+                        fontSize: "0.5rem",
+                        fontWeight: "bold",
+                        padding: "0.1rem 0.35rem",
+                        lineHeight: 1.4,
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      BETA
+                    </span>
+                  )}
+                  <span
+                    style={{
+                      backgroundColor: "#a78bfa",
+                      color: "#1a0a2e",
+                      borderRadius: "999px",
+                      fontSize: "0.5rem",
+                      fontWeight: "bold",
+                      padding: "0.1rem 0.35rem",
+                      lineHeight: 1.4,
+                      letterSpacing: "0.04em",
+                    }}
+                  >
+                    PRO
+                  </span>
+                </>
               )}
             </Link>
           );
         })}
       </div>
+
+      {beta && (
+        <Link
+          href="/app/debug"
+          title="Debug"
+          style={{
+            color: pathname === "/app/debug" ? "#60a5fa" : "#64748b",
+            textDecoration: "none",
+            fontSize: "0.95rem",
+            padding: "0.5rem",
+            display: "flex",
+            alignItems: "center",
+            transition: "color 0.15s",
+            flexShrink: 0,
+            fontWeight: "bold",
+          }}
+        >
+          Debug
+        </Link>
+      )}
 
       <Link
         href="/app/settings"

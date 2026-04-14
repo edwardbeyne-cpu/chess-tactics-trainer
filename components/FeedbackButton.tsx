@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { saveFeedbackResponse, type FeedbackResponse } from "@/lib/feedback";
+import { getClientFeedbackMetadata } from "@/lib/beta";
 
 const FORMSPREE_ENDPOINT = process.env.NEXT_PUBLIC_FORMSPREE_ID
   ? `https://formspree.io/f/${process.env.NEXT_PUBLIC_FORMSPREE_ID}`
@@ -43,12 +44,14 @@ export default function FeedbackButton() {
 
     try {
       // Save locally
+      const metadata = getClientFeedbackMetadata(pathname);
       saveFeedbackResponse({
         chessLevel: form.chessLevel as ChessLevel,
         likedMost: form.likedMost,
         frustrated: form.frustrated,
         patternDifference: form.patternDifference,
         wouldPay: form.wouldPay,
+        metadata,
       });
 
       // Optionally submit to Formspree
@@ -62,6 +65,7 @@ export default function FeedbackButton() {
             frustrated: form.frustrated,
             patternDifference: form.patternDifference,
             wouldPay: form.wouldPay,
+            metadata,
           }),
         });
         if (!res.ok) {
