@@ -601,7 +601,7 @@ function CCTInfoModal({ open, onClose }: CCTInfoModalProps) {
 
 // ── Tactic Board ────────────────────────────────────────────────────────────
 
-interface TacticBoardProps {
+export interface TacticBoardProps {
   puzzleData: { fen: string; solution: string[]; rating: number; theme: string };
   onResult: (correct: boolean) => void;
   onAdvance: () => void;
@@ -611,7 +611,7 @@ interface TacticBoardProps {
   onAnalyzeClick?: () => void;
 }
 
-function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, showAnalysis = false, onAnalyzeClick }: TacticBoardProps) {
+export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnlocked, showAnalysis = false, onAnalyzeClick }: TacticBoardProps) {
   const [fen, setFen] = useState(puzzleData.fen);
   const [moveIndex, setMoveIndex] = useState(0);
   const [status, setStatus] = useState<"solve" | "solved" | "failed">("solve");

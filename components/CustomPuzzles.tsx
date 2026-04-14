@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
+import { TacticBoard, type TacticBoardProps } from "./TrainingSession";
 import UpgradeModal from "./UpgradeModal";
 // GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
 interface GeneratedCustomPuzzle {
@@ -1206,6 +1207,9 @@ function CustomQueuePuzzleBoard({
 
 // ── Puzzle solver (interactive board) ─────────────────────────────────────
 
+// ── Puzzle solver (interactive board) ─────────────────────────────────────
+// Reuses TacticBoard for identical UI/UX with Training section
+
 function CustomPuzzleSolver({
   fen: initialFen,
   moves,
@@ -1226,289 +1230,71 @@ function CustomPuzzleSolver({
   onNext: () => void;
 }) {
   // Apply first move (opponent's) to get actual puzzle start
-  const { startFen, solution } = (() => {
-    if (!moves || moves.length < 2 || puzzleId.startsWith('custom-')) return { startFen: initialFen, solution: moves };
+  const { startFen, solution, firstTheme } = (() => {
+    if (!moves || moves.length < 2 || puzzleId.startsWith('custom-')) return { startFen: initialFen, solution: moves, firstTheme: themes[0] || 'Custom' };
     try {
       const chess = new Chess(initialFen);
       const m = moves[0];
       chess.move({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m.length === 5 ? m[4] : undefined });
-      return { startFen: chess.fen(), solution: moves.slice(1) };
+      return { startFen: chess.fen(), solution: moves.slice(1), firstTheme: themes[0] || 'Custom' };
     } catch {
-      return { startFen: initialFen, solution: moves };
+      return { startFen: initialFen, solution: moves, firstTheme: themes[0] || 'Custom' };
     }
   })();
 
-  const [fen, setFen] = useState(startFen);
-  const [moveIndex, setMoveIndex] = useState(0);
-  const [status, setStatus] = useState<'solve' | 'waiting' | 'solved' | 'failed'>('solve');
-  const [message, setMessage] = useState('Find the best move!');
-  const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
+  // Track if we've advanced to next puzzle already
+  const advancedRef = useRef(false);
 
-  // orientation
-  const orientation = startFen.includes(' b ') ? 'black' : 'white';
+  // Map to TacticBoard props
+  const puzzleData: TacticBoardProps['puzzleData'] = {
+    fen: startFen,
+    solution: solution,
+    rating: rating,
+    theme: firstTheme,
+  };
 
-  // board width - match TacticBoard sizing
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [boardWidth, setBoardWidth] = useState(460);
-  useEffect(() => {
-    function getWidth() {
-      if (typeof window === "undefined") return 440;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const maxFromHeight = Math.floor((vh - 220) * 0.88);
-      if (vw < 700) {
-        return Math.max(280, Math.min(vw - 36, maxFromHeight));
-      }
-      const containerW = Math.min(900, vw - 64);
-      return Math.max(300, Math.min(500, containerW - 220 - 16, maxFromHeight));
-    }
-    setBoardWidth(getWidth());
-    setIsDesktop(window.innerWidth >= 700);
-    const handleResize = () => {
-      setBoardWidth(getWidth());
-      setIsDesktop(window.innerWidth >= 700);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+  const handleResult = useCallback((correct: boolean) => {
+    // TacticBoard handles the result; we don't need to do anything here
   }, []);
 
-  function handleMove(from: string, to: string): boolean {
-    if (status !== 'solve') return false;
-    const expected = solution[moveIndex];
-    if (!expected) return false;
-    const expFrom = expected.slice(0, 2);
-    const expTo = expected.slice(2, 4);
-    if (from !== expFrom || to !== expTo) {
-      setMessage('❌ Incorrect — try again!');
-      return false;
+  const handleAdvance = useCallback(() => {
+    // Only advance once
+    if (!advancedRef.current) {
+      advancedRef.current = true;
+      onNext();
     }
-    const game = new Chess(fen);
-    try {
-      game.move({ from, to, promotion: expected.length === 5 ? expected[4] : 'q' });
-    } catch { return false; }
-    const newFen = game.fen();
-    setFen(newFen);
-    setLastMove([from, to]);
-    const nextIdx = moveIndex + 1;
-    if (nextIdx >= solution.length) {
-      setMoveIndex(nextIdx);
-      setStatus('solved');
-      setMessage('✅ Excellent! Puzzle solved!');
-      return true;
-    }
-    setStatus('waiting');
-    setMoveIndex(nextIdx);
-    setTimeout(() => {
-      const opMove = solution[nextIdx];
-      const opFrom = opMove.slice(0, 2);
-      const opTo = opMove.slice(2, 4);
-      const afterOp = new Chess(newFen);
-      try {
-        afterOp.move({ from: opFrom, to: opTo, promotion: opMove.length === 5 ? opMove[4] : undefined });
-      } catch { setMoveIndex(nextIdx + 1); setStatus('solve'); return; }
-      setFen(afterOp.fen());
-      setLastMove([opFrom, opTo]);
-      setMoveIndex(nextIdx + 1);
-      setStatus('solve');
-      setMessage('Good move! Keep going...');
-    }, 600);
-    return true;
-  }
+  }, [onNext]);
 
-  function handleGiveUp() {
-    setStatus('failed');
-    setMessage('Puzzle skipped — try the next one.');
-  }
-
-  const messageColor = status === 'solved' ? '#4ade80' : status === 'failed' ? '#ef4444' : '#e2e8f0';
+  const handleRetry = useCallback(() => {
+    // TacticBoard's retry resets the puzzle; we don't advance
+    advancedRef.current = false;
+  }, []);
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: isDesktop ? '280px 1fr' : '1fr',
-      gap: '2rem',
-      alignItems: 'start',
-      maxWidth: isDesktop ? '100%' : '100vw',
-    }}>
-      {/* Left sidebar - matches TacticBoard layout */}
-      {isDesktop && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {/* Header */}
+    <div>
+      {/* Header with queue context */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #2e3a5c' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div>
-            <div style={{ color: '#4ade80', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-              🎯 Custom Queue
-            </div>
-            <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
-              Puzzle {puzzleIndex} of {totalPuzzles}
-            </div>
-            {puzzleId.startsWith('custom-') && (
-              <div style={{ color: '#a78bfa', fontSize: '0.7rem', marginTop: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                ✨ Personalized
-              </div>
-            )}
+            <div style={{ color: '#4ade80', fontSize: '0.85rem', fontWeight: 'bold' }}>🎯 Custom Queue</div>
+            <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>Puzzle {puzzleIndex} of {totalPuzzles}</div>
           </div>
-
-          {/* Puzzle Info */}
-          <div style={{ backgroundColor: '#0d1621', border: '1px solid #1e3a5c', borderRadius: '8px', padding: '0.75rem 1rem' }}>
-            <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Info</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Rating</span>
-                <span style={{ color: '#e2e8f0', fontWeight: 'bold' }}>{rating}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Themes</span>
-                <span style={{ color: '#4ade80', fontSize: '0.75rem' }}>{themes.slice(0, 2).join(', ') || 'Mixed'}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Source</span>
-                {puzzleId.startsWith('custom-') ? (
-                  <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Your games</span>
-                ) : (
-                  <a href={`https://lichess.org/training/${puzzleId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.75rem' }}>Lichess ↗</a>
-                )}
-              </div>
+          {puzzleId.startsWith('custom-') && (
+            <div style={{ color: '#a78bfa', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#0d2218', border: '1px solid #2d5f1f', borderRadius: '4px', padding: '0.25rem 0.6rem' }}>
+              ✨ Personalized
             </div>
-          </div>
-
-          {/* Status message */}
-          <div style={{ backgroundColor: '#0d1621', border: '1px solid #1e3a5c', borderRadius: '8px', padding: '0.75rem 1rem' }}>
-            <div style={{ color: messageColor, fontSize: '0.85rem', lineHeight: 1.4 }}>
-              {message}
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {(status === 'solved' || status === 'failed') && (
-              <button
-                onClick={onNext}
-                style={{
-                  backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '8px',
-                  padding: '0.65rem 1rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem',
-                  transition: 'opacity 0.15s',
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
-                onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
-              >
-                ⏭ Next Puzzle
-              </button>
-            )}
-            {status === 'solve' && (
-              <button
-                onClick={handleGiveUp}
-                style={{
-                  backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px',
-                  padding: '0.65rem 1rem', cursor: 'pointer', color: '#64748b', fontSize: '0.8rem',
-                  transition: 'all 0.15s',
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = '#4ade80';
-                  e.currentTarget.style.color = '#4ade80';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = '#2e3a5c';
-                  e.currentTarget.style.color = '#64748b';
-                }}
-              >
-                Skip →
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      )}
-
-      {/* Right content - board and mobile info */}
-      <div>
-        {/* Mobile info header */}
-        {!isDesktop && (
-          <div style={{ backgroundColor: '#13132b', border: '1px solid #2e3a5c', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <div style={{ color: '#4ade80', fontSize: '0.9rem', fontWeight: 'bold' }}>
-                🎯 Custom Queue — {puzzleIndex}/{totalPuzzles}
-              </div>
-              {puzzleId.startsWith('custom-') && (
-                <div style={{ color: '#a78bfa', fontSize: '0.65rem', textTransform: 'uppercase' }}>✨ Personalized</div>
-              )}
-            </div>
-            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Rating {rating}</div>
-            <div style={{ color: messageColor, fontSize: '0.95rem', fontWeight: messageColor !== '#e2e8f0' ? 'bold' : 'normal' }}>
-              {message}
-            </div>
-          </div>
-        )}
-
-        {/* Board */}
-        <CustomBoard
-          fen={fen}
-          orientation={orientation as 'white' | 'black'}
-          onMove={handleMove}
-          lastMove={lastMove}
-          draggable={status === 'solve'}
-          boardWidth={boardWidth}
-        />
-
-        {/* Mobile controls */}
-        {!isDesktop && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
-            {(status === 'solved' || status === 'failed') && (
-              <button
-                onClick={onNext}
-                style={{
-                  backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '8px',
-                  padding: '0.75rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
-                }}
-              >
-                ⏭ Next Puzzle
-              </button>
-            )}
-            {status === 'solve' && (
-              <button
-                onClick={handleGiveUp}
-                style={{
-                  backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px',
-                  padding: '0.75rem', cursor: 'pointer', color: '#64748b', fontSize: '0.85rem',
-                }}
-              >
-                Skip →
-              </button>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* TacticBoard with full puzzle-solving UI */}
+      <TacticBoard
+        puzzleData={puzzleData}
+        onResult={handleResult}
+        onAdvance={handleAdvance}
+        onRetry={handleRetry}
+      />
     </div>
-  );
-}
-
-// ── Minimal chess board for custom queue ──────────────────────────────────
-// Uses the same ChessBoard component as the rest of the app (Chessground)
-
-import ChessBoard from './ChessBoard';
-
-function CustomBoard({
-  fen,
-  orientation,
-  onMove,
-  lastMove,
-  draggable,
-  boardWidth,
-}: {
-  fen: string;
-  orientation: 'white' | 'black';
-  onMove: (from: string, to: string) => boolean;
-  lastMove?: [string, string];
-  draggable: boolean;
-  boardWidth: number;
-}) {
-  return (
-    <ChessBoard
-      fen={fen}
-      orientation={orientation}
-      onMove={onMove}
-      lastMove={lastMove}
-      draggable={draggable}
-      boardWidth={boardWidth}
-    />
   );
 }
 
