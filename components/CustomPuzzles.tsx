@@ -1233,18 +1233,29 @@ function CustomPuzzleSolver({
   // orientation
   const orientation = startFen.includes(' b ') ? 'black' : 'white';
 
-  // board width
-  const [boardWidth, setBoardWidth] = useState(520);
+  // board width - match TacticBoard sizing
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [boardWidth, setBoardWidth] = useState(460);
   useEffect(() => {
-    const update = () => {
+    function getWidth() {
+      if (typeof window === "undefined") return 440;
       const vw = window.innerWidth;
-      if (vw < 640) setBoardWidth(Math.min(vw - 32, 380));
-      else if (vw <= 1024) setBoardWidth(Math.min(520, Math.floor(vw * 0.9)));
-      else setBoardWidth(520);
+      const vh = window.innerHeight;
+      const maxFromHeight = Math.floor((vh - 220) * 0.88);
+      if (vw < 700) {
+        return Math.max(280, Math.min(vw - 36, maxFromHeight));
+      }
+      const containerW = Math.min(900, vw - 64);
+      return Math.max(300, Math.min(500, containerW - 220 - 16, maxFromHeight));
+    }
+    setBoardWidth(getWidth());
+    setIsDesktop(window.innerWidth >= 700);
+    const handleResize = () => {
+      setBoardWidth(getWidth());
+      setIsDesktop(window.innerWidth >= 700);
     };
-    update();
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   function handleMove(from: string, to: string): boolean {
@@ -1296,26 +1307,122 @@ function CustomPuzzleSolver({
   }
 
   const messageColor = status === 'solved' ? '#4ade80' : status === 'failed' ? '#ef4444' : '#e2e8f0';
-  const isMobile = boardWidth < 480;
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: isMobile ? '1fr' : 'auto 1fr',
-      gap: isMobile ? '1rem' : '2rem',
+      gridTemplateColumns: isDesktop ? '280px 1fr' : '1fr',
+      gap: '2rem',
       alignItems: 'start',
+      maxWidth: isDesktop ? '100%' : '100vw',
     }}>
-      <div>
-        {/* Info card */}
-        <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '12px', padding: '1rem 1.5rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <div style={{ color: '#4ade80', fontSize: '0.8rem', fontWeight: 'bold' }}>
-              🎯 Custom Queue — Puzzle {puzzleIndex} of {totalPuzzles}
+      {/* Left sidebar - matches TacticBoard layout */}
+      {isDesktop && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Header */}
+          <div>
+            <div style={{ color: '#4ade80', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+              🎯 Custom Queue
             </div>
-            <div style={{ color: '#64748b', fontSize: '0.78rem' }}>Rating {rating}</div>
+            <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+              Puzzle {puzzleIndex} of {totalPuzzles}
+            </div>
+            {puzzleId.startsWith('custom-') && (
+              <div style={{ color: '#a78bfa', fontSize: '0.7rem', marginTop: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                ✨ Personalized
+              </div>
+            )}
           </div>
-          <div style={{ color: messageColor, fontSize: '1rem' }}>{message}</div>
+
+          {/* Puzzle Info */}
+          <div style={{ backgroundColor: '#0d1621', border: '1px solid #1e3a5c', borderRadius: '8px', padding: '0.75rem 1rem' }}>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em' }}>Info</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Rating</span>
+                <span style={{ color: '#e2e8f0', fontWeight: 'bold' }}>{rating}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Themes</span>
+                <span style={{ color: '#4ade80', fontSize: '0.75rem' }}>{themes.slice(0, 2).join(', ') || 'Mixed'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#64748b' }}>Source</span>
+                {puzzleId.startsWith('custom-') ? (
+                  <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Your games</span>
+                ) : (
+                  <a href={`https://lichess.org/training/${puzzleId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.75rem' }}>Lichess ↗</a>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Status message */}
+          <div style={{ backgroundColor: '#0d1621', border: '1px solid #1e3a5c', borderRadius: '8px', padding: '0.75rem 1rem' }}>
+            <div style={{ color: messageColor, fontSize: '0.85rem', lineHeight: 1.4 }}>
+              {message}
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {(status === 'solved' || status === 'failed') && (
+              <button
+                onClick={onNext}
+                style={{
+                  backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '8px',
+                  padding: '0.65rem 1rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem',
+                  transition: 'opacity 0.15s',
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
+                onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
+              >
+                ⏭ Next Puzzle
+              </button>
+            )}
+            {status === 'solve' && (
+              <button
+                onClick={handleGiveUp}
+                style={{
+                  backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px',
+                  padding: '0.65rem 1rem', cursor: 'pointer', color: '#64748b', fontSize: '0.8rem',
+                  transition: 'all 0.15s',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.borderColor = '#4ade80';
+                  e.currentTarget.style.color = '#4ade80';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = '#2e3a5c';
+                  e.currentTarget.style.color = '#64748b';
+                }}
+              >
+                Skip →
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {/* Right content - board and mobile info */}
+      <div>
+        {/* Mobile info header */}
+        {!isDesktop && (
+          <div style={{ backgroundColor: '#13132b', border: '1px solid #2e3a5c', borderRadius: '10px', padding: '1rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ color: '#4ade80', fontSize: '0.9rem', fontWeight: 'bold' }}>
+                🎯 Custom Queue — {puzzleIndex}/{totalPuzzles}
+              </div>
+              {puzzleId.startsWith('custom-') && (
+                <div style={{ color: '#a78bfa', fontSize: '0.65rem', textTransform: 'uppercase' }}>✨ Personalized</div>
+              )}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '0.5rem' }}>Rating {rating}</div>
+            <div style={{ color: messageColor, fontSize: '0.95rem', fontWeight: messageColor !== '#e2e8f0' ? 'bold' : 'normal' }}>
+              {message}
+            </div>
+          </div>
+        )}
 
         {/* Board */}
         <CustomBoard
@@ -1326,17 +1433,17 @@ function CustomPuzzleSolver({
           draggable={status === 'solve'}
           boardWidth={boardWidth}
         />
-      </div>
 
-      {/* Right panel */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '12px', padding: '1.25rem 1.5rem' }}>
-          <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Controls</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {/* Mobile controls */}
+        {!isDesktop && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '1rem' }}>
             {(status === 'solved' || status === 'failed') && (
               <button
                 onClick={onNext}
-                style={{ backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '8px', padding: '0.7rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
+                style={{
+                  backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '8px',
+                  padding: '0.75rem', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.9rem',
+                }}
               >
                 ⏭ Next Puzzle
               </button>
@@ -1344,34 +1451,16 @@ function CustomPuzzleSolver({
             {status === 'solve' && (
               <button
                 onClick={handleGiveUp}
-                style={{ backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px', padding: '0.7rem', cursor: 'pointer', color: '#64748b', fontSize: '0.85rem' }}
+                style={{
+                  backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px',
+                  padding: '0.75rem', cursor: 'pointer', color: '#64748b', fontSize: '0.85rem',
+                }}
               >
                 Skip →
               </button>
             )}
           </div>
-        </div>
-        <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '12px', padding: '1.25rem 1.5rem' }}>
-          <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Puzzle Info</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.82rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#64748b' }}>Rating</span>
-              <span style={{ color: '#e2e8f0' }}>{rating}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#64748b' }}>Themes</span>
-              <span style={{ color: '#4ade80', fontSize: '0.78rem' }}>{themes.slice(0, 2).join(', ')}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#64748b' }}>Source</span>
-              {puzzleId.startsWith('custom-') ? (
-                <span style={{ color: '#94a3b8' }}>Your games</span>
-              ) : (
-                <a href={`https://lichess.org/training/${puzzleId}`} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none' }}>Lichess ↗</a>
-              )}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
