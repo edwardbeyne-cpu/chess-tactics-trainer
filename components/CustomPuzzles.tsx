@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
-import { TacticBoard, type TacticBoardProps } from "./TrainingSession";
+import { getDailyTargetSettings, type MasteryPuzzle, type MasterySet } from "@/lib/storage";
+import { TacticBoard, type TacticBoardProps, pickNextPuzzleIdx, MASTERY_TIME_LIMIT_MS } from "./TrainingSession";
 import UpgradeModal from "./UpgradeModal";
 // GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
 interface GeneratedCustomPuzzle {
@@ -29,6 +30,7 @@ const CUSTOM_GENERATED_PUZZLES_KEY = "ctt_custom_puzzles_generated";
 const CUSTOM_ANALYSIS_KEY = "ctt_custom_analysis";
 const CUSTOM_USERNAME_KEY = "ctt_custom_username";
 const CUSTOM_PLATFORM_KEY = "ctt_custom_platform";
+const CUSTOM_MASTERY_SET_KEY = "ctt_custom_mastery_set";
 
 const MAX_GAMES = 50;
 
@@ -91,11 +93,113 @@ interface StoredAnalysis extends AnalysisResult {
   generationMode?: 'stockfish' | 'fallback';
 }
 
+interface CustomMasteryProgress {
+  currentSet: MasterySet | null;
+  totalMastered: number;
+  dailySessionCompleted: number;
+  dailySessionDate: string;
+  lastSessionSummary?: {
+    solved: number;
+    masteredToday: number;
+    completedAt: number;
+  } | null;
+}
+
 // ── Utility: check Pro tier ─────────────────────────────────────────────────
 
 function isProUser(): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem("ctt_sub_tier") === "2";
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function defaultCustomMastery(): CustomMasteryProgress {
+  return {
+    currentSet: null,
+    totalMastered: 0,
+    dailySessionCompleted: 0,
+    dailySessionDate: "",
+    lastSessionSummary: null,
+  };
+}
+
+function loadCustomMastery(): CustomMasteryProgress {
+  if (typeof window === "undefined") return defaultCustomMastery();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CUSTOM_MASTERY_SET_KEY) || "null") as CustomMasteryProgress | null;
+    return parsed ?? defaultCustomMastery();
+  } catch {
+    return defaultCustomMastery();
+  }
+}
+
+function saveCustomMastery(progress: CustomMasteryProgress) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(CUSTOM_MASTERY_SET_KEY, JSON.stringify(progress));
+}
+
+function buildCustomMasterySet(generatedPuzzles: GeneratedCustomPuzzle[], fallbackIds: string[]): MasterySet {
+  const now = Date.now();
+  const puzzles: MasteryPuzzle[] = generatedPuzzles.map((puzzle, idx) => ({
+    id: puzzle.id || `custom_${idx}`,
+    type: "tactic",
+    puzzleData: {
+      id: puzzle.id,
+      fen: puzzle.fen,
+      solution: puzzle.moves,
+      rating: puzzle.rating,
+      theme: puzzle.themes?.[0] || puzzle.pattern || "custom",
+      themes: puzzle.themes || [],
+      sourceGame: puzzle.sourceGame,
+      sourceType: puzzle.sourceType,
+    },
+    masteryHits: 0,
+    lastSolvedAt: [],
+    lastMasteryHitCounter: -999,
+    attempts: 0,
+    correctAttempts: 0,
+    avgSolveTime: 0,
+    lastAttemptAt: 0,
+  }));
+
+  if (puzzles.length === 0) {
+    fallbackIds.forEach((id, idx) => {
+      puzzles.push({
+        id,
+        type: "tactic",
+        puzzleData: { id, fallbackOnly: true },
+        masteryHits: 0,
+        lastSolvedAt: [],
+        lastMasteryHitCounter: -999,
+        attempts: 0,
+        correctAttempts: 0,
+        avgSolveTime: 0,
+        lastAttemptAt: 0,
+      });
+    });
+  }
+
+  return {
+    setNumber: 1,
+    createdAt: now,
+    completedAt: null,
+    targetELO: 1500,
+    puzzles,
+    blunderRatio: 0,
+  };
+}
+
+function getMasteredCount(set: MasterySet | null): number {
+  return set ? set.puzzles.filter((p) => p.masteryHits >= 3).length : 0;
+}
+
+function syncDailySession(progress: CustomMasteryProgress): CustomMasteryProgress {
+  const today = todayIso();
+  if (progress.dailySessionDate === today) return progress;
+  return { ...progress, dailySessionDate: today, dailySessionCompleted: 0, lastSessionSummary: null };
 }
 
 // ── Heuristic missed-tactic detection ──────────────────────────────────────
@@ -664,7 +768,7 @@ function ConnectState({
                   fontSize: '0.9rem',
                 }}
               >
-                Analyze →
+                Analyze My Games →
               </button>
             </div>
           </div>
@@ -738,7 +842,7 @@ function ConnectState({
                   fontSize: '0.9rem',
                 }}
               >
-                Analyze →
+                Analyze My Games →
               </button>
             </div>
           </div>
@@ -859,10 +963,12 @@ function AnalyzingState({
 
 function ResultsState({
   analysis,
+  masteryProgress,
   onStartTraining,
   onReanalyze,
 }: {
   analysis: StoredAnalysis;
+  masteryProgress: CustomMasteryProgress;
   onStartTraining: () => void;
   onReanalyze: () => void;
 }) {
@@ -878,6 +984,10 @@ function ResultsState({
   const maxMiss = sorted[0]?.[1] ?? 1;
 
   const totalMissed = sorted.reduce((sum, [, c]) => sum + c, 0);
+  const masterySet = masteryProgress.currentSet;
+  const masteredCount = getMasteredCount(masterySet);
+  const totalCustomPuzzles = masterySet?.puzzles.length ?? customQueue.length;
+  const allMastered = totalCustomPuzzles > 0 && masteredCount >= totalCustomPuzzles;
 
   return (
     <div style={{ maxWidth: '680px', margin: '0 auto' }}>
@@ -973,7 +1083,7 @@ function ResultsState({
         border: '1px solid #166534',
         borderRadius: '12px',
         padding: '1rem 1.5rem',
-        marginBottom: '1.5rem',
+        marginBottom: '1rem',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -982,7 +1092,7 @@ function ResultsState({
       }}>
         <div>
           <div style={{ color: '#4ade80', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-            ✅ Custom Queue Ready — {customQueue.length} Puzzles
+            ✅ Custom Queue Ready — {totalCustomPuzzles} Puzzles
           </div>
           <div style={{ color: '#6b9e7a', fontSize: '0.85rem' }}>
             Weighted by your miss frequency. Queue saved to your device.
@@ -990,24 +1100,53 @@ function ResultsState({
         </div>
       </div>
 
+      <div style={{
+        backgroundColor: '#1a1a2e',
+        border: '1px solid #2e3a5c',
+        borderRadius: '12px',
+        padding: '1rem 1.5rem',
+        marginBottom: '1.5rem',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ color: '#e2e8f0', fontWeight: 'bold' }}>Mastery Progress</div>
+          <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{masteredCount}/{totalCustomPuzzles} Mastered</div>
+        </div>
+        <div style={{ backgroundColor: '#0f0f1a', borderRadius: '999px', height: '10px', overflow: 'hidden', border: '1px solid #1e2a3a' }}>
+          <div style={{
+            height: '100%',
+            width: `${totalCustomPuzzles > 0 ? Math.round((masteredCount / totalCustomPuzzles) * 100) : 0}%`,
+            backgroundColor: '#4ade80',
+            borderRadius: '999px',
+            transition: 'width 0.4s ease',
+          }} />
+        </div>
+        <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.75rem' }}>
+          Custom Puzzles mastery is tracked separately from Training. Solve under 10 seconds to earn a mastery hit.
+        </div>
+      </div>
+
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <button
           onClick={onStartTraining}
-          disabled={customQueue.length === 0}
+          disabled={totalCustomPuzzles === 0 || allMastered}
           style={{
             flex: 1,
-            backgroundColor: customQueue.length > 0 ? '#4ade80' : '#1e3a2e',
-            color: customQueue.length > 0 ? '#0f0f1a' : '#2e5a3e',
+            backgroundColor: totalCustomPuzzles > 0 && !allMastered ? '#4ade80' : '#1e3a2e',
+            color: totalCustomPuzzles > 0 && !allMastered ? '#0f0f1a' : '#2e5a3e',
             border: 'none',
             borderRadius: '10px',
             padding: '1rem',
             fontWeight: 'bold',
             fontSize: '1rem',
-            cursor: customQueue.length > 0 ? 'pointer' : 'not-allowed',
+            cursor: totalCustomPuzzles > 0 && !allMastered ? 'pointer' : 'not-allowed',
           }}
         >
-          🎯 Start Custom Training
+          {allMastered
+            ? 'All Mastered! 🏆 Analyze Latest Games'
+            : masteredCount > 0
+              ? `Continue Training (${masteredCount}/${totalCustomPuzzles} Mastered)`
+              : '🎯 Start Custom Training'}
         </button>
         <button
           onClick={onReanalyze}
@@ -1023,7 +1162,7 @@ function ResultsState({
             minWidth: '140px',
           }}
         >
-          🔄 Re-analyze
+          🔄 Analyze Latest Games
         </button>
       </div>
 
@@ -1037,29 +1176,161 @@ function ResultsState({
 // ── Custom Queue Puzzle Mode ────────────────────────────────────────────────
 
 function CustomQueueTraining({ onBack }: { onBack: () => void }) {
-  const [puzzleIds, setPuzzleIds] = useState<string[]>([]);
+  const [masteryProgress, setMasteryProgress] = useState<CustomMasteryProgress>(defaultCustomMastery());
   const [generatedPuzzles, setGeneratedPuzzles] = useState<GeneratedCustomPuzzle[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [puzzleIds, setPuzzleIds] = useState<string[]>([]);
+  const [currentPuzzleId, setCurrentPuzzleId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [keepGoing, setKeepGoing] = useState(false);
+  const [sessionSolved, setSessionSolved] = useState(0);
+  const [sessionMasteredToday, setSessionMasteredToday] = useState(0);
+  const sessionSeenIdsRef = useRef<Set<string>>(new Set());
+  const dailyGoal = getDailyTargetSettings().dailyGoal;
+
+  const chooseNextPuzzle = useCallback((progress: CustomMasteryProgress, seenIds: Set<string>, forceKeepGoing = keepGoing) => {
+    const synced = syncDailySession(progress);
+    const set = synced.currentSet;
+    if (!set || set.puzzles.length === 0) {
+      return { progress: synced, nextId: null, phase: 'empty' as const };
+    }
+
+    const allMastered = set.puzzles.every((p) => p.masteryHits >= 3);
+    if (allMastered) {
+      return { progress: synced, nextId: null, phase: 'all_mastered' as const };
+    }
+
+    if (!forceKeepGoing && synced.dailySessionCompleted >= dailyGoal) {
+      return { progress: synced, nextId: null, phase: 'session_complete' as const };
+    }
+
+    const idx = pickNextPuzzleIdx(set, null, seenIds);
+    if (idx === -1) {
+      return { progress: synced, nextId: null, phase: 'all_mastered' as const };
+    }
+
+    const next = set.puzzles[idx];
+    seenIds.add(next.id);
+    return { progress: synced, nextId: next.id, phase: 'active' as const };
+  }, [dailyGoal, keepGoing]);
 
   useEffect(() => {
     try {
       const queue = JSON.parse(localStorage.getItem(CUSTOM_QUEUE_KEY) || '[]') as string[];
       const generated = JSON.parse(localStorage.getItem(CUSTOM_GENERATED_PUZZLES_KEY) || '[]') as GeneratedCustomPuzzle[];
-      setPuzzleIds(queue);
-      setGeneratedPuzzles(Array.isArray(generated) ? generated : []);
+      const ids = Array.isArray(queue) ? queue : [];
+      const generatedList = Array.isArray(generated) ? generated : [];
+      setPuzzleIds(ids);
+      setGeneratedPuzzles(generatedList);
+
+      let progress = syncDailySession(loadCustomMastery());
+      const currentIds = generatedList.length ? generatedList.map((p) => p.id) : ids;
+      const savedIds = progress.currentSet?.puzzles.map((p) => p.id) ?? [];
+      const idsChanged = JSON.stringify(savedIds) !== JSON.stringify(currentIds);
+      if (!progress.currentSet || idsChanged) {
+        progress = {
+          ...defaultCustomMastery(),
+          dailySessionDate: todayIso(),
+          currentSet: buildCustomMasterySet(generatedList, ids),
+        };
+        saveCustomMastery(progress);
+      }
+
+      const { progress: synced, nextId } = chooseNextPuzzle(progress, sessionSeenIdsRef.current, false);
+      setMasteryProgress(synced);
+      setCurrentPuzzleId(nextId);
     } catch {
       setPuzzleIds([]);
       setGeneratedPuzzles([]);
+      setMasteryProgress(defaultCustomMastery());
+      setCurrentPuzzleId(null);
     }
     setLoaded(true);
+  }, [chooseNextPuzzle]);
+
+  const handlePuzzleResult = useCallback((puzzleId: string, correct: boolean, solveTimeMs: number) => {
+    setMasteryProgress((prev) => {
+      const synced = syncDailySession(prev);
+      const set = synced.currentSet;
+      if (!set) return synced;
+
+      const newSet: MasterySet = {
+        ...set,
+        puzzles: set.puzzles.map((puzzle) => {
+          if (puzzle.id !== puzzleId) return puzzle;
+          const attempts = puzzle.attempts + 1;
+          const correctAttempts = puzzle.correctAttempts + (correct ? 1 : 0);
+          const avgSolveTime = correct
+            ? (puzzle.avgSolveTime === 0 ? solveTimeMs : Math.round(((puzzle.avgSolveTime * puzzle.correctAttempts) + solveTimeMs) / correctAttempts))
+            : puzzle.avgSolveTime;
+          const masteryHits = correct
+            ? (solveTimeMs < MASTERY_TIME_LIMIT_MS ? Math.min(3, puzzle.masteryHits + 1) : puzzle.masteryHits)
+            : 0;
+          const lastSolvedAt = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS
+            ? [...puzzle.lastSolvedAt, Date.now()].slice(-3)
+            : (correct ? puzzle.lastSolvedAt : []);
+          return {
+            ...puzzle,
+            masteryHits,
+            attempts,
+            correctAttempts,
+            avgSolveTime,
+            lastAttemptAt: Date.now(),
+            lastSolvedAt,
+          };
+        }),
+      };
+
+      const prior = set.puzzles.find((p) => p.id === puzzleId);
+      const after = newSet.puzzles.find((p) => p.id === puzzleId);
+      const gainedMastery = !!after && !!prior && after.masteryHits > prior.masteryHits;
+      if (gainedMastery) setSessionMasteredToday((n) => n + 1);
+      setSessionSolved((n) => n + 1);
+
+      const nextProgress: CustomMasteryProgress = {
+        ...synced,
+        currentSet: newSet,
+        totalMastered: getMasteredCount(newSet),
+        dailySessionCompleted: synced.dailySessionCompleted + 1,
+      };
+      saveCustomMastery(nextProgress);
+      return nextProgress;
+    });
   }, []);
+
+  const handleAdvance = useCallback(() => {
+    setMasteryProgress((prev) => {
+      const { progress, nextId, phase } = chooseNextPuzzle(prev, sessionSeenIdsRef.current, keepGoing);
+      if (phase === 'session_complete') {
+        const updated = {
+          ...progress,
+          lastSessionSummary: {
+            solved: sessionSolved,
+            masteredToday: sessionMasteredToday,
+            completedAt: Date.now(),
+          },
+        };
+        saveCustomMastery(updated);
+        setCurrentPuzzleId(null);
+        return updated;
+      }
+      setCurrentPuzzleId(nextId);
+      saveCustomMastery(progress);
+      return progress;
+    });
+  }, [chooseNextPuzzle, keepGoing, sessionMasteredToday, sessionSolved]);
 
   if (!loaded) return null;
 
-  const totalPuzzles = generatedPuzzles.length || puzzleIds.length;
+  const masterySet = masteryProgress.currentSet;
+  const totalPuzzles = masterySet?.puzzles.length ?? generatedPuzzles.length ?? puzzleIds.length;
+  const masteredCount = getMasteredCount(masterySet);
+  const currentPuzzle = masterySet?.puzzles.find((p) => p.id === currentPuzzleId);
+  const currentGeneratedPuzzle = generatedPuzzles.find((p) => p.id === currentPuzzleId);
+  const currentFallbackId = currentGeneratedPuzzle ? undefined : currentPuzzleId || undefined;
+  const sessionDone = !keepGoing && masteryProgress.dailySessionCompleted >= dailyGoal && currentPuzzleId === null && masteredCount < totalPuzzles;
+  const allMastered = totalPuzzles > 0 && masteredCount >= totalPuzzles;
 
-  if (totalPuzzles === 0) {
+  if (totalPuzzles === 0 || !masterySet) {
     return (
       <div style={{ textAlign: 'center', padding: '3rem' }}>
         <p style={{ color: '#94a3b8' }}>No custom queue found. Please analyze your games first.</p>
@@ -1070,19 +1341,49 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
     );
   }
 
-  const currentId = puzzleIds[currentIndex];
-  const currentGeneratedPuzzle = generatedPuzzles[currentIndex];
-  const handleNext = () => {
-    if (currentIndex < totalPuzzles - 1) {
-      setCurrentIndex(i => i + 1);
-    } else {
-      onBack();
-    }
-  };
+  if (sessionDone) {
+    return (
+      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+        <button onClick={onBack} style={{ marginBottom: '1rem', backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px', padding: '0.5rem 1rem', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem' }}>← Back to Results</button>
+        <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '16px', padding: '2rem', textAlign: 'center' }}>
+          <div style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}>✅</div>
+          <div style={{ color: '#e2e8f0', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>Session Complete</div>
+          <div style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>Session Complete — {sessionSolved} puzzles solved, {sessionMasteredToday} mastered today</div>
+          <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{masteredCount}/{totalPuzzles} mastered · Daily goal reached ({dailyGoal})</div>
+          <button
+            onClick={() => {
+              setKeepGoing(true);
+              const seen = new Set<string>();
+              sessionSeenIdsRef.current = seen;
+              const { progress, nextId } = chooseNextPuzzle(masteryProgress, seen, true);
+              setMasteryProgress(progress);
+              setCurrentPuzzleId(nextId);
+            }}
+            style={{ backgroundColor: '#4ade80', color: '#0f0f1a', border: 'none', borderRadius: '10px', padding: '0.9rem 1.5rem', fontWeight: 'bold', cursor: 'pointer' }}
+          >
+            Session done — keep going anyway →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (allMastered) {
+    return (
+      <div style={{ maxWidth: '720px', margin: '0 auto', textAlign: 'center' }}>
+        <button onClick={onBack} style={{ marginBottom: '1rem', backgroundColor: 'transparent', border: '1px solid #2e3a5c', borderRadius: '8px', padding: '0.5rem 1rem', color: '#94a3b8', cursor: 'pointer', fontSize: '0.85rem' }}>← Back to Results</button>
+        <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '16px', padding: '2rem' }}>
+          <div style={{ fontSize: '2.25rem', marginBottom: '0.75rem' }}>🏆</div>
+          <div style={{ color: '#e2e8f0', fontSize: '1.4rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>All Custom Puzzles Mastered</div>
+          <div style={{ color: '#94a3b8' }}>{masteredCount}/{totalPuzzles} mastered. Analyze latest games for a fresh set.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <button
           onClick={onBack}
           style={{
@@ -1098,7 +1399,7 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           ← Back to Results
         </button>
         <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
-          Custom Queue · Puzzle {currentIndex + 1} of {totalPuzzles}
+          Custom Training · {masteredCount}/{totalPuzzles} mastered · {masteryProgress.dailySessionCompleted}/{dailyGoal} today
         </div>
         <div style={{
           backgroundColor: '#0d1f16',
@@ -1113,13 +1414,26 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <CustomQueuePuzzleBoard
-        puzzleId={currentId}
-        generatedPuzzle={currentGeneratedPuzzle}
-        onNext={handleNext}
-        puzzleIndex={currentIndex + 1}
-        totalPuzzles={totalPuzzles}
-      />
+      <div style={{ backgroundColor: '#1a1a2e', border: '1px solid #2e3a5c', borderRadius: '12px', padding: '1rem 1.25rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ color: '#e2e8f0', fontWeight: 'bold' }}>Custom Puzzle Mastery</div>
+          <div style={{ color: '#94a3b8', fontSize: '0.85rem' }}>{masteredCount}/{totalPuzzles} Mastered</div>
+        </div>
+        <div style={{ backgroundColor: '#0f0f1a', borderRadius: '999px', height: '8px', overflow: 'hidden', border: '1px solid #1e2a3a' }}>
+          <div style={{ height: '100%', width: `${Math.round((masteredCount / totalPuzzles) * 100)}%`, backgroundColor: '#4ade80', borderRadius: '999px' }} />
+        </div>
+      </div>
+
+      {currentPuzzle ? (
+        <CustomQueuePuzzleBoard
+          puzzleId={currentFallbackId}
+          generatedPuzzle={currentGeneratedPuzzle}
+          onNext={handleAdvance}
+          onResult={handlePuzzleResult}
+          puzzleIndex={masteryProgress.dailySessionCompleted + 1}
+          totalPuzzles={totalPuzzles}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1130,12 +1444,14 @@ function CustomQueuePuzzleBoard({
   puzzleId,
   generatedPuzzle,
   onNext,
+  onResult,
   puzzleIndex,
   totalPuzzles,
 }: {
   puzzleId?: string;
   generatedPuzzle?: GeneratedCustomPuzzle;
   onNext: () => void;
+  onResult: (puzzleId: string, correct: boolean, solveTimeMs: number) => void;
   puzzleIndex: number;
   totalPuzzles: number;
 }) {
@@ -1201,6 +1517,7 @@ function CustomQueuePuzzleBoard({
       puzzleIndex={puzzleIndex}
       totalPuzzles={totalPuzzles}
       onNext={onNext}
+      onResult={onResult}
     />
   );
 }
@@ -1219,6 +1536,7 @@ function CustomPuzzleSolver({
   puzzleIndex,
   totalPuzzles,
   onNext,
+  onResult,
 }: {
   fen: string;
   moves: string[];
@@ -1228,6 +1546,7 @@ function CustomPuzzleSolver({
   puzzleIndex: number;
   totalPuzzles: number;
   onNext: () => void;
+  onResult: (puzzleId: string, correct: boolean, solveTimeMs: number) => void;
 }) {
   // Apply first move (opponent's) to get actual puzzle start
   const { startFen, solution, firstTheme } = (() => {
@@ -1244,6 +1563,12 @@ function CustomPuzzleSolver({
 
   // Track if we've advanced to next puzzle already
   const advancedRef = useRef(false);
+  const startedAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    advancedRef.current = false;
+    startedAtRef.current = Date.now();
+  }, [puzzleId]);
 
   // Map to TacticBoard props
   const puzzleData: TacticBoardProps['puzzleData'] = {
@@ -1254,8 +1579,9 @@ function CustomPuzzleSolver({
   };
 
   const handleResult = useCallback((correct: boolean) => {
-    // TacticBoard handles the result; we don't need to do anything here
-  }, []);
+    const solveTimeMs = Date.now() - startedAtRef.current;
+    onResult(puzzleId, correct, solveTimeMs);
+  }, [onResult, puzzleId]);
 
   const handleAdvance = useCallback(() => {
     // Only advance once
@@ -1297,6 +1623,7 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
   const [statusMsg, setStatusMsg] = useState('');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<StoredAnalysis | null>(null);
+  const [masteryProgress, setMasteryProgress] = useState<CustomMasteryProgress>(defaultCustomMastery());
   const cancelRef = useRef(false);
 
   // Notify parent when training state changes
@@ -1314,6 +1641,7 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
         const customStored = JSON.parse(localStorage.getItem(CUSTOM_ANALYSIS_KEY) || 'null') as StoredAnalysis | null;
         if (customStored) {
           setAnalysis(customStored);
+          setMasteryProgress(syncDailySession(loadCustomMastery()));
           setPageState('results');
           const storedUsername = localStorage.getItem(CUSTOM_USERNAME_KEY) ?? '';
           const storedPlatform = (localStorage.getItem(CUSTOM_PLATFORM_KEY) ?? 'chesscom') as Platform;
@@ -1532,17 +1860,25 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
         generationMode,
       };
 
+      const freshMastery: CustomMasteryProgress = {
+        ...defaultCustomMastery(),
+        dailySessionDate: todayIso(),
+        currentSet: buildCustomMasterySet(generatedPuzzles, customQueue),
+      };
+
       try {
         localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
         localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
         localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
         localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
         localStorage.setItem(CUSTOM_PLATFORM_KEY, plat);
+        saveCustomMastery(freshMastery);
       } catch {
         // ignore storage errors
       }
 
       setAnalysis(result);
+      setMasteryProgress(freshMastery);
       setPageState('results');
     } catch (err) {
       setAnalysisError(err instanceof Error ? err.message : 'Failed to analyze games.');
@@ -1561,12 +1897,17 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
   }, []);
 
   const handleReanalyze = useCallback(() => {
+    if (typeof window !== 'undefined' && !window.confirm('This will reset your current mastery progress. Continue?')) {
+      return;
+    }
     setAnalysis(null);
+    setMasteryProgress(defaultCustomMastery());
     setPageState('connect');
     try {
       localStorage.removeItem(CUSTOM_ANALYSIS_KEY);
       localStorage.removeItem(CUSTOM_QUEUE_KEY);
       localStorage.removeItem(CUSTOM_GENERATED_PUZZLES_KEY);
+      localStorage.removeItem(CUSTOM_MASTERY_SET_KEY);
     } catch { /**/ }
   }, []);
 
@@ -1576,10 +1917,10 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
 
   const handleBackFromTraining = useCallback(() => {
     setTraining(false);
-    // Reload analysis in case queue was consumed
     try {
       const stored = JSON.parse(localStorage.getItem(CUSTOM_ANALYSIS_KEY) || 'null') as StoredAnalysis | null;
       if (stored) setAnalysis(stored);
+      setMasteryProgress(syncDailySession(loadCustomMastery()));
     } catch { /**/ }
   }, []);
 
@@ -1606,6 +1947,7 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
       {pageState === 'results' && analysis && (
         <ResultsState
           analysis={analysis}
+          masteryProgress={masteryProgress}
           onStartTraining={handleStartTraining}
           onReanalyze={handleReanalyze}
         />

@@ -41,7 +41,7 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const MASTERY_TIME_LIMIT_MS = 10000; // 10 seconds
+export const MASTERY_TIME_LIMIT_MS = 10000; // 10 seconds
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -387,7 +387,7 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
  * - Avoid puzzles already shown in the current session
  * Returns the index into set.puzzles, or -1 if all mastered.
  */
-function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, seenIds: Set<string> = new Set()): number {
+export function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, seenIds: Set<string> = new Set()): number {
   const candidates = set.puzzles
     .map((p, i) => ({ p, i }))
     .filter(({ p }) => p.masteryHits < 3 && p.id !== lastShownId && !seenIds.has(p.id));
