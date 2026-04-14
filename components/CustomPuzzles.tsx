@@ -1331,11 +1331,47 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
           try {
             const gameAnalysis: StoredGameAnalysis = JSON.parse(gameAnalysisRaw);
             
-            // Build missedByPattern from shared analysis
-            const missedByPattern = gameAnalysis.weaknesses?.reduce((acc, w) => {
-              acc[w.pattern] = w.count || 0;
-              return acc;
-            }, {} as Record<string, number>) || {};
+            // Validate that analysis has actual data
+            console.log('[CustomPuzzles] ctt_game_analysis:', {
+              gameCount: gameAnalysis.gameCount,
+              weaknesses: gameAnalysis.weaknesses?.length,
+              missedTactics: gameAnalysis.missedTactics?.length,
+            });
+
+            // If analysis is empty or stale (0 games), re-run fresh analysis instead of showing empty results
+            if (!gameAnalysis.gameCount || gameAnalysis.gameCount === 0 || !gameAnalysis.weaknesses?.length) {
+              console.log('[CustomPuzzles] Analysis data is empty/stale, re-running fresh analysis');
+              // Fall through to trigger fresh runAnalysis below
+              setUsername(storedUsername);
+              setPlatform(storedPlatform);
+              // We'll let the outer catch trigger, then the code below will re-run analysis
+              throw new Error('Empty analysis data - re-running');
+            }
+            
+            // Build missedByPattern from shared analysis - with fallback to missedTactics
+            let missedByPattern: Record<string, number> = {};
+            
+            // Primary: use weaknesses if available
+            if (gameAnalysis.weaknesses?.length) {
+              missedByPattern = gameAnalysis.weaknesses.reduce((acc, w) => {
+                acc[w.pattern] = w.count || 0;
+                return acc;
+              }, {} as Record<string, number>);
+            }
+            
+            // Fallback: build from missedTactics if weaknesses are empty
+            if (Object.keys(missedByPattern).length === 0 && gameAnalysis.missedTactics?.length) {
+              console.log('[CustomPuzzles] Using fallback: building missedByPattern from missedTactics');
+              for (const t of gameAnalysis.missedTactics) {
+                missedByPattern[t.pattern] = (missedByPattern[t.pattern] || 0) + 1;
+              }
+            }
+
+            // Only proceed if we have actual weakness data
+            if (Object.keys(missedByPattern).length === 0) {
+              console.log('[CustomPuzzles] No weakness data found even with fallback, re-running analysis');
+              throw new Error('No weakness data - re-running analysis');
+            }
 
             // Build custom queue from existing analysis
             let customQueue: string[] = [];
@@ -1372,8 +1408,27 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
             setPlatform(storedPlatform);
             setPageState('results');
             return;
-          } catch {
-            // If parsing or queue building fails, continue to connect screen
+          } catch (err) {
+            // If parsing, validation, or queue building fails, try fresh analysis if we have username
+            console.log('[CustomPuzzles] Analysis loading failed:', err instanceof Error ? err.message : err);
+            if (storedUsername) {
+              console.log('[CustomPuzzles] Attempting fresh analysis for', storedUsername);
+              // Trigger fresh analysis with stored credentials
+              setUsername(storedUsername);
+              setPlatform(storedPlatform);
+              setPageState('analyzing');
+              setStatusMsg('Analyzing your games...');
+              try {
+                await runGameAnalysis(storedUsername, storedPlatform);
+                // After analysis completes, reload
+                setTimeout(() => loadAnalysis(), 500);
+              } catch (analysisErr) {
+                console.error('[CustomPuzzles] Fresh analysis failed:', analysisErr);
+                // Fall through to connect screen
+              }
+              return;
+            }
+            // If no stored username, continue to connect screen
           }
         }
       } catch {
