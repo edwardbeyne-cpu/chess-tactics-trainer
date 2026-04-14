@@ -1498,11 +1498,17 @@ export default function CustomPuzzles() {
     let generationMode: 'stockfish' | 'fallback' = 'stockfish';
 
     try {
-      setStatusMsg(`Analyzing your games... Building custom puzzles from ${generationCandidates.length} missed tactics found... (0/${generationCandidates.length} complete)`);
+      setStatusMsg(`Loading Stockfish engine...`);
       const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
-      generatedPuzzles = await generateCustomPuzzlesFromMissedTactics(generationCandidates, {
+      
+      // Race Stockfish generation against a 30-second overall timeout
+      const timeoutPromise = new Promise<GeneratedCustomPuzzle[]>((_, reject) => 
+        setTimeout(() => reject(new Error('Stockfish generation timed out after 30s')), 30000)
+      );
+      
+      const generatePromise = generateCustomPuzzlesFromMissedTactics(generationCandidates, {
         onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
-          setStatusMsg(`Analyzing your games... Building custom puzzles from ${total} missed tactics found... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
+          setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
           try {
             localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
             localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
@@ -1511,7 +1517,10 @@ export default function CustomPuzzles() {
           }
         },
       });
-    } catch {
+      
+      generatedPuzzles = await Promise.race([generatePromise, timeoutPromise]);
+    } catch (err) {
+      console.warn('[CustomPuzzles] Stockfish generation failed, falling back:', err);
       generatedPuzzles = [];
     }
 
