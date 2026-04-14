@@ -412,17 +412,31 @@ async function fetchChesscomGames(username: string): Promise<Array<{ pgn: string
   const { archives } = await archivesRes.json() as { archives: string[] };
   if (!archives || archives.length === 0) throw new Error('No games found for this username');
 
-  // 2. Fetch most recent archive
-  const latestArchive = archives[archives.length - 1];
-  const gamesRes = await fetch(latestArchive, {
-    headers: { 'User-Agent': 'ChessTacticsTrainer/1.0' }
-  });
-  if (!gamesRes.ok) throw new Error(`Failed to fetch Chess.com games`);
-  const { games } = await gamesRes.json() as { games: ChesscomGame[] };
-  if (!games || games.length === 0) throw new Error('No games found in latest month');
+  // 2. Fetch games from multiple archives (up to 3 months) until we have MAX_GAMES
+  const allGames: ChesscomGame[] = [];
+  const maxArchivesToFetch = Math.min(3, archives.length); // Don't go back more than 3 months
 
-  // 3. Take last MAX_GAMES, determine player color
-  const sliced = games.slice(-MAX_GAMES);
+  // Iterate backwards through archives (most recent first)
+  for (let i = 0; i < maxArchivesToFetch && allGames.length < MAX_GAMES; i++) {
+    const archiveUrl = archives[archives.length - 1 - i];
+    try {
+      const gamesRes = await fetch(archiveUrl, {
+        headers: { 'User-Agent': 'ChessTacticsTrainer/1.0' }
+      });
+      if (!gamesRes.ok) continue; // Skip failed fetches, try next archive
+      const { games } = await gamesRes.json() as { games: ChesscomGame[] };
+      if (!games || games.length === 0) continue;
+      allGames.push(...games);
+    } catch {
+      // Skip failed fetches, continue to next archive
+      continue;
+    }
+  }
+
+  if (allGames.length === 0) throw new Error('No games found for this username');
+
+  // 3. Take most recent MAX_GAMES and determine player color
+  const sliced = allGames.slice(-MAX_GAMES);
   return sliced.map(g => ({
     pgn: g.pgn,
     playerColor: g.white.username.toLowerCase() === username.toLowerCase() ? 'white' : 'black',
