@@ -49,7 +49,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 function CustomPuzzlesContent() {
   return (
     <div>
-      <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+      {/* Hide header when user is actively training — maximizes board space */}
+      <div id="custom-puzzles-header" style={{ textAlign: "center", marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
           <h1 style={{ color: "#e2e8f0", fontSize: "1.8rem", fontWeight: "bold", margin: 0 }}>
             Custom Puzzles
@@ -82,7 +83,23 @@ function CustomPuzzlesContent() {
           </HelpModal>
         </div>
       </div>
-      <CustomPuzzles />
+
+      <style>{`
+        #custom-puzzles-header.training-active {
+          display: none;
+        }
+      `}</style>
+
+      <CustomPuzzles onTrainingStateChange={(training) => {
+        const header = document.getElementById('custom-puzzles-header');
+        if (header) {
+          if (training) {
+            header.classList.add('training-active');
+          } else {
+            header.classList.remove('training-active');
+          }
+        }
+      }} />
     </div>
   );
 }

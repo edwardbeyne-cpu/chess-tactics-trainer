@@ -1271,36 +1271,22 @@ function CustomPuzzleSolver({
   }, []);
 
   return (
-    <div>
-      {/* Header with queue context */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #2e3a5c' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div>
-            <div style={{ color: '#4ade80', fontSize: '0.85rem', fontWeight: 'bold' }}>🎯 Custom Queue</div>
-            <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>Puzzle {puzzleIndex} of {totalPuzzles}</div>
-          </div>
-          {puzzleId.startsWith('custom-') && (
-            <div style={{ color: '#a78bfa', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#0d2218', border: '1px solid #2d5f1f', borderRadius: '4px', padding: '0.25rem 0.6rem' }}>
-              ✨ Personalized
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* TacticBoard with full puzzle-solving UI */}
-      <TacticBoard
-        puzzleData={puzzleData}
-        onResult={handleResult}
-        onAdvance={handleAdvance}
-        onRetry={handleRetry}
-      />
-    </div>
+    <TacticBoard
+      puzzleData={puzzleData}
+      onResult={handleResult}
+      onAdvance={handleAdvance}
+      onRetry={handleRetry}
+    />
   );
 }
 
 // ── Main CustomPuzzles component ────────────────────────────────────────────
 
-export default function CustomPuzzles() {
+interface CustomPuzzlesProps {
+  onTrainingStateChange?: (training: boolean) => void;
+}
+
+export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesProps = {}) {
   const [isPro, setIsPro] = useState(false);
   const [pageState, setPageState] = useState<PageState>('connect');
   const [training, setTraining] = useState(false);
@@ -1312,6 +1298,11 @@ export default function CustomPuzzles() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<StoredAnalysis | null>(null);
   const cancelRef = useRef(false);
+
+  // Notify parent when training state changes
+  useEffect(() => {
+    onTrainingStateChange?.(training);
+  }, [training, onTrainingStateChange]);
 
   useEffect(() => {
     setIsPro(isProUser());
