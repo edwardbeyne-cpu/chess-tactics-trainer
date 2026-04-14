@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
+import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
 import UpgradeModal from "./UpgradeModal";
 // GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
 interface GeneratedCustomPuzzle {
@@ -1451,110 +1452,105 @@ export default function CustomPuzzles() {
     setTotalGames(0);
     setStatusMsg('Fetching your games...');
 
-    let games: Array<{ pgn: string; playerColor: string }> = [];
     try {
-      if (plat === 'chesscom') {
-        games = await fetchChesscomGames(uname);
-      } else {
-        games = await fetchLichessGames(uname);
+      // Use the shared game analysis pipeline from lib/game-analysis.ts
+      setStatusMsg('Analyzing your games...');
+      await runGameAnalysis(uname, plat);
+
+      if (cancelRef.current) return;
+
+      // Read the results from localStorage where runGameAnalysis wrote them
+      const gameAnalysisRaw = localStorage.getItem('ctt_game_analysis');
+      if (!gameAnalysisRaw) {
+        setAnalysisError('No analysis results. Please check your username and try again.');
+        return;
       }
+
+      const gameAnalysis: StoredGameAnalysis = JSON.parse(gameAnalysisRaw);
+      
+      // Build missedByPattern from weaknesses (patterns where user is weakest)
+      const missedByPattern = gameAnalysis.weaknesses?.reduce((acc, w) => {
+        acc[w.pattern] = w.count || 0;
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      if (cancelRef.current) return;
+
+      // Extract missed tactics for Stockfish generation (limit to first 12)
+      // Convert from the shared format to the custom puzzle format
+      const missedTactics = (gameAnalysis.missedTactics?.slice(0, 12) ?? []).map((mt, idx) => ({
+        pattern: mt.pattern,
+        fen: mt.fen,
+        moveNumber: mt.moveNumber ?? idx,
+        gameIndex: idx,
+      }));
+      
+      let generatedPuzzles: GeneratedCustomPuzzle[] = [];
+      let customQueue: string[] = [];
+      let generationMode: 'stockfish' | 'fallback' = 'stockfish';
+
+      try {
+        setStatusMsg(`Loading Stockfish engine...`);
+        const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
+        
+        // Race Stockfish generation against a 30-second overall timeout
+        const timeoutPromise = new Promise<GeneratedCustomPuzzle[]>((_, reject) => 
+          setTimeout(() => reject(new Error('Stockfish generation timed out after 30s')), 30000)
+        );
+        
+        const generatePromise = generateCustomPuzzlesFromMissedTactics(missedTactics, {
+          onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
+            setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
+            try {
+              localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
+              localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
+            } catch {
+              // ignore storage errors during progressive generation
+            }
+          },
+        });
+        
+        generatedPuzzles = await Promise.race([generatePromise, timeoutPromise]);
+      } catch (err) {
+        console.warn('[CustomPuzzles] Stockfish generation failed, falling back:', err);
+        generatedPuzzles = [];
+      }
+
+      if (generatedPuzzles.length === 0) {
+        generationMode = 'fallback';
+        setStatusMsg('Stockfish unavailable — building fallback custom queue...');
+        customQueue = await buildCustomQueue(missedByPattern);
+      } else {
+        customQueue = generatedPuzzles.map((p) => p.id);
+      }
+
+      const result: StoredAnalysis = {
+        missedByPattern,
+        total: gameAnalysis.gameCount || 0,
+        platform: plat,
+        username: uname,
+        analyzedAt: new Date().toISOString(),
+        customQueue,
+        generatedCount: generatedPuzzles.length,
+        generationMode,
+      };
+
+      try {
+        localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
+        localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
+        localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
+        localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
+        localStorage.setItem(CUSTOM_PLATFORM_KEY, plat);
+      } catch {
+        // ignore storage errors
+      }
+
+      setAnalysis(result);
+      setPageState('results');
     } catch (err) {
-      setAnalysisError(err instanceof Error ? err.message : 'Failed to fetch games.');
+      setAnalysisError(err instanceof Error ? err.message : 'Failed to analyze games.');
       return;
     }
-
-    if (cancelRef.current) return;
-
-    setTotalGames(games.length);
-    setStatusMsg(`Analyzing game 1 of ${games.length}...`);
-
-    const allMissed: MissedTactic[] = [];
-    for (let i = 0; i < games.length; i++) {
-      if (cancelRef.current) return;
-      setProgress(i + 1);
-      setStatusMsg(`Analyzing game ${i + 1} of ${games.length}...`);
-      const { pgn, playerColor } = games[i];
-      try {
-        const missed = analyzeGame(pgn, playerColor, i);
-        allMissed.push(...missed);
-      } catch {
-        // Skip failed games
-      }
-      // Small yield to keep UI responsive
-      await new Promise(r => setTimeout(r, 5));
-    }
-
-    if (cancelRef.current) return;
-
-    // Aggregate by pattern
-    const missedByPattern: Record<string, number> = {};
-    for (const tactic of allMissed) {
-      missedByPattern[tactic.pattern] = (missedByPattern[tactic.pattern] ?? 0) + 1;
-    }
-
-    const generationCandidates = allMissed.slice(0, 12);
-    let generatedPuzzles: GeneratedCustomPuzzle[] = [];
-    let customQueue: string[] = [];
-    let generationMode: 'stockfish' | 'fallback' = 'stockfish';
-
-    try {
-      setStatusMsg(`Loading Stockfish engine...`);
-      const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
-      
-      // Race Stockfish generation against a 30-second overall timeout
-      const timeoutPromise = new Promise<GeneratedCustomPuzzle[]>((_, reject) => 
-        setTimeout(() => reject(new Error('Stockfish generation timed out after 30s')), 30000)
-      );
-      
-      const generatePromise = generateCustomPuzzlesFromMissedTactics(generationCandidates, {
-        onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
-          setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
-          try {
-            localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
-            localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
-          } catch {
-            // ignore storage errors during progressive generation
-          }
-        },
-      });
-      
-      generatedPuzzles = await Promise.race([generatePromise, timeoutPromise]);
-    } catch (err) {
-      console.warn('[CustomPuzzles] Stockfish generation failed, falling back:', err);
-      generatedPuzzles = [];
-    }
-
-    if (generatedPuzzles.length === 0) {
-      generationMode = 'fallback';
-      setStatusMsg('Stockfish unavailable — building fallback custom queue...');
-      customQueue = await buildCustomQueue(missedByPattern);
-    } else {
-      customQueue = generatedPuzzles.map((p) => p.id);
-    }
-
-    const result: StoredAnalysis = {
-      missedByPattern,
-      total: games.length,
-      platform: plat,
-      username: uname,
-      analyzedAt: new Date().toISOString(),
-      customQueue,
-      generatedCount: generatedPuzzles.length,
-      generationMode,
-    };
-
-    try {
-      localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
-      localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
-      localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
-      localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
-      localStorage.setItem(CUSTOM_PLATFORM_KEY, plat);
-    } catch {
-      // ignore storage errors
-    }
-
-    setAnalysis(result);
-    setPageState('results');
   }, []);
 
   const handleConnect = useCallback((plat: Platform, uname: string) => {
