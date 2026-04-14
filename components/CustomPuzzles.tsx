@@ -782,9 +782,25 @@ function AnalyzingState({
         </div>
       ) : (
         <>
-          <div style={{ marginBottom: '1rem', color: '#94a3b8', fontSize: '0.95rem' }}>
-            {statusMsg}
+          <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+            {/* CSS Spinner */}
+            <div style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: '50%',
+              border: '2px solid #64748b',
+              borderTopColor: platformColor,
+              animation: 'spin 0.8s linear infinite',
+            }} />
+            <div style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
+              {statusMsg}
+            </div>
           </div>
+          <style>{`
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
           <div style={{
             backgroundColor: '#1a1a2e',
             borderRadius: '999px',
