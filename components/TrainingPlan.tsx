@@ -1353,15 +1353,20 @@ export default function TrainingPlan() {
               borderRadius: "16px",
               padding: "1.5rem",
             }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.25rem" }}>
-                <div style={sectionHeaderStyle}>Coach Analysis</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                <div>
+                  <div style={sectionHeaderStyle}>Tactics You're Missing</div>
+                  <div style={{ color: "#64748b", fontSize: "0.75rem", lineHeight: 1.4, marginTop: "0.35rem" }}>
+                    From your recent games — patterns you had available but didn't play
+                  </div>
+                </div>
                 {username && (
                   <button
                     onClick={() => {
                       const plat = (localStorage.getItem("ctt_custom_platform") as "chesscom" | "lichess") ?? "chesscom";
                       runGameAnalysis(username, plat).then(() => loadData());
                     }}
-                    style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.68rem", cursor: "pointer", padding: 0 }}
+                    style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.68rem", cursor: "pointer", padding: 0, flexShrink: 0, marginLeft: "1rem" }}
                   >
                     Refresh →
                   </button>
@@ -1373,10 +1378,12 @@ export default function TrainingPlan() {
                 try {
                   const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
                   if (raw) {
-                    const d = JSON.parse(raw) as { gameCount?: number; platform?: string };
+                    const d = JSON.parse(raw) as { gameCount?: number; platform?: string; totalGames?: number };
+                    const gameCount = d.gameCount || d.totalGames || 0;
+                    const platformName = d.platform === "lichess" ? "Lichess" : "Chess.com";
                     return (
                       <div style={{ color: "#64748b", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.75rem" }}>
-                        Based on your last {d.gameCount || 0} {d.platform === "lichess" ? "Lichess" : "Chess.com"} games
+                        {gameCount > 0 ? `Analyzed ${gameCount} ${platformName} games` : `Data from ${platformName}`}
                       </div>
                     );
                   }
@@ -1411,9 +1418,12 @@ export default function TrainingPlan() {
                       const pct = Math.round(missRate * 100);
                       const label = pattern.charAt(0).toUpperCase() + pattern.slice(1).toLowerCase();
                       return (
-                        <div key={pattern} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                          <div style={{ color: "#94a3b8", fontSize: "0.85rem", width: "110px", flexShrink: 0 }}>{label}</div>
-                          <div style={{ flex: 1, backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", border: "1px solid #1e2a3a", overflow: "hidden" }}>
+                        <div key={pattern} style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem", minWidth: "140px", flexShrink: 0 }}>
+                            <div style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: 600 }}>{label}</div>
+                            <div style={{ color: "#64748b", fontSize: "0.72rem" }}>missed {pct}% of the time</div>
+                          </div>
+                          <div style={{ flex: 1, backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", border: "1px solid #1e2a3a", overflow: "hidden", marginTop: "0.3rem" }}>
                             <div style={{ height: "100%", backgroundColor: "#f97316", borderRadius: "999px", width: `${pct}%`, transition: "width 0.4s ease" }} />
                           </div>
                           <div style={{ color: "#f97316", fontSize: "0.82rem", fontWeight: "bold", width: "36px", textAlign: "right", flexShrink: 0 }}>{pct}%</div>
