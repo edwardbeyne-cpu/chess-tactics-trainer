@@ -9,6 +9,11 @@ export default function BetaPage() {
 
   useEffect(() => {
     enableBetaAccess();
+    // Clear onboarding state so beta testers get the full first-time experience
+    try {
+      localStorage.removeItem("ctt_calibration_complete");
+      localStorage.removeItem("ctt_cct_onboarding_complete");
+    } catch { /* ignore */ }
   }, []);
 
   return (
@@ -56,7 +61,7 @@ export default function BetaPage() {
           <li>Your feedback shapes the product — tell us what works and what doesn&apos;t</li>
         </ul>
         <button
-          onClick={() => router.push("/app/training-plan")}
+          onClick={() => router.push("/app/calibration")}
           style={{
             backgroundColor: "#4ade80",
             color: "#0f0f1a",

@@ -10,6 +10,11 @@ export default function FreePage() {
     if (typeof window === "undefined") return;
     localStorage.setItem("ctt_sub_tier", "0");
     localStorage.setItem("ctt_beta_tester", "false");
+    // Clear onboarding state so free testers get the full first-time experience
+    try {
+      localStorage.removeItem("ctt_calibration_complete");
+      localStorage.removeItem("ctt_cct_onboarding_complete");
+    } catch { /* ignore */ }
   }, []);
 
   return (
@@ -51,7 +56,7 @@ export default function FreePage() {
           Pro and beta access are cleared on this device so you can test the full free-user experience, including paywalls and upgrade prompts.
         </p>
         <button
-          onClick={() => router.push("/app/training-plan")}
+          onClick={() => router.push("/app/calibration")}
           style={{
             backgroundColor: "#4ade80",
             color: "#0f0f1a",
