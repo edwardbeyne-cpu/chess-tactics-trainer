@@ -204,6 +204,14 @@ function syncDailySession(progress: CustomMasteryProgress): CustomMasteryProgres
   return { ...progress, dailySessionDate: today, dailySessionCompleted: 0, lastSessionSummary: null };
 }
 
+function hasMeaningfulCustomAnalysis(analysis: StoredAnalysis | null | undefined): boolean {
+  if (!analysis) return false;
+  const totalGames = analysis.total || 0;
+  const queueCount = analysis.customQueue?.length || 0;
+  const weaknessCount = Object.values(analysis.missedByPattern || {}).filter((count) => count > 0).length;
+  return totalGames > 0 && queueCount > 0 && weaknessCount > 0;
+}
+
 // ── Heuristic missed-tactic detection ──────────────────────────────────────
 // We can't run Stockfish in-browser cleanly, so we use Chess.js to detect
 // tactical patterns based on position characteristics.
@@ -989,6 +997,8 @@ function ResultsState({
   const masterySet = masteryProgress.currentSet;
   const masteredCount = getMasteredCount(masterySet);
   const totalCustomPuzzles = masterySet?.puzzles.length ?? customQueue.length;
+  const hasQueueData = totalCustomPuzzles > 0;
+  const hasPriorResults = total > 0 && totalMissed > 0;
   const allMastered = totalCustomPuzzles > 0 && masteredCount >= totalCustomPuzzles;
 
   return (
@@ -1079,77 +1089,83 @@ function ResultsState({
         </>
       )}
 
-      {/* Queue info */}
-      <div style={{
-        backgroundColor: '#0d1f16',
-        border: '1px solid #166534',
-        borderRadius: '12px',
-        padding: '1rem 1.5rem',
-        marginBottom: '1rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '1rem',
-        flexWrap: 'wrap',
-      }}>
-        <div>
-          <div style={{ color: '#4ade80', fontWeight: 'bold', marginBottom: '0.25rem' }}>
-            ✅ Custom Queue Ready — {totalCustomPuzzles} Puzzles
-          </div>
-          <div style={{ color: '#6b9e7a', fontSize: '0.85rem' }}>
-            Weighted by your miss frequency. Queue saved to your device.
-          </div>
-        </div>
-      </div>
-
-      <div style={{
-        backgroundColor: '#1a1a2e',
-        border: '1px solid #2e3a5c',
-        borderRadius: '12px',
-        padding: '1rem 1.5rem',
-        marginBottom: '1.5rem',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-          <div style={{ color: '#e2e8f0', fontWeight: 'bold' }}>Mastery Progress</div>
-          <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{masteredCount}/{totalCustomPuzzles} Mastered</div>
-        </div>
-        <div style={{ backgroundColor: '#0f0f1a', borderRadius: '999px', height: '10px', overflow: 'hidden', border: '1px solid #1e2a3a' }}>
+      {hasQueueData && (
+        <>
+          {/* Queue info */}
           <div style={{
-            height: '100%',
-            width: `${totalCustomPuzzles > 0 ? Math.round((masteredCount / totalCustomPuzzles) * 100) : 0}%`,
-            backgroundColor: '#4ade80',
-            borderRadius: '999px',
-            transition: 'width 0.4s ease',
-          }} />
-        </div>
-        <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.75rem' }}>
-          Custom Puzzles mastery is tracked separately from Training. Solve under 10 seconds to earn a mastery hit.
-        </div>
-      </div>
+            backgroundColor: '#0d1f16',
+            border: '1px solid #166534',
+            borderRadius: '12px',
+            padding: '1rem 1.5rem',
+            marginBottom: '1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            flexWrap: 'wrap',
+          }}>
+            <div>
+              <div style={{ color: '#4ade80', fontWeight: 'bold', marginBottom: '0.25rem' }}>
+                ✅ Custom Queue Ready — {totalCustomPuzzles} Puzzles
+              </div>
+              <div style={{ color: '#6b9e7a', fontSize: '0.85rem' }}>
+                Weighted by your miss frequency. Queue saved to your device.
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            backgroundColor: '#1a1a2e',
+            border: '1px solid #2e3a5c',
+            borderRadius: '12px',
+            padding: '1rem 1.5rem',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={{ color: '#e2e8f0', fontWeight: 'bold' }}>Mastery Progress</div>
+              <div style={{ color: '#94a3b8', fontSize: '0.9rem' }}>{masteredCount}/{totalCustomPuzzles} Mastered</div>
+            </div>
+            <div style={{ backgroundColor: '#0f0f1a', borderRadius: '999px', height: '10px', overflow: 'hidden', border: '1px solid #1e2a3a' }}>
+              <div style={{
+                height: '100%',
+                width: `${totalCustomPuzzles > 0 ? Math.round((masteredCount / totalCustomPuzzles) * 100) : 0}%`,
+                backgroundColor: '#4ade80',
+                borderRadius: '999px',
+                transition: 'width 0.4s ease',
+              }} />
+            </div>
+            <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '0.75rem' }}>
+              Custom Puzzles mastery is tracked separately from Training. Solve under 10 seconds to earn a mastery hit.
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-        <button
-          onClick={onStartTraining}
-          disabled={totalCustomPuzzles === 0 || allMastered}
-          style={{
-            flex: 1,
-            backgroundColor: totalCustomPuzzles > 0 && !allMastered ? '#4ade80' : '#1e3a2e',
-            color: totalCustomPuzzles > 0 && !allMastered ? '#0f0f1a' : '#2e5a3e',
-            border: 'none',
-            borderRadius: '10px',
-            padding: '1rem',
-            fontWeight: 'bold',
-            fontSize: '1rem',
-            cursor: totalCustomPuzzles > 0 && !allMastered ? 'pointer' : 'not-allowed',
-          }}
-        >
-          {allMastered
-            ? 'All Mastered! 🏆 Analyze Latest Games'
-            : masteredCount > 0
-              ? `Continue Training (${masteredCount}/${totalCustomPuzzles} Mastered)`
-              : '🎯 Start Custom Training'}
-        </button>
+        {hasQueueData && (
+          <button
+            onClick={onStartTraining}
+            disabled={allMastered}
+            style={{
+              flex: 1,
+              backgroundColor: !allMastered ? '#4ade80' : '#1e3a2e',
+              color: !allMastered ? '#0f0f1a' : '#2e5a3e',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '1rem',
+              fontWeight: 'bold',
+              fontSize: '1rem',
+              cursor: !allMastered ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {allMastered
+              ? 'All Mastered! 🏆 Analyze Latest Games'
+              : masteredCount > 0
+                ? `Continue Training (${masteredCount}/${totalCustomPuzzles} Mastered)`
+                : '🎯 Start Custom Training'}
+          </button>
+        )}
         <button
           onClick={onReanalyze}
           style={{
@@ -1164,12 +1180,12 @@ function ResultsState({
             minWidth: '140px',
           }}
         >
-          🔄 Analyze Latest Games
+          🔄 {hasPriorResults ? 'Analyze Latest Games' : 'Analyze My Games'}
         </button>
       </div>
 
       <p style={{ color: '#475569', fontSize: '0.75rem', marginTop: '1.5rem', textAlign: 'center' }}>
-        Analysis uses pattern-detection heuristics. For deeper analysis, Stockfish integration is on the roadmap.
+        Analysis powered by pattern detection from your real games.
       </p>
     </div>
   );
@@ -1649,7 +1665,7 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
       try {
         // First, check if Custom Puzzles already has cached analysis
         const customStored = JSON.parse(localStorage.getItem(CUSTOM_ANALYSIS_KEY) || 'null') as StoredAnalysis | null;
-        if (customStored) {
+        if (customStored && hasMeaningfulCustomAnalysis(customStored)) {
           setAnalysis(customStored);
           setMasteryProgress(syncDailySession(loadCustomMastery()));
           setPageState('results');
@@ -1741,11 +1757,13 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
               // ignore storage errors
             }
 
-            setAnalysis(result);
-            setUsername(storedUsername);
-            setPlatform(storedPlatform);
-            setPageState('results');
-            return;
+            if (hasMeaningfulCustomAnalysis(result)) {
+              setAnalysis(result);
+              setUsername(storedUsername);
+              setPlatform(storedPlatform);
+              setPageState('results');
+              return;
+            }
           } catch (err) {
             // If parsing, validation, or queue building fails, try fresh analysis if we have username
             console.log('[CustomPuzzles] Analysis loading failed:', err instanceof Error ? err.message : err);
