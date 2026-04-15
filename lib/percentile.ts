@@ -1,3 +1,5 @@
+import { isBetaTester } from "@/lib/beta";
+
 /**
  * Sprint 8 — Per-Pattern Percentile Rankings
  *
@@ -173,6 +175,7 @@ export type SubscriptionTier = "free" | "improver" | "serious";
 
 export function getSubscriptionTier(): SubscriptionTier {
   if (typeof window === "undefined") return "free";
+  if (isBetaTester()) return "serious";
   const status = localStorage.getItem("subscription_status");
   if (status === "active") return "serious"; // legacy flag — treat as serious
   if (status === "improver") return "improver";

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { isBetaTester } from "@/lib/beta";
 import {
   LineChart,
   Line,
@@ -29,6 +30,7 @@ type Tier = "free" | "improver" | "serious";
 
 function getTier(): Tier {
   if (typeof window === "undefined") return "free";
+  if (isBetaTester()) return "serious";
   const status = localStorage.getItem("subscription_status");
   // Sprint 4 set this to 'active' on Stripe success
   // For Sprint 7, treat 'active' as 'serious' (simplest approach until plan tiers are explicit)

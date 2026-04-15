@@ -1,3 +1,5 @@
+import { isBetaTester } from "@/lib/beta";
+
 // localStorage keys
 const ATTEMPTS_KEY = "ctt_attempts";
 const SRS_KEY = "ctt_srs";
@@ -1696,6 +1698,7 @@ export function savePieceStyle(style: PieceStyle): void {
 
 export function getSubscriptionTier(): number {
   if (typeof window === "undefined") return 0;
+  if (isBetaTester()) return 2;
   const tier = localStorage.getItem("ctt_sub_tier");
   if (tier === "2") return 2;  // Serious
   if (tier === "1") return 1;  // Improver
