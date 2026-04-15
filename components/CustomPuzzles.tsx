@@ -1620,7 +1620,10 @@ interface CustomPuzzlesProps {
 }
 
 export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesProps = {}) {
-  const [isPro, setIsPro] = useState(false);
+  const [isPro, setIsPro] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return isProUser();
+  });
   const [pageState, setPageState] = useState<PageState>('connect');
   const [training, setTraining] = useState(false);
   const [platform, setPlatform] = useState<Platform>('chesscom');
