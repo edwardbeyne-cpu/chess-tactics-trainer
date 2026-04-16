@@ -987,7 +987,17 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         >
           {connectingPhase === "analyzing" ? (
             <>
-              <span style={{ display: "inline-block", animation: "spin 1s linear infinite", marginRight: "0.5rem" }}>⟳</span>
+              <span style={{
+                display: "inline-block",
+                width: "16px",
+                height: "16px",
+                border: "2px solid rgba(255,255,255,0.3)",
+                borderTopColor: "#fff",
+                borderRadius: "50%",
+                animation: "spin 0.8s linear infinite",
+                marginRight: "0.5rem",
+                verticalAlign: "middle",
+              }} />
               Analyzing your games… hang tight
               <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
             </>
