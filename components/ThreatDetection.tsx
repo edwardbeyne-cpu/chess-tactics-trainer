@@ -30,10 +30,14 @@ export default function ThreatDetection() {
 
   useEffect(() => {
     buildThreatDetectionSession(10).then((next) => {
+      console.log("[ThreatDetection] Session built:", next.length, "puzzles");
       setSession(next);
       setBoardFen(next[0]?.defenderFen || "");
       setIdentifiedFlags(new Array(next.length).fill(false));
       setDefenseFlags(new Array(next.length).fill(false));
+    }).catch((err) => {
+      console.error("[ThreatDetection] Failed to build session:", err);
+      setSession([]);
     });
   }, []);
 

@@ -64,31 +64,40 @@ function normalizeTheme(themes: string[]): string {
 }
 
 function buildThreatPuzzle(raw: LichessCachedPuzzle): ThreatPuzzle | null {
+  if (!raw.moves || raw.moves.length < 2) return null;
   const attackerMove = raw.moves[0];
   if (!attackerMove) return null;
 
-  const defenderFen = toggleFenTurn(raw.fen);
-  const defenderChess = new Chess(defenderFen);
-  const legal = defenderChess.moves({ verbose: true });
-  if (!legal.length) return null;
+  // The puzzle FEN is the position where the attacker is about to play.
+  // We play the attacker's first move to show what happened,
+  // then the defender must find the correct response (moves[1]).
+  const chess = new Chess(raw.fen);
+  const attackerSide = chess.turn(); // 'w' or 'b'
+  
+  // Play the attacker's move
+  try {
+    chess.move({ from: attackerMove.slice(0, 2), to: attackerMove.slice(2, 4), promotion: attackerMove[4] });
+  } catch {
+    return null;
+  }
 
-  const acceptableDefenseMoves = legal
-    .map((move) => `${move.from}${move.to}${move.promotion || ""}`)
-    .filter((uci) => {
-      const defenseBoard = new Chess(defenderFen);
-      try {
-        defenseBoard.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
-      } catch {
-        return false;
-      }
-      const attackerBoard = new Chess(defenseBoard.fen());
-      const attackerLegal = attackerBoard.moves({ verbose: true }).map((m) => `${m.from}${m.to}${m.promotion || ""}`);
-      return !attackerLegal.includes(attackerMove);
-    });
+  // Now it's the defender's turn — this is the position we show
+  const defenderFen = chess.fen();
+  const defenderSide = chess.turn();
+  
+  // The correct defense is moves[1] (the puzzle's expected response)
+  const correctDefense = raw.moves[1];
+  if (!correctDefense) return null;
 
-  if (!acceptableDefenseMoves.length) return null;
+  // Verify the defense is legal
+  try {
+    const test = new Chess(defenderFen);
+    test.move({ from: correctDefense.slice(0, 2), to: correctDefense.slice(2, 4), promotion: correctDefense[4] });
+  } catch {
+    return null;
+  }
 
-  const defenderTurn = defenderFen.split(" ")[1] === "w" ? "white" : "black";
+  const orientation = defenderSide === "w" ? "white" : "black";
   return {
     id: `threat-${raw.id}`,
     sourcePuzzleId: raw.id,
@@ -98,8 +107,8 @@ function buildThreatPuzzle(raw: LichessCachedPuzzle): ThreatPuzzle | null {
     defenderFen,
     rating: raw.rating,
     themes: raw.themes,
-    orientation: defenderTurn,
-    acceptableDefenseMoves,
+    orientation,
+    acceptableDefenseMoves: [correctDefense],
   };
 }
 
