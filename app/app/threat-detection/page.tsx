@@ -10,7 +10,7 @@ export default function ThreatDetectionPage() {
           Threat Detection
         </h1>
         <p style={{ color: "#94a3b8", fontSize: "0.92rem", margin: "0 auto", maxWidth: "620px", lineHeight: 1.6 }}>
-          Train your defensive vision — spot your opponent&apos;s tactic before it lands, then find the move that shuts it down.
+          Your opponent is planning a tactic. Find the move that prevents it before it happens.
         </p>
       </div>
       <ThreatDetection />

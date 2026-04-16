@@ -21,6 +21,8 @@ interface ChessBoardProps {
   showCoordinates?: boolean;
   animateMove?: boolean;  // Whether to animate piece movement
   mode?: "training" | "identification";  // training: moves stay moved; identification: snaps back (CCT)
+  customArrows?: { from: string; to: string; brush?: string }[];  // Programmatic arrows (e.g. threat visualization)
+  onArrowDrawn?: (from: string, to: string) => void;  // Called when user right-click drags an arrow
 }
 
 function getMovable(fen: string, draggable: boolean) {
@@ -84,6 +86,8 @@ export default function ChessBoard({
   showCoordinates = true,
   animateMove = true,
   mode = "training",  // "training": moves stay moved; "identification": snaps back (CCT)
+  customArrows,
+  onArrowDrawn,
 }: ChessBoardProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cgRef = useRef<Api | null>(null);
@@ -93,6 +97,8 @@ export default function ChessBoard({
   const highlights = useRef<SquareHighlight[]>([]);
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;
+  const onArrowDrawnRef = useRef(onArrowDrawn);
+  onArrowDrawnRef.current = onArrowDrawn;
   const fenRef = useRef(fen);
   fenRef.current = fen;
   const draggableRef = useRef(draggable);
@@ -277,6 +283,7 @@ export default function ChessBoard({
         } else {
           arrows.current.push({ from: startSquare, to: endSquare, color });
         }
+        onArrowDrawnRef.current?.(startSquare, endSquare);
       }
 
       applyAnnotations();
@@ -314,8 +321,31 @@ export default function ChessBoard({
       },
       lastMove: lastMove as [Key, Key] | undefined,
       animation: { enabled: !disableAnimation, duration: 250 },
+      draggable: { enabled: draggable },
     });
   }, [fen, draggable, lastMove, orientation, disableAnimation]);
+
+  // Apply programmatic arrows (autoShapes don't interfere with user-drawn annotations)
+  useEffect(() => {
+    if (!cgRef.current) return;
+    if (!customArrows || customArrows.length === 0) {
+      cgRef.current.setAutoShapes([]);
+      return;
+    }
+    cgRef.current.setAutoShapes(
+      customArrows.map((a) => ({
+        orig: a.from as Key,
+        dest: a.to as Key,
+        brush: a.brush || "red",
+      }))
+    );
+    // Re-apply movable after setting auto shapes to ensure dragging still works
+    const movable = getMovable(fenRef.current, draggableRef.current);
+    cgRef.current.set({
+      movable: { free: false, color: movable.color, dests: movable.dests },
+      draggable: { enabled: draggableRef.current },
+    });
+  }, [customArrows]);
 
   return (
     <div

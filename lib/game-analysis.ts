@@ -489,6 +489,127 @@ export async function fetchRecentGames(
     .filter((x): x is GameResult => x !== null && Boolean(x.pgn));
 }
 
+// ── Threat Detection puzzle builder ──────────────────────────────────────────
+//
+// Walks the opponent's turns in each game. When the opponent had a fork/pin/skewer
+// AND actually played it, record the position BEFORE their move as a defensive puzzle.
+// This gives real "your opponent just played a tactic — defend it" positions from your games.
+
+export const THREAT_DETECTION_GAMES_KEY = "ctt_threat_detection_game_puzzles";
+
+export interface GameThreatPuzzle {
+  id: string;
+  fen: string;           // position before opponent's threatening move (where player must defend)
+  defenderFen: string;   // position after opponent's move (what player sees)
+  attackerMove: string;  // UCI of the opponent's threatening move
+  threatType: string;    // "fork" | "pin" | "skewer"
+  orientation: "white" | "black";  // player's perspective
+  acceptableDefenseMoves: string[];  // moves[next] from the game = what was actually played
+  rating?: number;
+  source: string;        // "chesscom:username"
+}
+
+const THREAT_PATTERNS = ["fork", "pin", "skewer"] as const;
+type ThreatPattern = (typeof THREAT_PATTERNS)[number];
+
+function detectOpponentThreat(fen: string): { pattern: ThreatPattern; moves: string[] } | null {
+  const tactics = findAvailableTactics(fen);
+  for (const pattern of THREAT_PATTERNS) {
+    if (tactics.has(pattern as TacticLabel)) {
+      return { pattern: pattern as ThreatPattern, moves: tactics.get(pattern as TacticLabel)! };
+    }
+  }
+  // Also check pin and skewer via their dedicated functions (findAvailableTactics misses some)
+  if (hasPinOpportunity(fen)) return { pattern: "pin", moves: [] };
+  if (hasSkewerOpportunity(fen)) return { pattern: "skewer", moves: [] };
+  return null;
+}
+
+export function buildThreatDetectionPuzzlesFromGames(
+  games: Array<{ pgn: string; playerColor: string }>,
+  source: string
+): GameThreatPuzzle[] {
+  const results: GameThreatPuzzle[] = [];
+  let puzzleIdx = 0;
+
+  for (const { pgn, playerColor } of games) {
+    const moves = parsePgnMoves(pgn);
+    const isWhite = playerColor.toLowerCase().startsWith("w");
+    const c = new Chess();
+    let moveNum = 0;
+
+    for (let i = 0; i < moves.length - 1; i++) {
+      const uci = moves[i];
+      moveNum++;
+      const fenBeforeMove = c.fen();
+
+      let moved;
+      try {
+        moved = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length === 5 ? uci[4] : undefined });
+      } catch { break; }
+
+      if (moveNum <= 12) continue; // skip opening
+
+      const wasOpponentTurn = isWhite
+        ? fenBeforeMove.split(" ")[1] === "b"
+        : fenBeforeMove.split(" ")[1] === "w";
+
+      if (!wasOpponentTurn) continue;
+
+      // Check if opponent had a fork/pin/skewer AND the move they played is one of those threats
+      const threat = detectOpponentThreat(fenBeforeMove);
+      if (!threat) continue;
+
+      // The move they played must be the threatening move (not just any move)
+      // If findAvailableTactics gave us specific moves, verify the played move is one of them
+      if (threat.moves.length > 0) {
+        const normalize = (u: string) => u.replace(/undefined$/, "").toLowerCase();
+        const playedNorm = normalize(uci);
+        if (!threat.moves.some((m) => normalize(m) === playedNorm)) continue;
+      }
+
+      // The defending player's next move is what was actually played
+      const nextMove = moves[i + 1];
+      if (!nextMove) continue;
+
+      const defenderFen = c.fen();
+      const defenderSide = defenderFen.split(" ")[1];
+
+      // Validate the defensive move is legal and purely defensive (quiet move)
+      try {
+        const defTest = new Chess(defenderFen);
+        const defResult = defTest.move({
+          from: nextMove.slice(0, 2),
+          to: nextMove.slice(2, 4),
+          promotion: nextMove.length === 5 ? nextMove[4] : undefined,
+        });
+        if (!defResult) continue;
+        // Accept any legal move — it came from a real game, so it's a real defensive response
+        // (unlike the Lichess inversion approach, we don't need to filter captures/checks)
+      } catch { continue; }
+
+      const orientation: "white" | "black" = isWhite ? "white" : "black";
+
+      results.push({
+        id: `threat-game-${puzzleIdx++}`,
+        fen: fenBeforeMove,
+        defenderFen,
+        attackerMove: uci,
+        threatType: threat.pattern,
+        orientation,
+        acceptableDefenseMoves: [nextMove],
+        source,
+      });
+
+      if (results.length >= 200) break;
+    }
+    if (results.length >= 200) break;
+  }
+
+  console.log(`[CTT] Built ${results.length} threat detection puzzles from games`);
+  return results;
+}
+
 export async function runGameAnalysis(
   username: string,
   platform: Platform = "chesscom"
@@ -544,6 +665,14 @@ export async function runGameAnalysis(
     localStorage.setItem("ctt_custom_platform", platform);
     localStorage.setItem("ctt_custom_username", username);
     localStorage.setItem("ctt_analysis_status", "done");
+
+    // Build threat detection puzzles from the user's games
+    const threatPuzzles = buildThreatDetectionPuzzlesFromGames(
+      games,
+      `${platform}:${username}`
+    );
+    dbg(`[CTT] Built ${threatPuzzles.length} threat detection puzzles from games`);
+    localStorage.setItem(THREAT_DETECTION_GAMES_KEY, JSON.stringify(threatPuzzles));
 
     if (missed.length > 0) {
       const queue = missed.slice(0, 50).map((m, i) => ({
