@@ -1605,7 +1605,27 @@ export default function TrainingPlan() {
             </>)}
           </div>
 
-
+        <div style={{
+          backgroundColor: "#2a160d",
+          border: "1px solid #fb923c",
+          borderRadius: "16px",
+          padding: "1.25rem 1.5rem",
+          marginTop: "1rem",
+          marginBottom: "1rem",
+        }}>
+          <div style={{ color: "#fb923c", fontWeight: 800, fontSize: "0.82rem", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+            Threat Detection
+          </div>
+          <div style={{ color: "#e2e8f0", fontSize: "1.05rem", fontWeight: 800, marginBottom: "0.35rem" }}>
+            Train your defensive vision
+          </div>
+          <div style={{ color: "#cbd5e1", fontSize: "0.88rem", lineHeight: 1.65, marginBottom: "0.9rem", maxWidth: "720px" }}>
+            Spot your opponent&apos;s tactic before it lands. Identify the threat, then find the move that prevents it.
+          </div>
+          <a href="/app/threat-detection" style={{ backgroundColor: "#fb923c", color: "#fff", padding: "0.65rem 1.2rem", borderRadius: "8px", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none", display: "inline-block" }}>
+            Start Threat Detection →
+          </a>
+        </div>
 
         {/* CCT Training Card — shown for new_to_cct and cct_inconsistent users who haven't completed first session */}
         {(() => {
