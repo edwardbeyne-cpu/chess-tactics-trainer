@@ -1,5 +1,5 @@
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import { getTacticsRatingData } from "@/lib/storage";
 
 export const THREAT_DETECTION_PROGRESS_KEY = "ctt_threat_detection_progress";
@@ -112,7 +112,8 @@ function shuffle<T>(items: T[]): T[] {
   return arr;
 }
 
-export function buildThreatDetectionSession(count = 10): ThreatPuzzle[] {
+export async function buildThreatDetectionSession(count = 10): Promise<ThreatPuzzle[]> {
+  const { cachedPuzzlesByTheme } = await import("@/data/lichess-puzzles");
   const rating = getTacticsRatingData().tacticsRating || 800;
   const pool: ThreatPuzzle[] = [];
 

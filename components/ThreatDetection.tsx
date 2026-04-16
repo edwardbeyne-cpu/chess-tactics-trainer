@@ -29,11 +29,12 @@ export default function ThreatDetection() {
   const progress = useMemo(() => loadThreatDetectionProgress(), []);
 
   useEffect(() => {
-    const next = buildThreatDetectionSession(10);
-    setSession(next);
-    setBoardFen(next[0]?.defenderFen || "");
-    setIdentifiedFlags(new Array(next.length).fill(false));
-    setDefenseFlags(new Array(next.length).fill(false));
+    buildThreatDetectionSession(10).then((next) => {
+      setSession(next);
+      setBoardFen(next[0]?.defenderFen || "");
+      setIdentifiedFlags(new Array(next.length).fill(false));
+      setDefenseFlags(new Array(next.length).fill(false));
+    });
   }, []);
 
   const puzzle = session[idx];
@@ -115,13 +116,14 @@ export default function ThreatDetection() {
           </div>
         </div>
         <button onClick={() => {
-          const next = buildThreatDetectionSession(10);
+          buildThreatDetectionSession(10).then((next) => {
           setSession(next);
           setIdx(0);
           setIdentifiedFlags(new Array(next.length).fill(false));
           setDefenseFlags(new Array(next.length).fill(false));
           setBoardFen(next[0]?.defenderFen || "");
           setPhase("identify");
+          });
         }} style={{ backgroundColor: "#fb923c", color: "#fff", border: "none", borderRadius: "10px", padding: "0.9rem 1.25rem", fontWeight: 800, cursor: "pointer" }}>
           Start Another Threat Session →
         </button>
