@@ -6,11 +6,11 @@
  * redirect.
  */
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 
-export default function AuthCallback() {
+function AuthCallbackInner() {
   const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -49,16 +49,18 @@ export default function AuthCallback() {
   }, [params, router]);
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "column",
-      gap: "1rem",
-      color: "#e2e8f0",
-      backgroundColor: "#0f0f1a",
-    }}>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: "1rem",
+        color: "#e2e8f0",
+        backgroundColor: "#0f0f1a",
+      }}
+    >
       {error ? (
         <>
           <div style={{ fontSize: "1.1rem", color: "#fca5a5" }}>Sign-in failed</div>
@@ -93,5 +95,13 @@ export default function AuthCallback() {
         </>
       )}
     </div>
+  );
+}
+
+export default function AuthCallback() {
+  return (
+    <Suspense>
+      <AuthCallbackInner />
+    </Suspense>
   );
 }

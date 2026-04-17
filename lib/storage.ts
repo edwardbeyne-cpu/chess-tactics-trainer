@@ -1,4 +1,5 @@
 import { isBetaTester } from "@/lib/beta";
+import { syncedSetItem } from "@/lib/sync";
 
 // localStorage keys
 const ATTEMPTS_KEY = "ctt_attempts";
@@ -101,7 +102,7 @@ export function recordAttempt(
   if (typeof window === "undefined") return;
   const attempts = getAttempts();
   attempts.push({ puzzleId, outcome, timestamp: new Date().toISOString() });
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+  syncedSetItem(ATTEMPTS_KEY, JSON.stringify(attempts));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ export function getSRS(): SRSData {
 
 function saveSRS(srs: SRSData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SRS_KEY, JSON.stringify(srs));
+  syncedSetItem(SRS_KEY, JSON.stringify(srs));
 }
 
 function addDays(days: number): string {
@@ -194,7 +195,7 @@ export function recordSM2Attempt(attempt: SM2Attempt): void {
   if (typeof window === "undefined") return;
   const attempts = getSM2Attempts();
   attempts.push(attempt);
-  localStorage.setItem(SM2_ATTEMPTS_KEY, JSON.stringify(attempts));
+  syncedSetItem(SM2_ATTEMPTS_KEY, JSON.stringify(attempts));
 }
 
 export function getSM2StateMap(): SM2StateMap {
@@ -598,7 +599,7 @@ export function addXP(xp: number): { newLevel: number; leveledUp: boolean; total
   const newLevel = getLevelFromXP(newTotalXP);
   const leveledUp = newLevel > current.level;
   const newData: XPData = { totalXP: newTotalXP, level: newLevel };
-  localStorage.setItem(XP_KEY, JSON.stringify(newData));
+  syncedSetItem(XP_KEY, JSON.stringify(newData));
   return { newLevel, leveledUp, totalXP: newTotalXP };
 }
 
@@ -645,7 +646,7 @@ export function getStreakData(): StreakData {
 
 function saveStreakData(data: StreakData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STREAK_KEY, JSON.stringify(data));
+  syncedSetItem(STREAK_KEY, JSON.stringify(data));
 }
 
 export function getTodayKey(): string {
@@ -922,7 +923,7 @@ export function getUserSettings(): UserSettings {
 
 export function saveUserSettings(settings: UserSettings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  syncedSetItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1677,7 +1678,7 @@ export function getBoardTheme(): BoardTheme {
 
 export function saveBoardTheme(theme: BoardTheme): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(BOARD_THEME_KEY, theme);
+  syncedSetItem(BOARD_THEME_KEY, theme);
 }
 
 export function getPieceStyle(): PieceStyle {
@@ -1687,7 +1688,7 @@ export function getPieceStyle(): PieceStyle {
 
 export function savePieceStyle(style: PieceStyle): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PIECE_STYLE_KEY, style);
+  syncedSetItem(PIECE_STYLE_KEY, style);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1915,7 +1916,7 @@ export function getDailyTargetSettings(): DailyTargetSettings {
 
 export function saveDailyTargetSettings(settings: DailyTargetSettings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DAILY_TARGET_KEY, JSON.stringify(settings));
+  syncedSetItem(DAILY_TARGET_KEY, JSON.stringify(settings));
 }
 
 /**
@@ -1945,7 +1946,7 @@ export function getHabitData(): HabitData {
 
 function saveHabitData(data: HabitData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DAILY_HABIT_KEY, JSON.stringify(data));
+  syncedSetItem(DAILY_HABIT_KEY, JSON.stringify(data));
 }
 
 /**
@@ -2064,7 +2065,7 @@ export function getPuzzleProgressMap(): Record<string, PuzzleProgress> {
 
 function savePuzzleProgressMap(map: Record<string, PuzzleProgress>): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PUZZLE_PROGRESS_KEY, JSON.stringify(map));
+  syncedSetItem(PUZZLE_PROGRESS_KEY, JSON.stringify(map));
 }
 
 export function getPuzzleProgress(puzzleId: string): PuzzleProgress | null {
@@ -2132,7 +2133,7 @@ export function getPatternRatings(): Record<string, PatternRating> {
 
 function savePatternRatings(ratings: Record<string, PatternRating>): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PATTERN_RATINGS_KEY, JSON.stringify(ratings));
+  syncedSetItem(PATTERN_RATINGS_KEY, JSON.stringify(ratings));
 }
 
 export function getPatternRating(theme: string): PatternRating {
@@ -2337,7 +2338,7 @@ export function recordActivityToday(): void {
     log.push(today);
     // Keep last 90 days
     const trimmed = log.slice(-90);
-    localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
+    syncedSetItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
   }
 }
 
@@ -2438,7 +2439,7 @@ export function earnNewAchievement(id: NewAchievementId): { earned: boolean; ach
     if (stored.some((s) => s.id === id)) return { earned: false, achievement: null };
     const now = new Date().toISOString();
     stored.push({ id, earnedDate: now });
-    localStorage.setItem(NEW_ACHIEVEMENTS_KEY, JSON.stringify(stored));
+    syncedSetItem(NEW_ACHIEVEMENTS_KEY, JSON.stringify(stored));
     const def = NEW_ACHIEVEMENT_DEFINITIONS.find((d) => d.id === id);
     if (!def) return { earned: false, achievement: null };
     return { earned: true, achievement: { ...def, earned: true, earnedDate: now } };
@@ -2911,7 +2912,7 @@ export function saveTimeStandard(seconds: number): void {
   try {
     const settings = JSON.parse(localStorage.getItem("ctt_puzzle_settings") || "{}");
     settings.timeStandard = seconds;
-    localStorage.setItem("ctt_puzzle_settings", JSON.stringify(settings));
+    syncedSetItem("ctt_puzzle_settings", JSON.stringify(settings));
   } catch {
     // ignore
   }
@@ -3000,7 +3001,7 @@ export function saveCalcGymSession(_session: CalcGymSession): void {
   try {
     const sessions = getCalcGymSessions();
     sessions.unshift(_session);
-    localStorage.setItem("ctt_calc_gym_sessions", JSON.stringify(sessions.slice(0, 50)));
+    syncedSetItem("ctt_calc_gym_sessions", JSON.stringify(sessions.slice(0, 50)));
   } catch { /* ignore */ }
 }
 export function getCalcGymSessions(): CalcGymSession[] {
@@ -3291,7 +3292,7 @@ export function getMasteryProgress(): MasteryProgress {
 
 export function saveMasteryProgress(p: MasteryProgress): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(MASTERY_PROGRESS_KEY, JSON.stringify(p));
+  syncedSetItem(MASTERY_PROGRESS_KEY, JSON.stringify(p));
 }
 
 export function getCurrentMasterySet(): MasterySet | null {

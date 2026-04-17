@@ -23,6 +23,15 @@ import {
 } from "react";
 import type { User, Session } from "@supabase/supabase-js";
 import { getSupabase, type Profile } from "@/lib/supabase";
+import {
+  fetchCloudData,
+  needsMigrationPrompt,
+  applyMergeStrategy,
+  pullOnFocus,
+  type CloudRow,
+  type MergeStrategy,
+} from "@/lib/sync";
+import MigrationPromptModal from "@/components/MigrationPromptModal";
 
 interface AuthContextValue {
   user: User | null;
@@ -46,6 +55,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Migration state: set when sign-in reveals data on both sides
+  const [pendingMigration, setPendingMigration] = useState<{
+    cloudRows: CloudRow[];
+    userId: string;
+  } | null>(null);
 
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = getSupabase();
@@ -111,14 +125,30 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       if (u) {
         const p = await fetchProfile(u.id);
         setProfile(p);
+        // Sync cloud data on sign-in
+        if (_event === "SIGNED_IN") {
+          const cloudRows = await fetchCloudData(u.id);
+          if (needsMigrationPrompt(cloudRows)) {
+            setPendingMigration({ cloudRows, userId: u.id });
+          } else {
+            // Auto-merge (no conflict)
+            await applyMergeStrategy("merge", cloudRows, u.id);
+          }
+        }
       } else {
         setProfile(null);
+        setPendingMigration(null);
       }
     });
+
+    // Pull on window focus
+    const handleFocus = () => { pullOnFocus(); };
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       active = false;
       sub.subscription.unsubscribe();
+      window.removeEventListener("focus", handleFocus);
     };
   }, [fetchProfile]);
 
@@ -158,5 +188,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     [user, profile, loading, signInWithGoogle, signInWithEmail, signOut, refreshProfile]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const resolveMigration = useCallback(async (strategy: MergeStrategy) => {
+    if (!pendingMigration) return;
+    await applyMergeStrategy(strategy, pendingMigration.cloudRows, pendingMigration.userId);
+    setPendingMigration(null);
+  }, [pendingMigration]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {pendingMigration && (
+        <MigrationPromptModal onChoose={resolveMigration} />
+      )}
+    </AuthContext.Provider>
+  );
 }
