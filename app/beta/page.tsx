@@ -3,17 +3,35 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { enableBetaAccess } from "@/lib/beta";
+import { getSupabase } from "@/lib/supabase";
+import { getSyncUserId } from "@/lib/sync";
 
 export default function BetaPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Always set localStorage so it works for anonymous users too
     enableBetaAccess();
     // Clear onboarding state so beta testers get the full first-time experience
     try {
       localStorage.removeItem("ctt_calibration_complete");
       localStorage.removeItem("ctt_cct_onboarding_complete");
     } catch { /* ignore */ }
+
+    // If signed in, persist beta + Pro to the profile row
+    const userId = getSyncUserId();
+    if (userId) {
+      const supabase = getSupabase();
+      if (supabase) {
+        supabase
+          .from("profiles")
+          .update({ beta_tester: true, sub_tier: 2, last_seen_at: new Date().toISOString() })
+          .eq("id", userId)
+          .then(({ error }) => {
+            if (error) console.warn("Failed to update beta profile:", error.message);
+          });
+      }
+    }
   }, []);
 
   return (

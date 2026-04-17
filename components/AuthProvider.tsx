@@ -83,6 +83,22 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     setProfile(p);
   }, [user, fetchProfile]);
 
+  // Mirror profile tier/beta to localStorage so existing getSubscriptionTier()
+  // and isBetaTester() calls continue to work without modification.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!profile) return;
+    try {
+      localStorage.setItem("ctt_sub_tier", String(profile.sub_tier ?? 0));
+      localStorage.setItem("ctt_beta_tester", profile.beta_tester ? "true" : "false");
+      // Fire storage event so any mounted components re-check entitlement
+      window.dispatchEvent(new Event("storage"));
+      window.dispatchEvent(new Event("ctt-subscription-updated"));
+    } catch {
+      // ignore
+    }
+  }, [profile]);
+
   // Initial session check + listen for auth changes
   useEffect(() => {
     const supabase = getSupabase();

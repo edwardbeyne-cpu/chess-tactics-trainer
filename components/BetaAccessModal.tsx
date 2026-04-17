@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { applyBetaCode, dismissBetaPrompt } from "@/lib/auth";
+import { getSupabase } from "@/lib/supabase";
+import { getSyncUserId } from "@/lib/sync";
 
 interface BetaAccessModalProps {
   onClose: () => void;
@@ -23,6 +25,18 @@ export default function BetaAccessModal({ onClose, onApplied }: BetaAccessModalP
     if (!ok) {
       setError("Invalid code. Try again.");
       return;
+    }
+    // If signed in, persist beta + Pro to the profile row
+    const userId = getSyncUserId();
+    if (userId) {
+      const supabase = getSupabase();
+      if (supabase) {
+        supabase
+          .from("profiles")
+          .update({ beta_tester: true, sub_tier: 2, last_seen_at: new Date().toISOString() })
+          .eq("id", userId)
+          .then(() => {/* fire and forget */});
+      }
     }
     setSuccess(true);
     setTimeout(() => {
