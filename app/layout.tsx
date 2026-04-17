@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import RewardfulScript from "@/components/RewardfulScript";
+import AuthProvider from "@/components/AuthProvider";
 
 export const viewport: Viewport = {
   themeColor: "#0f1a2e",
@@ -41,7 +42,7 @@ export default function RootLayout({
         <RewardfulScript />
       </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "#0f0f1a", color: "#e2e8f0", fontFamily: "Inter, system-ui, -apple-system, sans-serif" }}>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

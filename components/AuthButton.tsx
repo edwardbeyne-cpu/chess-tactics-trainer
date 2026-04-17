@@ -1,129 +1,63 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import {
-  getUserProfile,
-  signOut,
-  handleGoogleSignIn,
-  type UserProfile,
-  type GoogleCredentialResponse,
-} from "@/lib/auth";
+import { useState } from "react";
+import { useAuth } from "./AuthProvider";
+import SignInModal from "./SignInModal";
 import BetaAccessModal from "./BetaAccessModal";
 
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
-
-
 export default function AuthButton() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const { user, profile, loading, signOut } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showSignIn, setShowSignIn] = useState(false);
   const [showBetaModal, setShowBetaModal] = useState(false);
-  const [gisReady, setGisReady] = useState(false);
 
-  useEffect(() => {
-    setProfile(getUserProfile());
-  }, []);
+  if (loading) return null;
 
-  const onGoogleSignIn = useCallback((response: GoogleCredentialResponse) => {
-    const newProfile = handleGoogleSignIn(response.credential);
-    if (newProfile) {
-      setProfile(newProfile);
-      // Show beta prompt if not yet entered
-      if (!newProfile.betaCodeEntered && !newProfile.betaPromptDismissed) {
-        setShowBetaModal(true);
-      }
-    }
-  }, []);
-
-  // Load Google Identity Services
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-
-    const scriptId = "gis-script";
-    if (document.getElementById(scriptId)) {
-      setGisReady(true);
-      return;
-    }
-
-    window.googleSignInCallback = onGoogleSignIn;
-
-    const script = document.createElement("script");
-    script.id = scriptId;
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (window.google && GOOGLE_CLIENT_ID) {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: onGoogleSignIn,
-          auto_select: false,
-        });
-      }
-      setGisReady(true);
-    };
-    document.head.appendChild(script);
-  }, [onGoogleSignIn]);
-
-  const handleSignIn = () => {
-    if (!GOOGLE_CLIENT_ID) {
-      alert("Google OAuth not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID.");
-      return;
-    }
-    if (window.google) {
-      window.google.accounts.id.prompt();
-    }
-  };
-
-  const handleSignOut = () => {
-    signOut();
-    setProfile(null);
-    setShowDropdown(false);
-  };
-
-  if (!profile) {
-    // Hide sign-in button if Google OAuth not configured
-    if (!GOOGLE_CLIENT_ID) return null;
+  // ── Signed out ────────────────────────────────────────────────────────────
+  if (!user) {
     return (
       <>
         <button
-          onClick={handleSignIn}
-          disabled={!gisReady && !!GOOGLE_CLIENT_ID}
+          onClick={() => setShowSignIn(true)}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "0.5rem",
+            gap: "0.4rem",
             backgroundColor: "transparent",
             border: "1px solid #2e3a5c",
             borderRadius: "8px",
             color: "#e2e8f0",
-            padding: "0.4rem 0.75rem",
+            padding: "0.4rem 0.85rem",
             fontSize: "0.85rem",
             cursor: "pointer",
             flexShrink: 0,
             transition: "border-color 0.15s",
+            fontWeight: 500,
           }}
           onMouseOver={(e) => (e.currentTarget.style.borderColor = "#4ade80")}
           onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2e3a5c")}
         >
-          <svg width="16" height="16" viewBox="0 0 18 18" fill="none">
-            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-            <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
-            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-          </svg>
-          Sign in with Google
+          Sign in
         </button>
-        {showBetaModal && (
-          <BetaAccessModal
-            onClose={() => setShowBetaModal(false)}
-            onApplied={() => {
-              setShowBetaModal(false);
-            }}
-          />
-        )}
+        {showSignIn && <SignInModal onClose={() => setShowSignIn(false)} />}
       </>
     );
   }
+
+  // ── Signed in ─────────────────────────────────────────────────────────────
+  const displayName =
+    profile?.display_name ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.email?.split("@")[0] ||
+    "Account";
+  const picture = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+  const isBeta = !!profile?.beta_tester;
+
+  const handleSignOut = async () => {
+    setShowDropdown(false);
+    await signOut();
+  };
 
   return (
     <>
@@ -141,17 +75,45 @@ export default function AuthButton() {
             cursor: "pointer",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={profile.picture}
-            alt={profile.name}
-            width={28}
-            height={28}
-            style={{ borderRadius: "50%", display: "block" }}
-            referrerPolicy="no-referrer"
-          />
-          <span style={{ color: "#e2e8f0", fontSize: "0.85rem", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {profile.name.split(" ")[0]}
+          {picture ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={picture}
+              alt={displayName}
+              width={28}
+              height={28}
+              style={{ borderRadius: "50%", display: "block" }}
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                backgroundColor: "#4ade80",
+                color: "#0f0f1a",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "0.85rem",
+                fontWeight: "bold",
+              }}
+            >
+              {displayName[0]?.toUpperCase()}
+            </div>
+          )}
+          <span
+            style={{
+              color: "#e2e8f0",
+              fontSize: "0.85rem",
+              maxWidth: "120px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {displayName.split(" ")[0]}
           </span>
           <span style={{ color: "#64748b", fontSize: "0.7rem" }}>▾</span>
         </button>
@@ -166,26 +128,31 @@ export default function AuthButton() {
               border: "1px solid #2e3a5c",
               borderRadius: "10px",
               padding: "0.5rem 0",
-              minWidth: "200px",
+              minWidth: "220px",
               zIndex: 100,
               boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
             }}
           >
             <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #2e3a5c" }}>
-              <div style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: "bold" }}>{profile.name}</div>
-              <div style={{ color: "#64748b", fontSize: "0.75rem" }}>{profile.email}</div>
-              {profile.betaCodeEntered && (
+              <div style={{ color: "#e2e8f0", fontSize: "0.9rem", fontWeight: "bold" }}>{displayName}</div>
+              <div style={{ color: "#64748b", fontSize: "0.75rem", overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
+              {isBeta && (
                 <div style={{ color: "#4ade80", fontSize: "0.7rem", marginTop: "0.25rem" }}>✓ Beta Pro access</div>
               )}
             </div>
-            {!profile.betaCodeEntered && (
+            {!isBeta && (
               <button
                 onClick={() => { setShowDropdown(false); setShowBetaModal(true); }}
                 style={{
-                  display: "block", width: "100%", textAlign: "left",
-                  backgroundColor: "transparent", border: "none",
-                  color: "#f59e0b", padding: "0.6rem 1rem",
-                  fontSize: "0.85rem", cursor: "pointer",
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  color: "#f59e0b",
+                  padding: "0.6rem 1rem",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
                 }}
               >
                 🔑 Enter beta code
@@ -194,10 +161,15 @@ export default function AuthButton() {
             <button
               onClick={handleSignOut}
               style={{
-                display: "block", width: "100%", textAlign: "left",
-                backgroundColor: "transparent", border: "none",
-                color: "#94a3b8", padding: "0.6rem 1rem",
-                fontSize: "0.85rem", cursor: "pointer",
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                backgroundColor: "transparent",
+                border: "none",
+                color: "#94a3b8",
+                padding: "0.6rem 1rem",
+                fontSize: "0.85rem",
+                cursor: "pointer",
               }}
             >
               Sign out
@@ -209,10 +181,7 @@ export default function AuthButton() {
       {showBetaModal && (
         <BetaAccessModal
           onClose={() => setShowBetaModal(false)}
-          onApplied={() => {
-            setShowBetaModal(false);
-            setProfile(getUserProfile());
-          }}
+          onApplied={() => setShowBetaModal(false)}
         />
       )}
     </>

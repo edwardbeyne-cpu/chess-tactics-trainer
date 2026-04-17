@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@stripe/stripe-js": "^9.0.0",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.103.3",
     "chess.js": "^1.4.0",
     "chessground": "^9.2.1",
     "html2canvas": "^1.4.1",
