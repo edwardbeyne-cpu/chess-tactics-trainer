@@ -34,10 +34,8 @@ export default function AppNav() {
         padding: "0 1rem",
         display: "flex",
         alignItems: "center",
-        gap: "1rem",
-        overflowX: "auto",
-        WebkitOverflowScrolling: "touch",
-        scrollbarWidth: "none",
+        gap: "0.5rem",
+        overflow: "hidden",
       }}
     >
       <style>{`nav::-webkit-scrollbar { display: none; }`}</style>
@@ -59,7 +57,7 @@ export default function AppNav() {
         ♔ <span style={{ color: "#4ade80" }}>Chess</span>Trainer
       </Link>
 
-      <div style={{ display: "flex", gap: "0.1rem", flex: 1, overflowX: "auto", scrollbarWidth: "none" }}>
+      <div style={{ display: "flex", gap: "0.1rem", flex: 1, minWidth: 0, overflowX: "auto", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
         {mainNavItems.map((item) => {
           const isActive =
             pathname === item.href ||
