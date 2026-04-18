@@ -25,6 +25,7 @@ export interface ThreatPuzzle {
   themes: string[];
   orientation: "white" | "black";  // defender's perspective
   acceptableDefenseMoves: string[];
+  isQuiet?: boolean;          // Ghost Tactic mode: position has no tactic; correct answer is "no tactic"
 }
 
 export interface ThreatDetectionSessionSummary {
@@ -43,6 +44,11 @@ export interface ThreatDetectionProgress {
   byPattern: Record<string, { seen: number; identified: number; defended: number }>;
   lastSession?: ThreatDetectionSessionSummary;
   sessionHistory?: ThreatDetectionSessionSummary[];
+  // Ghost Tactic mode stats (Phase 5): trigger detection on quiet vs. tactical positions
+  ghostSeen?: number;         // total quiet positions shown
+  ghostCorrect?: number;      // correctly identified as "no tactic"
+  ghostFalsePositive?: number;// said "tactic" on a quiet position
+  ghostFalseNegative?: number;// said "no tactic" on a tactical position
 }
 
 const EMPTY_PROGRESS: ThreatDetectionProgress = {
@@ -130,6 +136,53 @@ function buildThreatPuzzle(raw: LichessCachedPuzzle): ThreatPuzzle | null {
   };
 }
 
+/**
+ * Ghost Tactic: build a "quiet" puzzle from a Lichess raw puzzle.
+ *
+ * Strategy: play the entire puzzle solution (all moves) — by the time the
+ * tactical sequence has fully resolved the position is typically positional
+ * with no immediate forced motif. The user's task here is to recognize that
+ * no tactic exists.
+ *
+ * This is heuristic — some post-solution positions still have follow-up
+ * threats. We accept some noise: false positives on the "tactic detected"
+ * side just teach extra vigilance, which is the goal.
+ */
+function buildQuietPuzzle(raw: LichessCachedPuzzle): ThreatPuzzle | null {
+  if (!raw.moves || raw.moves.length < 2) return null;
+  const chess = new Chess(raw.fen);
+  // Play the whole solution forward
+  for (const move of raw.moves) {
+    try {
+      chess.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move[4] });
+    } catch {
+      return null;
+    }
+  }
+  // Skip if final position is checkmate/stalemate — those are not "quiet"
+  if (chess.isGameOver()) return null;
+  // Skip if side to move is in check — that's a forcing position
+  if (chess.inCheck()) return null;
+
+  const finalFen = chess.fen();
+  const orientation: "white" | "black" = chess.turn() === "w" ? "white" : "black";
+
+  return {
+    id: `quiet-${raw.id}`,
+    sourcePuzzleId: raw.id,
+    threatType: "quiet",
+    attackerMove: "",
+    tacticMove: "",
+    fen: finalFen,
+    defenderFen: finalFen,
+    rating: raw.rating,
+    themes: raw.themes,
+    orientation,
+    acceptableDefenseMoves: [],
+    isQuiet: true,
+  };
+}
+
 function shuffle<T>(items: T[]): T[] {
   const arr = [...items];
   for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -178,19 +231,42 @@ export async function buildThreatDetectionSession(count = 10): Promise<ThreatPuz
   // Show the position BEFORE the blunder, user must find a move that prevents the tactic.
   const { cachedPuzzlesByTheme } = await import("@/data/lichess-puzzles");
 
+  // Ghost Tactic: ~30% of session is quiet positions (no tactic) — trains the trigger.
+  const quietTarget = Math.max(1, Math.floor(count * 0.3));
+  const tacticTarget = count - quietTarget;
+
   // Try progressively wider rating windows until we have enough puzzles
   for (const ratingWindow of [250, 400, 600, 99999]) {
-    const pool: ThreatPuzzle[] = [];
+    const tacticPool: ThreatPuzzle[] = [];
+    const quietPool: ThreatPuzzle[] = [];
+    const tacticIds = new Set<string>();
     for (const theme of CORE_THEMES) {
       const candidates = cachedPuzzlesByTheme[theme] || [];
       for (const raw of candidates) {
         if (Math.abs(raw.rating - rating) > ratingWindow) continue;
         const threat = buildThreatPuzzle(raw);
-        if (threat) pool.push(threat);
-        if (pool.length >= count * 4) break;
+        if (threat) { tacticPool.push(threat); tacticIds.add(raw.id); }
+        if (tacticPool.length >= tacticTarget * 4) break;
       }
     }
-    if (pool.length >= count) return shuffle(pool).slice(0, count);
+    // Quiet pool: source from puzzles NOT used as tactic puzzles to avoid duplicate FENs
+    for (const theme of CORE_THEMES) {
+      const candidates = cachedPuzzlesByTheme[theme] || [];
+      for (const raw of candidates) {
+        if (tacticIds.has(raw.id)) continue;
+        if (Math.abs(raw.rating - rating) > ratingWindow) continue;
+        const quiet = buildQuietPuzzle(raw);
+        if (quiet) quietPool.push(quiet);
+        if (quietPool.length >= quietTarget * 4) break;
+      }
+    }
+    if (tacticPool.length >= tacticTarget && quietPool.length >= quietTarget) {
+      const tactics = shuffle(tacticPool).slice(0, tacticTarget);
+      const quiets = shuffle(quietPool).slice(0, quietTarget);
+      return shuffle([...tactics, ...quiets]);
+    }
+    // Fallback: if not enough quiet puzzles, fill with tactics
+    if (tacticPool.length >= count) return shuffle(tacticPool).slice(0, count);
   }
 
   return [];
@@ -375,13 +451,32 @@ export function recordThreatDetectionSession(
     sessionHistory: history,
   };
 
+  // Ghost Tactic stats: track quiet vs. tactical identification accuracy
+  let ghostSeen = progress.ghostSeen ?? 0;
+  let ghostCorrect = progress.ghostCorrect ?? 0;
+  let ghostFalsePositive = progress.ghostFalsePositive ?? 0;
+  let ghostFalseNegative = progress.ghostFalseNegative ?? 0;
+
   puzzles.forEach((puzzle, idx) => {
+    if (puzzle.isQuiet) {
+      // Quiet puzzles don't go in byPattern
+      ghostSeen += 1;
+      if (identifiedCorrectFlags[idx]) ghostCorrect += 1;
+      else ghostFalsePositive += 1; // user said "tactic" on a quiet position
+      return;
+    }
     const bucket = next.byPattern[puzzle.threatType] || { seen: 0, identified: 0, defended: 0 };
     bucket.seen += 1;
     if (identifiedCorrectFlags[idx]) bucket.identified += 1;
+    else ghostFalseNegative += 1; // user said "no tactic" on a tactical position
     if (defenseCorrectFlags[idx]) bucket.defended += 1;
     next.byPattern[puzzle.threatType] = bucket;
   });
+
+  next.ghostSeen = ghostSeen;
+  next.ghostCorrect = ghostCorrect;
+  next.ghostFalsePositive = ghostFalsePositive;
+  next.ghostFalseNegative = ghostFalseNegative;
 
   saveThreatDetectionProgress(next);
 }

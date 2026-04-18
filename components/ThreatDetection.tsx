@@ -14,13 +14,15 @@ import {
   type ThreatPuzzle,
 } from "@/lib/threat-puzzles";
 
-type Phase = "solve" | "feedback" | "summary";
+type Phase = "identify" | "solve" | "feedback" | "summary";
 
 export default function ThreatDetection() {
   const [session, setSession] = useState<ThreatPuzzle[]>([]);
   const [idx, setIdx] = useState(0);
-  const [phase, setPhase] = useState<Phase>("solve");
+  const [phase, setPhase] = useState<Phase>("identify");
   const [defenseFlags, setDefenseFlags] = useState<boolean[]>([]);
+  // Ghost Tactic: true if user correctly identified whether a tactic exists
+  const [identifyFlags, setIdentifyFlags] = useState<boolean[]>([]);
   const [defenseMessage, setDefenseMessage] = useState("");
   const [boardFen, setBoardFen] = useState("");
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
@@ -47,6 +49,7 @@ export default function ThreatDetection() {
       setBoardFen(next[0]?.fen || "");
       setLastMove(undefined); // no last move — position is before the blunder
       setDefenseFlags(new Array(next.length).fill(false));
+      setIdentifyFlags(new Array(next.length).fill(false));
       setSolveTimes(new Array(next.length).fill(0));
       if (timerLimit > 0) { setTimeLeft(timerLimit); setTimerActive(true); }
       puzzleStartRef.current = Date.now();
@@ -64,7 +67,7 @@ export default function ThreatDetection() {
     setBoardFen(puzzle.fen);
     setLastMove(undefined); // no last move — position is before the blunder
     setDefenseMessage("");
-    setPhase("solve");
+    setPhase("identify");
     setDefenseHintUsed(false);
     setShowThreatArrow(false);
     setEvaluatingDefense(false);
@@ -113,18 +116,65 @@ export default function ThreatDetection() {
   const goNext = () => {
     if (idx >= session.length - 1) {
       const nonZero = solveTimes.filter((t) => t > 0);
+      const identifiedCount = identifyFlags.filter(Boolean).length;
       recordThreatDetectionSession({
         completedAt: new Date().toISOString(),
-        identifiedCorrect: defendedCorrect, // no separate identify step
+        identifiedCorrect: identifiedCount,
         defendedCorrect,
         total: session.length,
         avgSolveTimeMs: nonZero.length > 0 ? Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length) : undefined,
-      }, session, defenseFlags, defenseFlags);
+      }, session, identifyFlags, defenseFlags);
       setPhase("summary");
       setTimerActive(false);
       return;
     }
     setIdx((n) => n + 1);
+  };
+
+  // Ghost Tactic: handle the identify step
+  const handleIdentify = (userSaysTactic: boolean) => {
+    const correct = userSaysTactic !== !!puzzle.isQuiet; // tactic puzzle wants "tactic"; quiet wants "no tactic"
+    const nextIdentify = [...identifyFlags];
+    nextIdentify[idx] = correct;
+    setIdentifyFlags(nextIdentify);
+
+    if (puzzle.isQuiet) {
+      // No defense step on quiet puzzles — go straight to feedback.
+      const nextDef = [...defenseFlags];
+      nextDef[idx] = correct; // for stats: count quiet identification as "defense" too
+      setDefenseFlags(nextDef);
+      setDefenseMessage(correct
+        ? "Correct — this position is quiet. No tactic for either side."
+        : "Actually quiet — no tactic exists here. Calculation discipline beats reflex.");
+      setTimerActive(false);
+      setPhase("feedback");
+      const elapsed = Date.now() - puzzleStartRef.current;
+      const nextTimes = [...solveTimes];
+      nextTimes[idx] = elapsed;
+      setSolveTimes(nextTimes);
+      return;
+    }
+
+    // Tactical puzzle
+    if (!correct) {
+      // User said "no tactic" but there IS one — wrong on identification, no chance to defend
+      const nextDef = [...defenseFlags];
+      nextDef[idx] = false;
+      setDefenseFlags(nextDef);
+      setDefenseMessage(`There IS a ${THREAT_LABELS[puzzle.threatType] || puzzle.threatType} here. Always look for the opponent's threat before assuming the position is safe.`);
+      setShowThreatArrow(true);
+      setTimerActive(false);
+      setPhase("feedback");
+      const elapsed = Date.now() - puzzleStartRef.current;
+      const nextTimes = [...solveTimes];
+      nextTimes[idx] = elapsed;
+      setSolveTimes(nextTimes);
+      return;
+    }
+
+    // Correct identification of tactic — proceed to defense
+    setPhase("solve");
+    puzzleStartRef.current = Date.now(); // reset timing for the defense portion
   };
 
   const handleDefenseMove = (from: string, to: string) => {
@@ -160,7 +210,7 @@ export default function ThreatDetection() {
 
   // Arrows: yellow = the blunder move, red = the tactic that follows it
   // Show during both "solve" (after hint) and "feedback" phases
-  const threatArrows = showThreatArrow
+  const threatArrows = showThreatArrow && !puzzle.isQuiet && puzzle.attackerMove
     ? [
         { from: puzzle.attackerMove.slice(0, 2), to: puzzle.attackerMove.slice(2, 4), brush: "yellow" },
         ...(threatContinuationMove
@@ -215,6 +265,24 @@ export default function ThreatDetection() {
           </div>
         </div>
 
+        {(updatedProgress.ghostSeen ?? 0) > 0 && (
+          <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "14px", padding: "1.25rem" }}>
+            <div style={{ color: "#94a3b8", marginBottom: "0.5rem", fontWeight: 700 }}>👁 Tactical Trigger (Ghost Tactic)</div>
+            <div style={{ color: "#64748b", fontSize: "0.78rem", lineHeight: 1.5, marginBottom: "0.75rem" }}>
+              How well you detect <em>whether</em> a tactic exists — the in-game vigilance puzzles can&apos;t train.
+            </div>
+            <div style={{ color: "#e2e8f0", lineHeight: 1.8, fontSize: "0.9rem" }}>
+              Quiet positions correctly identified: <span style={{ color: "#86efac", fontWeight: 700 }}>{updatedProgress.ghostCorrect ?? 0}</span> / {updatedProgress.ghostSeen}
+              {(updatedProgress.ghostFalsePositive ?? 0) > 0 && (
+                <><br /><span style={{ color: "#fca5a5" }}>False alarms (saw tactic that wasn&apos;t there): {updatedProgress.ghostFalsePositive}</span></>
+              )}
+              {(updatedProgress.ghostFalseNegative ?? 0) > 0 && (
+                <><br /><span style={{ color: "#fca5a5" }}>Missed threats (said quiet when tactic existed): {updatedProgress.ghostFalseNegative}</span></>
+              )}
+            </div>
+          </div>
+        )}
+
         {(updatedProgress.sessionHistory ?? []).length > 1 && (
           <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "14px", padding: "1.25rem" }}>
             <div style={{ color: "#94a3b8", marginBottom: "0.75rem", fontWeight: 700 }}>Recent sessions</div>
@@ -238,10 +306,11 @@ export default function ThreatDetection() {
             setSession(next);
             setIdx(0);
             setDefenseFlags(new Array(next.length).fill(false));
+            setIdentifyFlags(new Array(next.length).fill(false));
             setSolveTimes(new Array(next.length).fill(0));
             setBoardFen(next[0]?.fen || "");
             setLastMove(undefined);
-            setPhase("solve");
+            setPhase("identify");
             puzzleStartRef.current = Date.now();
             if (timerLimit > 0) { setTimeLeft(timerLimit); setTimerActive(true); }
           });
@@ -271,8 +340,40 @@ export default function ThreatDetection() {
           transition: "border-color 0.2s",
         }}>
           <div style={{ color: "#475569", fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.4rem" }}>
-            ⚠️ Prevent the Threat
+            {phase === "identify" ? "👁 Tactical Trigger" : "⚠️ Prevent the Threat"}
           </div>
+
+          {phase === "identify" && (
+            <>
+              <div style={{ color: "#64748b", fontSize: "0.72rem", marginBottom: "0.7rem", lineHeight: 1.45 }}>
+                Is there a tactic here for the opponent? Some positions are quiet — pick the right answer before defending.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginTop: "auto" }}>
+                <button
+                  onClick={() => handleIdentify(true)}
+                  style={{
+                    backgroundColor: "#1f1320", border: "1px solid #5c2e3a",
+                    borderRadius: "6px", padding: "0.55rem 0.6rem",
+                    color: "#fca5a5", fontSize: "0.82rem", fontWeight: 600,
+                    cursor: "pointer", textAlign: "left", width: "100%",
+                  }}
+                >
+                  🎯 Tactic — defend
+                </button>
+                <button
+                  onClick={() => handleIdentify(false)}
+                  style={{
+                    backgroundColor: "#0d2419", border: "1px solid #1e5c3a",
+                    borderRadius: "6px", padding: "0.55rem 0.6rem",
+                    color: "#86efac", fontSize: "0.82rem", fontWeight: 600,
+                    cursor: "pointer", textAlign: "left", width: "100%",
+                  }}
+                >
+                  ✋ No tactic — quiet
+                </button>
+              </div>
+            </>
+          )}
 
           {phase === "solve" && !evaluatingDefense && (
             <>
@@ -417,7 +518,8 @@ export default function ThreatDetection() {
                   onClick={() => {
                     setBoardFen(puzzle.fen);
                     setLastMove(undefined);
-                    setPhase("solve");
+                    // Quiet puzzles + identify-only failures route back to the identify step
+                    setPhase(puzzle.isQuiet || !identifyFlags[idx] ? "identify" : "solve");
                     setDefenseMessage("");
                     setDefenseHintUsed(false);
                     setShowThreatArrow(false);
