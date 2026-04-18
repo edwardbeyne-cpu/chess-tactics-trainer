@@ -13,6 +13,7 @@ import BetaSessionFeedbackPrompt from "./BetaSessionFeedbackPrompt";
 import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { loadPuzzleSettings, savePuzzleSettings, type PuzzleSettings } from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import { defaultFSRSState, inferFSRSFromLegacy, pickFromFeed } from "@/lib/fsrs";
 import {
   getAllPatternStats,
   getMasteryProgress,
@@ -402,10 +403,31 @@ export function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, s
     return last;
   }
 
-  // Group by masteryHits, pick from lowest group
+  // FSRS-aware selection: 70% due / 20% new / 10% edge-of-ability.
+  // Falls back to lowest-mastery-hit grouping when FSRS bucketing yields nothing.
+  const pool = candidates.map(({ p, i }) => ({
+    item: i,
+    fsrs: ensureFSRSStateInline(p),
+    difficulty: p.fsrs?.difficulty ?? 5,
+    mastered: false,
+  }));
+  const result = pickFromFeed(pool);
+  if (result) return result.index;
+
+  // Fallback: original lowest-hits grouping
   const minHits = Math.min(...candidates.map(({ p }) => p.masteryHits));
   const group = candidates.filter(({ p }) => p.masteryHits === minHits);
   return group[Math.floor(Math.random() * group.length)].i;
+}
+
+// Inline FSRS state initialization for the picker (avoids storage save side-effect).
+function ensureFSRSStateInline(p: MasteryPuzzle): import("@/lib/fsrs").FSRSState {
+  if (p.fsrs) return p.fsrs;
+  const next = p.attempts > 0
+    ? inferFSRSFromLegacy(p)
+    : defaultFSRSState();
+  p.fsrs = next;
+  return next;
 }
 
 // ── Progress Bar ────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { isBetaTester } from "@/lib/beta";
+import type { FSRSState } from "@/lib/fsrs";
+import { defaultFSRSState, inferFSRSFromLegacy, reviewCard, solveToGrade } from "@/lib/fsrs";
 
 // localStorage keys
 const ATTEMPTS_KEY = "ctt_attempts";
@@ -3240,13 +3242,14 @@ export interface MasteryPuzzle {
   type: "tactic" | "blunder";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   puzzleData: any;              // tactic: {fen,solution,rating,theme} | blunder: {fen,choices,correctChoiceIndex,blunderExplanation,patternTag}
-  masteryHits: number;          // 0–3; 3 = mastered
+  masteryHits: number;          // 0–3; 3 = mastered (legacy, kept for UI continuity)
   lastSolvedAt: number[];       // timestamps of each mastery hit
   lastMasteryHitCounter: number;// sessionPuzzleCounter value when last mastery hit was awarded
   attempts: number;
   correctAttempts: number;
   avgSolveTime: number;         // avg ms across correct solves
   lastAttemptAt: number;
+  fsrs?: FSRSState;             // FSRS scheduling state (optional for backwards compat)
 }
 
 export interface MasterySet {
@@ -3367,8 +3370,95 @@ export function recordMasteryAttempt(
     puzzle.lastMasteryHitCounter = 0;
   }
 
+  // FSRS: update memory state (independent of legacy mastery hits)
+  const prevFsrs = puzzle.fsrs ?? inferFSRSFromLegacy(puzzle);
+  const grade = solveToGrade(correct, solveTimeMs);
+  puzzle.fsrs = reviewCard(prevFsrs, grade);
+
   saveMasteryProgress(progress);
   return { masteryHits: puzzle.masteryHits, masteryAwarded };
+}
+
+/**
+ * Ensure every puzzle in the current set has an FSRS state.
+ * Called lazily by the picker so legacy data is migrated on first read.
+ */
+export function ensureFSRSState(puzzle: MasteryPuzzle): FSRSState {
+  if (!puzzle.fsrs) {
+    puzzle.fsrs = puzzle.attempts > 0 ? inferFSRSFromLegacy(puzzle) : defaultFSRSState();
+  }
+  return puzzle.fsrs;
+}
+
+/**
+ * Aggregate FSRS retention stats by motif theme across the user's mastery sets.
+ * Used by the Translation Deficit dashboard.
+ *
+ * Returns a map of theme → { puzzleCount, attempts, correctAttempts, avgRetrievability }
+ * where avgRetrievability is the mean current recall probability across that theme.
+ */
+export interface MotifRetention {
+  theme: string;
+  puzzleCount: number;
+  attempts: number;
+  correctAttempts: number;
+  avgRetrievability: number;  // 0–1
+  avgStability: number;       // days
+}
+
+export function getMotifRetentionStats(): MotifRetention[] {
+  if (typeof window === "undefined") return [];
+  const progress = getMasteryProgress();
+  const buckets = new Map<string, { puzzleCount: number; attempts: number; correct: number; rSum: number; sSum: number; rCount: number }>();
+
+  for (const set of progress.sets) {
+    for (const puzzle of set.puzzles) {
+      const themes: string[] = Array.isArray(puzzle.puzzleData?.themes)
+        ? puzzle.puzzleData.themes
+        : puzzle.puzzleData?.theme
+        ? [puzzle.puzzleData.theme]
+        : puzzle.puzzleData?.patternTag
+        ? [puzzle.puzzleData.patternTag]
+        : [];
+      if (themes.length === 0) continue;
+      const fsrs = puzzle.fsrs ?? (puzzle.attempts > 0 ? inferFSRSFromLegacy(puzzle) : null);
+      for (const themeRaw of themes) {
+        const theme = String(themeRaw).toLowerCase();
+        const existing = buckets.get(theme) ?? { puzzleCount: 0, attempts: 0, correct: 0, rSum: 0, sSum: 0, rCount: 0 };
+        existing.puzzleCount += 1;
+        existing.attempts += puzzle.attempts;
+        existing.correct += puzzle.correctAttempts;
+        if (fsrs && fsrs.lastReview > 0) {
+          // Retrievability calc inlined to avoid a top-level fsrs import dependency at runtime
+          // (we already imported reviewCard / inferFSRSFromLegacy, so pull retrievability too)
+          const r = computeRetrievability(fsrs);
+          existing.rSum += r;
+          existing.sSum += fsrs.stability;
+          existing.rCount += 1;
+        }
+        buckets.set(theme, existing);
+      }
+    }
+  }
+
+  return Array.from(buckets.entries()).map(([theme, b]) => ({
+    theme,
+    puzzleCount: b.puzzleCount,
+    attempts: b.attempts,
+    correctAttempts: b.correct,
+    avgRetrievability: b.rCount > 0 ? b.rSum / b.rCount : 0,
+    avgStability: b.rCount > 0 ? b.sSum / b.rCount : 0,
+  }));
+}
+
+// Local copy of retrievability formula to avoid circular import surface;
+// kept identical to lib/fsrs.ts.
+function computeRetrievability(state: FSRSState, now: number = Date.now()): number {
+  if (state.state === "new" || state.lastReview === 0 || state.stability === 0) return 0;
+  const DECAY = -0.5;
+  const FACTOR = Math.pow(0.9, 1 / DECAY) - 1;
+  const daysSince = (now - state.lastReview) / 86_400_000;
+  return Math.pow(1 + (FACTOR * daysSince) / state.stability, DECAY);
 }
 
 /**
