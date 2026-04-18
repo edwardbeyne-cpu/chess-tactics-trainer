@@ -14,6 +14,7 @@ import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { loadPuzzleSettings, savePuzzleSettings, type PuzzleSettings } from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import { defaultFSRSState, inferFSRSFromLegacy, pickFromFeed } from "@/lib/fsrs";
+import { computeScaffoldingArrows } from "@/lib/scaffolding";
 import {
   getAllPatternStats,
   getMasteryProgress,
@@ -1168,6 +1169,7 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           onArrowDrawn={candidateGateActive ? (_from, to) => {
             setCandidatesMarked((prev) => prev.includes(to) ? prev : [...prev, to].slice(-3));
           } : undefined}
+          customArrows={puzzleSettings.showScaffolding && status === "solve" ? computeScaffoldingArrows(fen) : undefined}
         />
 
         {/* Wrong Answer Overlay - centered on board */}
