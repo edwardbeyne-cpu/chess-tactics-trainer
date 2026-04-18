@@ -25,8 +25,10 @@ import {
   saveCCTFirstSessionComplete,
   getPatternSolveTimeTrend,
   getAllPatternMasteryTotals,
+  getMotifRetentionStats,
   type PatternStat,
   type FailureModeStats,
+  type MotifRetention,
 } from "@/lib/storage";
 import { runGameAnalysis } from "@/lib/game-analysis";
 
@@ -178,6 +180,144 @@ function RecognitionSpeedCard() {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Translation Deficit: puzzle accuracy vs. real-game miss rate per motif ──
+
+interface DeficitRow {
+  motif: string;
+  puzzleAccuracy: number;   // 0–1
+  retentionPct: number;     // 0–100, FSRS retrievability
+  gameMissRate: number;     // 0–1; from ctt_game_analysis.weaknesses
+  attempts: number;
+}
+
+function TranslationDeficitCard() {
+  const [mounted, setMounted] = useState(false);
+  const [rows, setRows] = useState<DeficitRow[]>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    const stats: MotifRetention[] = getMotifRetentionStats();
+
+    // Pull game-derived miss rates per motif
+    let gameWeak: Record<string, number> = {};
+    try {
+      const raw = localStorage.getItem("ctt_game_analysis") || localStorage.getItem("ctt_custom_analysis");
+      if (raw) {
+        const data = JSON.parse(raw) as {
+          weaknesses?: Array<{ pattern: string; share: number }>;
+          missedTactics?: Array<{ pattern: string }>;
+        };
+        if (data.weaknesses?.length) {
+          for (const w of data.weaknesses) gameWeak[w.pattern.toLowerCase()] = w.share;
+        } else if (data.missedTactics?.length) {
+          const counts: Record<string, number> = {};
+          const total = data.missedTactics.length;
+          data.missedTactics.forEach((m) => { counts[m.pattern.toLowerCase()] = (counts[m.pattern.toLowerCase()] || 0) + 1; });
+          gameWeak = Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v / total]));
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Restrict to motifs the user has attempted in puzzles AND seen in games
+    const out: DeficitRow[] = stats
+      .filter((s) => s.attempts >= 5)  // need at least a few puzzle attempts to be meaningful
+      .map((s) => ({
+        motif: s.theme,
+        puzzleAccuracy: s.attempts > 0 ? s.correctAttempts / s.attempts : 0,
+        retentionPct: Math.round(s.avgRetrievability * 100),
+        gameMissRate: gameWeak[s.theme] ?? 0,
+        attempts: s.attempts,
+      }))
+      // Show motifs with a real deficit OR strong puzzle accuracy + meaningful game presence
+      .filter((r) => r.gameMissRate > 0 || r.puzzleAccuracy >= 0.7)
+      .sort((a, b) => {
+        // Sort by deficit magnitude: high puzzle accuracy + high game miss = biggest deficit
+        const deficitA = a.puzzleAccuracy * a.gameMissRate;
+        const deficitB = b.puzzleAccuracy * b.gameMissRate;
+        return deficitB - deficitA;
+      })
+      .slice(0, 6);
+
+    setRows(out);
+  }, []);
+
+  if (!mounted || rows.length === 0) return null;
+
+  const prettyMotif = (m: string) =>
+    m.split(/(?=[A-Z])|[\s_-]+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+
+  return (
+    <div style={{
+      backgroundColor: "#13132b",
+      border: "1px solid #2e3a5c",
+      borderRadius: "16px",
+      padding: "1.5rem",
+      marginBottom: "1rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: "0.4rem" }}>
+        <div style={{ color: "#94a3b8", fontSize: "0.72rem", textTransform: "uppercase", fontWeight: "600", letterSpacing: "0.05em" }}>
+          Translation Deficit
+        </div>
+        <div style={{ color: "#475569", fontSize: "0.68rem" }}>puzzle accuracy vs. real-game misses</div>
+      </div>
+      <div style={{ color: "#64748b", fontSize: "0.75rem", marginBottom: "1rem", lineHeight: 1.45 }}>
+        Where you solve puzzles cleanly but still miss the same tactic in your games.
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {rows.map((r) => {
+          const acc = Math.round(r.puzzleAccuracy * 100);
+          const miss = Math.round(r.gameMissRate * 100);
+          const isDeficit = acc >= 70 && miss >= 25;
+          const accColor = acc >= 80 ? "#4ade80" : acc >= 60 ? "#f59e0b" : "#ef4444";
+          const missColor = miss >= 40 ? "#ef4444" : miss >= 20 ? "#f59e0b" : "#64748b";
+          return (
+            <div key={r.motif} style={{
+              backgroundColor: isDeficit ? "#1f1320" : "#0d1621",
+              border: `1px solid ${isDeficit ? "#5c2e3a" : "#1e3a5c"}`,
+              borderRadius: "8px",
+              padding: "0.65rem 0.85rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+            }}>
+              <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                <span style={{ color: "#e2e8f0", fontSize: "0.85rem", fontWeight: 600 }}>
+                  {prettyMotif(r.motif)}
+                  {isDeficit && (
+                    <span style={{ color: "#f87171", fontSize: "0.65rem", marginLeft: "0.5rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Deficit
+                    </span>
+                  )}
+                </span>
+                <span style={{ color: "#475569", fontSize: "0.7rem", marginTop: "0.15rem" }}>
+                  {r.attempts} attempts · {r.retentionPct}% retention
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.85rem", flexShrink: 0 }}>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: accColor, fontSize: "0.85rem", fontWeight: 700 }}>{acc}%</div>
+                  <div style={{ color: "#475569", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>puzzles</div>
+                </div>
+                <div style={{ color: "#334155", fontSize: "0.85rem" }}>·</div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ color: missColor, fontSize: "0.85rem", fontWeight: 700 }}>{miss}%</div>
+                  <div style={{ color: "#475569", fontSize: "0.62rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>game miss</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {rows.some((r) => r.puzzleAccuracy >= 0.7 && r.gameMissRate >= 0.25) && (
+        <div style={{ color: "#94a3b8", fontSize: "0.74rem", marginTop: "0.85rem", lineHeight: 1.45, paddingTop: "0.75rem", borderTop: "1px solid #1e2a3a" }}>
+          <span style={{ color: "#f87171", fontWeight: 600 }}>Deficit</span> = solving the pattern in puzzles but failing to spot it in real games. The Ghost Tactic mode (Threat Detection) trains the trigger.
+        </div>
+      )}
     </div>
   );
 }
@@ -1495,6 +1635,9 @@ export default function TrainingPlan() {
 
         {/* ── Feature 1: Recognition Speed Tracking ──────────────────────────── */}
         <RecognitionSpeedCard />
+
+        {/* ── Translation Deficit: puzzle accuracy vs. real-game miss rate ──── */}
+        <TranslationDeficitCard />
 
         {/* ── Feature 2: Pattern Mastery Progression ────────────────────────── */}
         <PatternMasteryProgressionCard />
