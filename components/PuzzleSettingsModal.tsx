@@ -8,6 +8,9 @@ export interface PuzzleSettings {
   timeLimit: number;
   autoAdvance: boolean;
   timeStandard: number; // Sprint 12: target seconds to "meet the standard"
+  candidateMoveGate: boolean;     // require pre-marking 2 candidate squares before moving
+  candidateMinRating: number;     // gate only applies to puzzles >= this rating
+  showScaffolding: boolean;       // show piece-relationship overlay arrows on the board
 }
 
 const SETTINGS_KEY = "ctt_puzzle_settings";
@@ -18,6 +21,9 @@ export const DEFAULT_PUZZLE_SETTINGS: PuzzleSettings = {
   timeLimit: 0,
   autoAdvance: true,
   timeStandard: 30,
+  candidateMoveGate: false,
+  candidateMinRating: 1500,
+  showScaffolding: false,
 };
 
 export function loadPuzzleSettings(): PuzzleSettings {
@@ -30,6 +36,9 @@ export function loadPuzzleSettings(): PuzzleSettings {
         ...DEFAULT_PUZZLE_SETTINGS,
         ...parsed,
         timeStandard: parsed.timeStandard ?? DEFAULT_PUZZLE_SETTINGS.timeStandard,
+        candidateMoveGate: parsed.candidateMoveGate ?? DEFAULT_PUZZLE_SETTINGS.candidateMoveGate,
+        candidateMinRating: parsed.candidateMinRating ?? DEFAULT_PUZZLE_SETTINGS.candidateMinRating,
+        showScaffolding: parsed.showScaffolding ?? DEFAULT_PUZZLE_SETTINGS.showScaffolding,
       };
     }
   } catch {
@@ -63,6 +72,9 @@ export default function PuzzleSettingsModal({
   const [timeLimit, setTimeLimit] = useState(currentSettings.timeLimit);
   const [autoAdvance, setAutoAdvance] = useState(currentSettings.autoAdvance);
   const [timeStandard, setTimeStandard] = useState(currentSettings.timeStandard ?? 30);
+  const [candidateMoveGate, setCandidateMoveGate] = useState(currentSettings.candidateMoveGate ?? false);
+  const [candidateMinRating, setCandidateMinRating] = useState(currentSettings.candidateMinRating ?? 1500);
+  const [showScaffolding, setShowScaffolding] = useState(currentSettings.showScaffolding ?? false);
 
   useEffect(() => {
     if (isOpen) {
@@ -71,6 +83,9 @@ export default function PuzzleSettingsModal({
       setTimeLimit(currentSettings.timeLimit);
       setAutoAdvance(currentSettings.autoAdvance);
       setTimeStandard(currentSettings.timeStandard ?? 30);
+      setCandidateMoveGate(currentSettings.candidateMoveGate ?? false);
+      setCandidateMinRating(currentSettings.candidateMinRating ?? 1500);
+      setShowScaffolding(currentSettings.showScaffolding ?? false);
     }
   }, [isOpen, currentSettings]);
 
@@ -81,12 +96,16 @@ export default function PuzzleSettingsModal({
     const clampedMax = Math.max(clampedMin, Math.min(maxRating || 2400, 3000));
     const clampedTime = Math.max(0, timeLimit || 0);
     const clampedStandard = Math.max(5, Math.min(timeStandard || 30, 300));
+    const clampedCandidateMin = Math.max(0, Math.min(candidateMinRating || 1500, 3000));
     const settings: PuzzleSettings = {
       minRating: clampedMin,
       maxRating: clampedMax,
       timeLimit: clampedTime,
       autoAdvance,
       timeStandard: clampedStandard,
+      candidateMoveGate,
+      candidateMinRating: clampedCandidateMin,
+      showScaffolding,
     };
     savePuzzleSettings(settings);
     onSave(settings);
@@ -309,6 +328,86 @@ export default function PuzzleSettingsModal({
             }}
           >
             Puzzles solved correctly under this time count as &quot;meeting the standard&quot; ⚡
+          </div>
+        </div>
+
+        {/* Candidate Move Gate */}
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                🎯 Candidate Moves Gate
+              </div>
+              <div style={{ color: "#475569", fontSize: "0.7rem", marginTop: "0.25rem" }}>
+                Right-click 2+ squares to mark candidates before moving — forces calculation, kills guessing
+              </div>
+            </div>
+            <button
+              onClick={() => setCandidateMoveGate((v) => !v)}
+              aria-label={candidateMoveGate ? "Disable candidate move gate" : "Enable candidate move gate"}
+              style={{
+                width: "50px", height: "28px",
+                backgroundColor: candidateMoveGate ? "#2e75b6" : "#1e2a3a",
+                borderRadius: "14px",
+                border: `1px solid ${candidateMoveGate ? "#2e75b6" : "#2e3a5c"}`,
+                cursor: "pointer", position: "relative", transition: "background 0.2s, border-color 0.2s",
+                flexShrink: 0, padding: 0,
+              }}
+            >
+              <div style={{
+                width: "22px", height: "22px", backgroundColor: "white", borderRadius: "50%",
+                position: "absolute", top: "2px", left: candidateMoveGate ? "25px" : "2px",
+                transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }} />
+            </button>
+          </div>
+          {candidateMoveGate && (
+            <div style={{ marginTop: "0.75rem" }}>
+              <div style={{ color: "#64748b", fontSize: "0.7rem", marginBottom: "0.3rem" }}>
+                Apply only to puzzles rated this high or above
+              </div>
+              <input
+                type="number"
+                value={candidateMinRating}
+                onChange={(e) => setCandidateMinRating(parseInt(e.target.value) || 1500)}
+                min={0}
+                max={3000}
+                step={100}
+                style={inputStyle}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Visual Scaffolding */}
+        <div style={{ marginBottom: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                🔭 Visual Scaffolding
+              </div>
+              <div style={{ color: "#475569", fontSize: "0.7rem", marginTop: "0.25rem" }}>
+                Highlight piece relationships (attackers/defenders) to train chunking. Some prefer it off.
+              </div>
+            </div>
+            <button
+              onClick={() => setShowScaffolding((v) => !v)}
+              aria-label={showScaffolding ? "Disable visual scaffolding" : "Enable visual scaffolding"}
+              style={{
+                width: "50px", height: "28px",
+                backgroundColor: showScaffolding ? "#2e75b6" : "#1e2a3a",
+                borderRadius: "14px",
+                border: `1px solid ${showScaffolding ? "#2e75b6" : "#2e3a5c"}`,
+                cursor: "pointer", position: "relative", transition: "background 0.2s, border-color 0.2s",
+                flexShrink: 0, padding: 0,
+              }}
+            >
+              <div style={{
+                width: "22px", height: "22px", backgroundColor: "white", borderRadius: "50%",
+                position: "absolute", top: "2px", left: showScaffolding ? "25px" : "2px",
+                transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }} />
+            </button>
           </div>
         </div>
 

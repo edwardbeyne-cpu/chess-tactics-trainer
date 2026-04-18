@@ -682,6 +682,18 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
   // First-wrong-move CCT slide-up tip (one-time, not shown in "off" mode)
   const [showCCTSlideUp, setShowCCTSlideUp] = useState(false);
 
+  // Candidate Move gate (Phase 3): user must mark ≥2 candidate squares before moving
+  const candidateGateActive = puzzleSettings.candidateMoveGate
+    && (puzzleData.rating ?? 0) >= puzzleSettings.candidateMinRating;
+  const [candidatesMarked, setCandidatesMarked] = useState<string[]>([]);
+  const [candidateNudge, setCandidateNudge] = useState(false);
+  const [candidateFeedback, setCandidateFeedback] = useState<{ marked: string[]; played: string; matched: boolean } | null>(null);
+  // Reset when puzzle position changes
+  useEffect(() => {
+    setCandidatesMarked([]);
+    setCandidateFeedback(null);
+  }, [puzzleData.fen]);
+
   useEffect(() => {
     if (cctMode === "enforced" && cctAllChecked && !cctUnlocked) {
       setCctUnlocked(true);
@@ -799,6 +811,21 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
       setCctNudge(true);
       setTimeout(() => setCctNudge(false), 2000);
       return false;
+    }
+    // Candidate Move gate: require ≥2 candidate squares marked before allowing the move
+    if (candidateGateActive && candidatesMarked.length < 2) {
+      setCandidateNudge(true);
+      setTimeout(() => setCandidateNudge(false), 2200);
+      return false;
+    }
+    // Capture candidate feedback before solution validation; brief flash regardless of correctness
+    if (candidateGateActive && candidatesMarked.length >= 2) {
+      setCandidateFeedback({
+        marked: [...candidatesMarked],
+        played: to,
+        matched: candidatesMarked.includes(to),
+      });
+      setTimeout(() => setCandidateFeedback(null), 2000);
     }
     // Suggested mode: nudge if user skipped CCT scan (first 10 sessions only)
     if (cctMode === "suggested" && !cctAnyClickedRef.current && !amberShownRef.current) {
@@ -1080,6 +1107,55 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
         </div>
       )}
 
+      {/* Candidate Move Gate banner */}
+      {candidateGateActive && status === "solve" && !candidateFeedback && (
+        <div style={{
+          width: boardWidth,
+          marginBottom: "0.5rem",
+          padding: "0.55rem 0.85rem",
+          backgroundColor: candidateNudge ? "#3a1f24" : (candidatesMarked.length >= 2 ? "#0d2419" : "#1a1f2e"),
+          border: `1px solid ${candidateNudge ? "#7c3a44" : (candidatesMarked.length >= 2 ? "#1e5c3a" : "#2e3a5c")}`,
+          borderRadius: "10px",
+          color: candidateNudge ? "#fca5a5" : (candidatesMarked.length >= 2 ? "#86efac" : "#94a3b8"),
+          fontSize: "0.78rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.5rem",
+          transition: "all 0.2s",
+        }}>
+          <span>
+            {candidatesMarked.length >= 2
+              ? `✓ Candidates marked: ${candidatesMarked.join(", ")} — make your move`
+              : `🎯 Right-click ${2 - candidatesMarked.length} more square${candidatesMarked.length === 1 ? "" : "s"} to mark candidates${candidatesMarked.length === 1 ? ` (so far: ${candidatesMarked[0]})` : ""}`}
+          </span>
+          {candidatesMarked.length > 0 && (
+            <button
+              onClick={() => setCandidatesMarked([])}
+              style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}
+            >
+              clear
+            </button>
+          )}
+        </div>
+      )}
+      {candidateFeedback && (
+        <div style={{
+          width: boardWidth,
+          marginBottom: "0.5rem",
+          padding: "0.55rem 0.85rem",
+          backgroundColor: candidateFeedback.matched ? "#0d2419" : "#1f1320",
+          border: `1px solid ${candidateFeedback.matched ? "#1e5c3a" : "#5c2e3a"}`,
+          borderRadius: "10px",
+          color: candidateFeedback.matched ? "#86efac" : "#fca5a5",
+          fontSize: "0.78rem",
+        }}>
+          {candidateFeedback.matched
+            ? `✓ Played ${candidateFeedback.played} — was in your candidates (${candidateFeedback.marked.join(", ")})`
+            : `Played ${candidateFeedback.played} — not in your candidates (${candidateFeedback.marked.join(", ")}). Slow down and consider all forcing moves.`}
+        </div>
+      )}
+
       {/* Board with overlay */}
       <div style={{ position: "relative", width: boardWidth, height: boardWidth, overflow: "hidden" }}>
         <ChessBoard
@@ -1089,6 +1165,9 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           draggable={status === "solve"}
           boardWidth={boardWidth}
           orientation={orientation as "white" | "black"}
+          onArrowDrawn={candidateGateActive ? (_from, to) => {
+            setCandidatesMarked((prev) => prev.includes(to) ? prev : [...prev, to].slice(-3));
+          } : undefined}
         />
 
         {/* Wrong Answer Overlay - centered on board */}
