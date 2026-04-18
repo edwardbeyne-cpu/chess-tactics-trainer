@@ -11,9 +11,7 @@ export default function AuthButton() {
   const [showSignIn, setShowSignIn] = useState(false);
   const [showBetaModal, setShowBetaModal] = useState(false);
 
-  if (loading) return null;
-
-  // ── Signed out ────────────────────────────────────────────────────────────
+  // ── Signed out (or still loading) ────────────────────────────────────────
   if (!user) {
     return (
       <>
@@ -31,8 +29,9 @@ export default function AuthButton() {
             fontSize: "0.85rem",
             cursor: "pointer",
             flexShrink: 0,
-            transition: "border-color 0.15s",
+            transition: "border-color 0.15s, opacity 0.2s",
             fontWeight: 500,
+            opacity: loading ? 0 : 1,
           }}
           onMouseOver={(e) => (e.currentTarget.style.borderColor = "#4ade80")}
           onMouseOut={(e) => (e.currentTarget.style.borderColor = "#2e3a5c")}
