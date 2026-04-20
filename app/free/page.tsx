@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -8,8 +9,8 @@ export default function FreePage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    localStorage.setItem("ctt_sub_tier", "0");
-    localStorage.setItem("ctt_beta_tester", "false");
+    safeSetItem("ctt_sub_tier", "0");
+    safeSetItem("ctt_beta_tester", "false");
     // Clear onboarding state so free testers get the full first-time experience
     try {
       localStorage.removeItem("ctt_calibration_complete");

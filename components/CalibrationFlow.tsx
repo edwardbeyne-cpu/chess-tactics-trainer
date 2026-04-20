@@ -1,10 +1,12 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
 import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import { saveDailyTargetSettings, saveGameSnapshot } from "@/lib/storage";
 import { runGameAnalysis, fetchRecentGames as fetchRecentGamesShared } from "@/lib/game-analysis";
 
@@ -31,24 +33,11 @@ interface AllRatings {
   main: number | null;
 }
 
-async function fetchWithRetry(url: string, opts: RequestInit = {}): Promise<Response> {
-  const fetchOpts = { ...opts, redirect: "follow" as RequestRedirect };
-  try {
-    return await fetch(url, fetchOpts);
-  } catch {
-    // Retry once after 1 second — handles transient mobile network issues
-    await new Promise((r) => setTimeout(r, 1000));
-    return await fetch(url, fetchOpts);
-  }
-}
 
 async function fetchAllRatings(platform: Platform, username: string): Promise<AllRatings | null> {
   try {
     if (platform === "chesscom") {
-      const res = await fetchWithRetry(
-        `https://api.chess.com/pub/player/${username.toLowerCase()}/stats`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await chesscomApi.stats(username);
       if (!res.ok) return null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = await res.json();
@@ -57,10 +46,7 @@ async function fetchAllRatings(platform: Platform, username: string): Promise<Al
       const rapid: number | null = data?.chess_rapid?.last?.rating ?? null;
       return { bullet, blitz, rapid, main: rapid ?? blitz ?? bullet };
     } else {
-      const res = await fetchWithRetry(
-        `https://lichess.org/api/user/${username}`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await lichessApi.user(username);
       if (!res.ok) return null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data: any = await res.json();
@@ -152,7 +138,8 @@ function getPlayerOrientation(puzzle: LichessCachedPuzzle): "white" | "black" {
   return originalSideToMove === "w" ? "black" : "white";
 }
 
-function selectPuzzle(targetElo: number, usedIds: Set<string>): LichessCachedPuzzle | null {
+async function selectPuzzle(targetElo: number, usedIds: Set<string>): Promise<LichessCachedPuzzle | null> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const candidates: LichessCachedPuzzle[] = [];
   for (const puzzles of Object.values(cachedPuzzlesByTheme)) {
     for (const p of puzzles) {
@@ -272,14 +259,14 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
 
 
 
-  const loadPuzzle = useCallback((elo: number, used: Set<string>, preloaded?: LichessCachedPuzzle | null) => {
-    const puzzle = preloaded ?? selectPuzzle(elo, used);
+  const loadPuzzle = useCallback(async (elo: number, used: Set<string>, preloaded?: LichessCachedPuzzle | null) => {
+    const puzzle = preloaded ?? await selectPuzzle(elo, used);
     if (!puzzle) return;
     used.add(puzzle.id);
     lastPuzzleRef.current = puzzle;
 
-    // Preload next puzzle synchronously — ensures it's ready before user taps Next
-    nextPuzzleRef.current = selectPuzzle(elo, used);
+    // Preload next puzzle in the background — ready before user taps Next
+    selectPuzzle(elo, used).then((p) => { nextPuzzleRef.current = p; });
 
     // Apply the opponent's first move so the player sees the position they need to solve
     // In Lichess puzzles, moves[0] is the opponent's move that creates the tactic
@@ -343,7 +330,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
       setFinalElo(calculatedElo);
       setCalibElo(calculatedElo);
       calibEloRef.current = calculatedElo;
-      try { localStorage.setItem("ctt_calibration_rating", String(calculatedElo)); } catch { /* ignore */ }
+      try { safeSetItem("ctt_calibration_rating", String(calculatedElo)); } catch { /* ignore */ }
       setPhase("reveal");
       return;
     }
@@ -353,8 +340,8 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
     setNewElo(calculatedElo);
     setEloChange(change);
     // Preload next puzzle + pre-compute its startFen while user reads transition screen
-    setTimeout(() => {
-      const next = selectPuzzle(calculatedElo, usedIds.current);
+    setTimeout(async () => {
+      const next = await selectPuzzle(calculatedElo, usedIds.current);
       if (next) {
         let startFen = next.fen;
         if (next.moves && next.moves.length > 0) {
@@ -488,10 +475,10 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
         setConnecting(false);
         return;
       }
-      localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
-      localStorage.setItem(CUSTOM_PLATFORM_KEY, platform);
-      localStorage.setItem(PLATFORM_RATING_KEY, String(allRatings.main));
-      localStorage.setItem(PLATFORM_RATINGS_V2_KEY, JSON.stringify({
+      safeSetItem(CUSTOM_USERNAME_KEY, uname);
+      safeSetItem(CUSTOM_PLATFORM_KEY, platform);
+      safeSetItem(PLATFORM_RATING_KEY, String(allRatings.main));
+      safeSetItem(PLATFORM_RATINGS_V2_KEY, JSON.stringify({
         bullet: allRatings.bullet,
         blitz: allRatings.blitz,
         rapid: allRatings.rapid,

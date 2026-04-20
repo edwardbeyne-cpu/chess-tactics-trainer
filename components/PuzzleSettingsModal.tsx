@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect } from "react";
 
 export interface PuzzleSettings {
@@ -41,7 +42,7 @@ export function loadPuzzleSettings(): PuzzleSettings {
 export function savePuzzleSettings(settings: PuzzleSettings): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    safeSetItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch {
     // ignore
   }

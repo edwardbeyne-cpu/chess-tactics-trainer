@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import ChessBoard from "./ChessBoard";
 import {
   saveCalcGymSession,
@@ -92,7 +92,8 @@ function buildChoices(fen: string, correctMove: string): { choices: string[]; co
 /** Sample puzzles for the Calculation Gym session.
  *  Uses puzzles with 4+ solution moves (after applying opp first move).
  */
-function sampleCalcDrills(count: number): CalcDrill[] {
+async function sampleCalcDrills(count: number): Promise<CalcDrill[]> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const allThemes = Object.keys(cachedPuzzlesByTheme);
   const drills: CalcDrill[] = [];
   const usedIds = new Set<string>();
@@ -565,8 +566,8 @@ export default function CalculationGym() {
   const sessionStartRef = useRef<number>(0);
   const stats = getCalcGymStats();
 
-  function startSession() {
-    const newDrills = sampleCalcDrills(SESSION_SIZE);
+  async function startSession() {
+    const newDrills = await sampleCalcDrills(SESSION_SIZE);
     if (newDrills.length === 0) return;
     setDrills(newDrills);
     setCurrentIdx(0);

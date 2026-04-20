@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import CalibrationFlow from "./CalibrationFlow";
@@ -41,7 +42,7 @@ function seedRatings(elo: number) {
   for (const theme of PATTERN_THEMES) {
     patternRatings[theme] = { theme, rating: patternStartElo, gamesPlayed: 0, history: [] };
   }
-  localStorage.setItem(PATTERN_RATINGS_KEY, JSON.stringify(patternRatings));
+  safeSetItem(PATTERN_RATINGS_KEY, JSON.stringify(patternRatings));
 
   // Tactics and puzzle ratings seeded at full calibration ELO
   const tacticsData = {
@@ -51,9 +52,9 @@ function seedRatings(elo: number) {
     totalPuzzlesRated: 0,
     lastMilestoneAt: elo,
   };
-  localStorage.setItem(TACTICS_RATING_KEY, JSON.stringify(tacticsData));
-  localStorage.setItem(PUZZLE_RATING_KEY, JSON.stringify({ rating: elo, totalPuzzlesRated: 0 }));
-  localStorage.setItem(GOAL_START_RATING_KEY, String(elo));
+  safeSetItem(TACTICS_RATING_KEY, JSON.stringify(tacticsData));
+  safeSetItem(PUZZLE_RATING_KEY, JSON.stringify({ rating: elo, totalPuzzlesRated: 0 }));
+  safeSetItem(GOAL_START_RATING_KEY, String(elo));
 }
 
 const GOAL_OPTIONS: Array<{ value: UserGoal; icon: string; label: string; sub: string }> = [
@@ -79,16 +80,16 @@ export default function OnboardingModal() {
 
   function handleStep1Continue() {
     if (!selectedGoal) return;
-    localStorage.setItem(GOAL_KEY, selectedGoal);
+    safeSetItem(GOAL_KEY, selectedGoal);
     setStep(2);
   }
 
   function handleCalibrationComplete(finalElo: number) {
     seedRatings(finalElo);
-    localStorage.setItem(CALIBRATION_COMPLETE_KEY, "true");
-    localStorage.setItem(CALIBRATION_RATING_KEY, String(finalElo));
-    localStorage.setItem(GOAL_START_RATING_KEY, String(finalElo));
-    localStorage.setItem(ONBOARDED_KEY, "true");
+    safeSetItem(CALIBRATION_COMPLETE_KEY, "true");
+    safeSetItem(CALIBRATION_RATING_KEY, String(finalElo));
+    safeSetItem(GOAL_START_RATING_KEY, String(finalElo));
+    safeSetItem(ONBOARDED_KEY, "true");
     setShow(false);
     router.push("/app/training-plan");
   }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import patterns from "@/data/patterns";
 import {
   getCreatorSetByCode,
@@ -30,8 +30,9 @@ const PATTERN_TO_DB_KEY: Record<string, string> = {
   "discovered attack": "discoveredAttack",
 };
 
-function resolveFeaturedPuzzleIds(set: CreatorSet): string[] {
+async function resolveFeaturedPuzzleIds(set: CreatorSet): Promise<string[]> {
   if (set.puzzleIds.length > 0) return set.puzzleIds;
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   // Resolve from DB
   const ids: string[] = [];
   const seen = new Set<string>();
@@ -50,11 +51,11 @@ function resolveFeaturedPuzzleIds(set: CreatorSet): string[] {
   return ids;
 }
 
-function resolveCreatorSet(code: string): CreatorSet | null {
+async function resolveCreatorSet(code: string): Promise<CreatorSet | null> {
   // Check featured sets first
   const featured = FEATURED_SETS.find((s) => s.shareCode.toUpperCase() === code.toUpperCase());
   if (featured) {
-    const puzzleIds = resolveFeaturedPuzzleIds(featured);
+    const puzzleIds = await resolveFeaturedPuzzleIds(featured);
     return { ...featured, puzzleIds };
   }
   // Check localStorage
@@ -297,8 +298,11 @@ export default function TrainSetClient({ code }: { code: string }) {
   const [started, setStarted] = useState(false);
 
   useEffect(() => {
-    const resolved = resolveCreatorSet(code);
-    setSet(resolved);
+    let cancelled = false;
+    resolveCreatorSet(code).then((resolved) => {
+      if (!cancelled) setSet(resolved);
+    });
+    return () => { cancelled = true; };
   }, [code]);
 
   if (set === "loading") {

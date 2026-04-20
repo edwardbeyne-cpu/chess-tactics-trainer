@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useMemo, useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +17,7 @@ import {
   loadPuzzleSettings,
   savePuzzleSettings,
 } from "@/components/PuzzleSettingsModal";
-import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
+import { usePuzzleData } from "@/lib/puzzle-data";
 
 // ── Sprint 33: localStorage flag for explainer dismissal ──────────────────
 const DRILL_EXPLAINER_DISMISSED_KEY = "ctt_drill_explainer_dismissed";
@@ -320,6 +321,7 @@ style={{
 
 export default function Patterns() {
   const router = useRouter();
+  const puzzleData = usePuzzleData();
 
   // Sprint 40: Drill mode toggle
   const [drillMode, setDrillMode] = useState<"one" | "all">("one");
@@ -344,7 +346,7 @@ export default function Patterns() {
   }, []);
 
   function handleDismissExplainer() {
-    localStorage.setItem(DRILL_EXPLAINER_DISMISSED_KEY, "1");
+    safeSetItem(DRILL_EXPLAINER_DISMISSED_KEY, "1");
     setShowExplainer(false);
   }
 
@@ -368,11 +370,12 @@ export default function Patterns() {
     const result: Record<string, PatternCurriculumSummary> = {};
     for (const p of patterns) {
       const themeKey = getThemeKey(p.name);
-      const totalPuzzles = PATTERN_PUZZLE_COUNTS[themeKey] ?? (cachedPuzzlesByTheme[themeKey]?.length ?? 0);
+      const totalPuzzles = puzzleData?.PATTERN_PUZZLE_COUNTS[themeKey]
+        ?? (puzzleData?.cachedPuzzlesByTheme[themeKey]?.length ?? 0);
       result[p.name] = getPatternCurriculumSummary(themeKey, totalPuzzles || 200);
     }
     return result;
-  }, []);
+  }, [puzzleData]);
 
   // Sprint 12: time standard stats per pattern
   const timeStatsByTheme = useMemo(() => {

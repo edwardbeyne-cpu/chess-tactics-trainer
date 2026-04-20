@@ -6,13 +6,15 @@
  * Mix of tactic puzzles (~80%) and blunder-resistance positions (~20%).
  */
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js";
 import ChessBoard from "@/components/ChessBoard";
 import BetaSessionFeedbackPrompt from "./BetaSessionFeedbackPrompt";
 import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { loadPuzzleSettings, savePuzzleSettings, type PuzzleSettings } from "@/components/PuzzleSettingsModal";
-import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import {
   getAllPatternStats,
   getMasteryProgress,
@@ -210,7 +212,8 @@ function computeBlunderRatio(): number {
   return 0.2;
 }
 
-export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuzzle[] = []): MasterySet {
+export async function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuzzle[] = []): Promise<MasterySet> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
   const targetELO = calibrationRating + (setNumber - 1) * 50;
@@ -1308,7 +1311,7 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           </div>
           <button
             onClick={() => {
-              try { localStorage.setItem("ctt_cct_tutorial_seen", "true"); } catch { /* ignore */ }
+              try { safeSetItem("ctt_cct_tutorial_seen", "true"); } catch { /* ignore */ }
               setShowCCTSlideUp(false);
             }}
             style={{
@@ -2045,6 +2048,8 @@ export default function TrainingSession() {
 
   useEffect(() => {
     if (!mounted) return;
+    let cancelled = false;
+    (async () => {
 
     const settings = getDailyTargetSettings();
     setDailyGoal(settings.dailyGoal);
@@ -2068,7 +2073,8 @@ export default function TrainingSession() {
 
     // Generate first set if none exists
     if (!set) {
-      set = generateMasterySet(progress.currentSetNumber);
+      set = await generateMasterySet(progress.currentSetNumber);
+      if (cancelled) return;
       progress = { ...progress, sets: [...progress.sets, set] };
       saveMasteryProgress(progress);
     }
@@ -2084,7 +2090,8 @@ export default function TrainingSession() {
       if (unmastered.length < set.puzzles.length) {
         // Some puzzles were mastered - refresh the set
         const nextSetNumber = set.setNumber + 1;
-        const nextSet = generateMasterySet(nextSetNumber, unmastered);
+        const nextSet = await generateMasterySet(nextSetNumber, unmastered);
+        if (cancelled) return;
         const updatedSet = { ...set, completedAt: Date.now() };
         progress = {
           ...progress,
@@ -2105,7 +2112,8 @@ export default function TrainingSession() {
     if (set.completedAt || isSetComplete()) {
       const updatedSet = { ...set, completedAt: set.completedAt ?? Date.now() };
       const nextSetNumber = set.setNumber + 1;
-      const nextSet = generateMasterySet(nextSetNumber, []);
+      const nextSet = await generateMasterySet(nextSetNumber, []);
+      if (cancelled) return;
       const updatedProgress = {
         ...progress,
         sets: [...progress.sets.map((s) => s.setNumber === set!.setNumber ? updatedSet : s), nextSet],
@@ -2131,7 +2139,7 @@ export default function TrainingSession() {
     const idx = pickNextPuzzleIdx(set, null, sessionSeenPuzzleIdsRef.current);
     if (idx === -1) {
       // All mastered - mark set complete
-      markSetComplete(progress, set);
+      await markSetComplete(progress, set);
       return;
     }
     setCurrentPuzzleIdx(idx);
@@ -2139,16 +2147,18 @@ export default function TrainingSession() {
     sessionSeenPuzzleIdsRef.current.add(set.puzzles[idx].id);
     setPuzzleStartTime(Date.now());
     setPhase("solving");
+    })();
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 
-  function markSetComplete(progress: MasteryProgress, set: MasterySet) {
+  async function markSetComplete(progress: MasteryProgress, set: MasterySet) {
     const updatedSet = { ...set, completedAt: Date.now() };
     const updatedSets = progress.sets.map((s) => (s.setNumber === set.setNumber ? updatedSet : s));
 
     // Generate next set immediately (all puzzles mastered, nothing to carry)
     const nextSetNumber = set.setNumber + 1;
-    const nextSet = generateMasterySet(nextSetNumber, []);
+    const nextSet = await generateMasterySet(nextSetNumber, []);
     const updatedProgress = {
       ...progress,
       sets: [...updatedSets, nextSet],
@@ -2210,7 +2220,7 @@ export default function TrainingSession() {
           const newU = correct && solveTimeMs < MASTERY_TIME_LIMIT_MS ? u + 1 : u;
           setSessionNewMastered((m: number) => {
             const newM = (masteryAwarded && masteryHits === 3) ? m + 1 : m;
-            try { localStorage.setItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
+            try { safeSetItem("ctt_session_stats", JSON.stringify({ correct: newC, total: newT, under10s: newU, mastered: newM, date: new Date().toISOString().slice(0,10) })); } catch { /* ignore */ }
             return newM;
           });
           return newU;

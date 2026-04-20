@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 /**
  * Sprint 5 — Auth & Beta Access
  *
@@ -35,7 +37,7 @@ export function getUserProfile(): UserProfile | null {
 
 export function saveUserProfile(profile: UserProfile): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AUTH_KEY, JSON.stringify(profile));
+  safeSetItem(AUTH_KEY, JSON.stringify(profile));
 }
 
 export function signOut(): void {
@@ -66,7 +68,7 @@ export function applyBetaCode(code: string): boolean {
   if (typeof window === "undefined") return false;
 
   // Store in standalone key (works for guests too)
-  localStorage.setItem(BETA_KEY, "true");
+  safeSetItem(BETA_KEY, "true");
 
   // Also update profile if signed in
   const profile = getUserProfile();
@@ -76,8 +78,8 @@ export function applyBetaCode(code: string): boolean {
   }
 
   // Grant Pro tier via both current and legacy subscription mechanisms
-  localStorage.setItem("ctt_sub_tier", "2");
-  localStorage.setItem("subscription_status", "active");
+  safeSetItem("ctt_sub_tier", "2");
+  safeSetItem("subscription_status", "active");
 
   // Nudge already-mounted UI to re-check entitlement state
   try {
@@ -98,7 +100,7 @@ export function dismissBetaPrompt(): void {
     saveUserProfile(profile);
   } else {
     // Guest — remember dismissal separately
-    localStorage.setItem("ctt_beta_prompt_dismissed", "true");
+    safeSetItem("ctt_beta_prompt_dismissed", "true");
   }
 }
 

@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 export const BETA_TESTER_KEY = "ctt_beta_tester";
 export const BETA_FEEDBACK_KEY = "ctt_beta_feedback";
 
@@ -16,8 +18,8 @@ export function isBetaTester(): boolean {
 
 export function enableBetaAccess(): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem("ctt_sub_tier", "2");
-  localStorage.setItem(BETA_TESTER_KEY, "true");
+  safeSetItem("ctt_sub_tier", "2");
+  safeSetItem(BETA_TESTER_KEY, "true");
 }
 
 export function getBetaFeedback(): BetaFeedbackEntry[] {
@@ -38,7 +40,7 @@ export function saveBetaFeedback(entry: Omit<BetaFeedbackEntry, "id" | "timestam
   };
   const existing = getBetaFeedback();
   existing.push(full);
-  localStorage.setItem(BETA_FEEDBACK_KEY, JSON.stringify(existing));
+  safeSetItem(BETA_FEEDBACK_KEY, JSON.stringify(existing));
   return full;
 }
 

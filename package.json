@@ -14,6 +14,7 @@
     "chessground": "^9.2.1",
     "html2canvas": "^1.4.1",
     "next": "16.2.1",
+    "posthog-js": "^1.369.3",
     "react": "19.2.4",
     "react-chessboard": "^5.10.0",
     "react-dom": "19.2.4",

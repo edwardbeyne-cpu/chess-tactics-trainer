@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import patterns from "@/data/patterns";
-import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
+import { usePuzzleData } from "@/lib/puzzle-data";
 import {
   getPuzzleProgressMap,
   getPuzzleTimes,
@@ -102,8 +102,12 @@ export default function PatternProgressModal({
     });
   }, [theme]);
 
-  const puzzles = useMemo(() => cachedPuzzlesByTheme[theme] ?? [], [theme]);
-  const totalPuzzles = PATTERN_PUZZLE_COUNTS[theme] ?? puzzles.length;
+  const puzzleData = usePuzzleData();
+  const puzzles = useMemo(
+    () => puzzleData?.cachedPuzzlesByTheme[theme] ?? [],
+    [theme, puzzleData]
+  );
+  const totalPuzzles = puzzleData?.PATTERN_PUZZLE_COUNTS[theme] ?? puzzles.length;
   const patternRating = getPatternRating(theme);
   const summary = useMemo(
     () => getPatternCurriculumSummary(theme, totalPuzzles),

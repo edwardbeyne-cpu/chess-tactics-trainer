@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import ChessBoard from "./ChessBoard";
 import {
   recordMoveComparisonEntry,
@@ -160,7 +160,8 @@ function buildMoveOptions(fen: string, correctUci: string, themes: string[]): Mo
   }
 }
 
-function samplePositions(count: number): ComparisonPosition[] {
+async function samplePositions(count: number): Promise<ComparisonPosition[]> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const positions: ComparisonPosition[] = [];
   const usedIds = new Set<string>();
   const allThemes = Object.keys(cachedPuzzlesByTheme);
@@ -224,8 +225,8 @@ export default function MoveComparisonTrainer() {
     setStats(getMoveComparisonStats());
   }, []);
 
-  function startSession() {
-    const pos = samplePositions(SESSION_SIZE);
+  async function startSession() {
+    const pos = await samplePositions(SESSION_SIZE);
     setPositions(pos);
     setCurrentIndex(0);
     setSelected(null);

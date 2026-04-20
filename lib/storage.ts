@@ -1,4 +1,6 @@
 import { isBetaTester } from "@/lib/beta";
+import { safeSetItem } from "@/lib/safe-storage";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 
 // localStorage keys
 const ATTEMPTS_KEY = "ctt_attempts";
@@ -101,7 +103,7 @@ export function recordAttempt(
   if (typeof window === "undefined") return;
   const attempts = getAttempts();
   attempts.push({ puzzleId, outcome, timestamp: new Date().toISOString() });
-  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+  safeSetItem(ATTEMPTS_KEY, JSON.stringify(attempts));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +121,7 @@ export function getSRS(): SRSData {
 
 function saveSRS(srs: SRSData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SRS_KEY, JSON.stringify(srs));
+  safeSetItem(SRS_KEY, JSON.stringify(srs));
 }
 
 function addDays(days: number): string {
@@ -194,7 +196,7 @@ export function recordSM2Attempt(attempt: SM2Attempt): void {
   if (typeof window === "undefined") return;
   const attempts = getSM2Attempts();
   attempts.push(attempt);
-  localStorage.setItem(SM2_ATTEMPTS_KEY, JSON.stringify(attempts));
+  safeSetItem(SM2_ATTEMPTS_KEY, JSON.stringify(attempts));
 }
 
 export function getSM2StateMap(): SM2StateMap {
@@ -291,13 +293,13 @@ export function savePGN(pgn: StoredPGN): void {
   if (typeof window === "undefined") return;
   const pgns = getPGNs();
   pgns.push(pgn);
-  localStorage.setItem(PGNS_KEY, JSON.stringify(pgns));
+  safeSetItem(PGNS_KEY, JSON.stringify(pgns));
 }
 
 export function deletePGN(id: string): void {
   if (typeof window === "undefined") return;
   const pgns = getPGNs().filter((p) => p.id !== id);
-  localStorage.setItem(PGNS_KEY, JSON.stringify(pgns));
+  safeSetItem(PGNS_KEY, JSON.stringify(pgns));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -598,7 +600,7 @@ export function addXP(xp: number): { newLevel: number; leveledUp: boolean; total
   const newLevel = getLevelFromXP(newTotalXP);
   const leveledUp = newLevel > current.level;
   const newData: XPData = { totalXP: newTotalXP, level: newLevel };
-  localStorage.setItem(XP_KEY, JSON.stringify(newData));
+  safeSetItem(XP_KEY, JSON.stringify(newData));
   return { newLevel, leveledUp, totalXP: newTotalXP };
 }
 
@@ -645,7 +647,7 @@ export function getStreakData(): StreakData {
 
 function saveStreakData(data: StreakData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STREAK_KEY, JSON.stringify(data));
+  safeSetItem(STREAK_KEY, JSON.stringify(data));
 }
 
 export function getTodayKey(): string {
@@ -807,7 +809,7 @@ export function getDailyQuests(): DailyQuests {
     // Generate new quests for today
     const weakest = getWeakestPattern();
     const newQuests = generateDailyQuestsData(weakest);
-    localStorage.setItem(QUESTS_KEY, JSON.stringify(newQuests));
+    safeSetItem(QUESTS_KEY, JSON.stringify(newQuests));
     return newQuests;
   } catch {
     return generateDailyQuestsData(null);
@@ -816,7 +818,7 @@ export function getDailyQuests(): DailyQuests {
 
 export function saveDailyQuests(quests: DailyQuests): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(QUESTS_KEY, JSON.stringify(quests));
+  safeSetItem(QUESTS_KEY, JSON.stringify(quests));
 }
 
 /**
@@ -922,7 +924,7 @@ export function getUserSettings(): UserSettings {
 
 export function saveUserSettings(settings: UserSettings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  safeSetItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -972,7 +974,7 @@ export function saveRatingSnapshot(snapshot: RatingSnapshot): void {
     snapshots: trimmed,
     lastFetchedAt: new Date().toISOString(),
   };
-  localStorage.setItem(RATINGS_KEY, JSON.stringify(newData));
+  safeSetItem(RATINGS_KEY, JSON.stringify(newData));
 }
 
 export function shouldFetchRatings(): boolean {
@@ -994,10 +996,7 @@ export async function fetchAndSaveRatings(): Promise<void> {
   if (fetchChesscom) {
     try {
       const username = settings.chesscomUsername.toLowerCase().trim();
-      const res = await fetch(
-        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await chesscomApi.stats(username);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = await res.json();
@@ -1015,10 +1014,7 @@ export async function fetchAndSaveRatings(): Promise<void> {
 
   if (fetchLichess) {
     try {
-      const res = await fetch(
-        `https://lichess.org/api/user/${settings.lichessUsername}`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await lichessApi.user(settings.lichessUsername);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = await res.json();
@@ -1073,7 +1069,7 @@ export function getPlatformRatingsData(): PlatformRatingsData {
 
 function savePlatformRatingsData(data: PlatformRatingsData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PLATFORM_RATINGS_KEY, JSON.stringify(data));
+  safeSetItem(PLATFORM_RATINGS_KEY, JSON.stringify(data));
 }
 
 export function shouldFetchPlatformRatings(): boolean {
@@ -1092,10 +1088,7 @@ export async function fetchAndSavePlatformRatings(): Promise<void> {
   if (settings.trackChesscom && settings.chesscomUsername) {
     try {
       const username = settings.chesscomUsername.toLowerCase().trim();
-      const res = await fetch(
-        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await chesscomApi.stats(username);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const json: any = await res.json();
@@ -1115,10 +1108,7 @@ export async function fetchAndSavePlatformRatings(): Promise<void> {
 
   if (settings.trackLichess && settings.lichessUsername) {
     try {
-      const res = await fetch(
-        `https://lichess.org/api/user/${settings.lichessUsername}`,
-        { headers: { Accept: "application/json" } }
-      );
+      const res = await lichessApi.user(settings.lichessUsername);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const json: any = await res.json();
@@ -1181,7 +1171,7 @@ export function getTacticsRatingData(): TacticsRatingData {
 
 function saveTacticsRatingData(data: TacticsRatingData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(TACTICS_RATING_KEY, JSON.stringify(data));
+  safeSetItem(TACTICS_RATING_KEY, JSON.stringify(data));
 }
 
 /**
@@ -1316,7 +1306,7 @@ export function earnAchievement(id: AchievementId): { earned: boolean; achieveme
   })();
   if (stored[id]) return { earned: false, achievement: null }; // already earned
   stored[id] = new Date().toISOString();
-  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(stored));
+  safeSetItem(ACHIEVEMENTS_KEY, JSON.stringify(stored));
   const def = ACHIEVEMENT_DEFINITIONS.find((a) => a.id === id);
   return { earned: true, achievement: def ? { ...def, earnedAt: stored[id] } : null };
 }
@@ -1360,7 +1350,7 @@ export function updateSessionState(correct: boolean): SessionState {
   } else {
     state.consecutiveCorrect = 0;
   }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+  safeSetItem(SESSION_KEY, JSON.stringify(state));
   return state;
 }
 
@@ -1396,7 +1386,7 @@ export function recordPuzzleFail(puzzleId: string): NemesisEntry {
     lastFailedAt: new Date().toISOString(),
   };
   entries[puzzleId] = updated;
-  localStorage.setItem(NEMESIS_KEY, JSON.stringify(entries));
+  safeSetItem(NEMESIS_KEY, JSON.stringify(entries));
   return updated;
 }
 
@@ -1405,7 +1395,7 @@ export function recordPuzzleWin(puzzleId: string): void {
   const entries = getNemesisEntries();
   if (entries[puzzleId]) {
     entries[puzzleId].defeated = true;
-    localStorage.setItem(NEMESIS_KEY, JSON.stringify(entries));
+    safeSetItem(NEMESIS_KEY, JSON.stringify(entries));
   }
 }
 
@@ -1566,7 +1556,7 @@ export function addPersonalPuzzle(puzzle: PersonalPuzzle): void {
   // Deduplicate by FEN
   if (!puzzles.some((p) => p.fen === puzzle.fen)) {
     puzzles.push(puzzle);
-    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
+    safeSetItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
   }
 }
 
@@ -1577,7 +1567,7 @@ export function addPersonalPuzzles(newPuzzles: PersonalPuzzle[]): number {
   const toAdd = newPuzzles.filter((p) => !existingFens.has(p.fen));
   if (toAdd.length > 0) {
     const merged = [...existing, ...toAdd];
-    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(merged));
+    safeSetItem(PERSONAL_PUZZLES_KEY, JSON.stringify(merged));
   }
   return toAdd.length;
 }
@@ -1588,7 +1578,7 @@ export function markPersonalPuzzleSolved(id: string): void {
   const idx = puzzles.findIndex((p) => p.id === id);
   if (idx >= 0) {
     puzzles[idx].solved = true;
-    localStorage.setItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
+    safeSetItem(PERSONAL_PUZZLES_KEY, JSON.stringify(puzzles));
   }
 }
 
@@ -1624,7 +1614,7 @@ export function incrementPGNImportUsage(): void {
   if (typeof window === "undefined") return;
   const usage = getPGNImportUsage();
   usage.count++;
-  localStorage.setItem(PGN_IMPORT_USAGE_KEY, JSON.stringify(usage));
+  safeSetItem(PGN_IMPORT_USAGE_KEY, JSON.stringify(usage));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1677,7 +1667,7 @@ export function getBoardTheme(): BoardTheme {
 
 export function saveBoardTheme(theme: BoardTheme): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(BOARD_THEME_KEY, theme);
+  safeSetItem(BOARD_THEME_KEY, theme);
 }
 
 export function getPieceStyle(): PieceStyle {
@@ -1687,7 +1677,7 @@ export function getPieceStyle(): PieceStyle {
 
 export function savePieceStyle(style: PieceStyle): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PIECE_STYLE_KEY, style);
+  safeSetItem(PIECE_STYLE_KEY, style);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1915,7 +1905,7 @@ export function getDailyTargetSettings(): DailyTargetSettings {
 
 export function saveDailyTargetSettings(settings: DailyTargetSettings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DAILY_TARGET_KEY, JSON.stringify(settings));
+  safeSetItem(DAILY_TARGET_KEY, JSON.stringify(settings));
 }
 
 /**
@@ -1945,7 +1935,7 @@ export function getHabitData(): HabitData {
 
 function saveHabitData(data: HabitData): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(DAILY_HABIT_KEY, JSON.stringify(data));
+  safeSetItem(DAILY_HABIT_KEY, JSON.stringify(data));
 }
 
 /**
@@ -2064,7 +2054,7 @@ export function getPuzzleProgressMap(): Record<string, PuzzleProgress> {
 
 function savePuzzleProgressMap(map: Record<string, PuzzleProgress>): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PUZZLE_PROGRESS_KEY, JSON.stringify(map));
+  safeSetItem(PUZZLE_PROGRESS_KEY, JSON.stringify(map));
 }
 
 export function getPuzzleProgress(puzzleId: string): PuzzleProgress | null {
@@ -2132,7 +2122,7 @@ export function getPatternRatings(): Record<string, PatternRating> {
 
 function savePatternRatings(ratings: Record<string, PatternRating>): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PATTERN_RATINGS_KEY, JSON.stringify(ratings));
+  safeSetItem(PATTERN_RATINGS_KEY, JSON.stringify(ratings));
 }
 
 export function getPatternRating(theme: string): PatternRating {
@@ -2197,7 +2187,7 @@ export function getLastActivePattern(): string | null {
 
 export function setLastActivePattern(theme: string): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(LAST_ACTIVE_PATTERN_KEY, theme);
+  safeSetItem(LAST_ACTIVE_PATTERN_KEY, theme);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2337,7 +2327,7 @@ export function recordActivityToday(): void {
     log.push(today);
     // Keep last 90 days
     const trimmed = log.slice(-90);
-    localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
+    safeSetItem(ACTIVITY_LOG_KEY, JSON.stringify(trimmed));
   }
 }
 
@@ -2438,7 +2428,7 @@ export function earnNewAchievement(id: NewAchievementId): { earned: boolean; ach
     if (stored.some((s) => s.id === id)) return { earned: false, achievement: null };
     const now = new Date().toISOString();
     stored.push({ id, earnedDate: now });
-    localStorage.setItem(NEW_ACHIEVEMENTS_KEY, JSON.stringify(stored));
+    safeSetItem(NEW_ACHIEVEMENTS_KEY, JSON.stringify(stored));
     const def = NEW_ACHIEVEMENT_DEFINITIONS.find((d) => d.id === id);
     if (!def) return { earned: false, achievement: null };
     return { earned: true, achievement: { ...def, earned: true, earnedDate: now } };
@@ -2582,7 +2572,7 @@ export function ensureWeeklyRatingBaseline(currentRating: number): void {
 
   const existing = getWeeklyRatingGainData();
   if (!existing || existing.weekStart !== weekStart) {
-    localStorage.setItem(WEEKLY_RATING_GAIN_KEY, JSON.stringify({ weekStart, ratingAtWeekStart: currentRating }));
+    safeSetItem(WEEKLY_RATING_GAIN_KEY, JSON.stringify({ weekStart, ratingAtWeekStart: currentRating }));
   }
 }
 
@@ -2610,7 +2600,7 @@ export function getSessionRatingStart(): number {
 
 export function setSessionRatingStart(rating: number): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(SESSION_RATING_KEY, String(rating));
+  safeSetItem(SESSION_RATING_KEY, String(rating));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2632,7 +2622,7 @@ export function getAllTimeHighRating(): number {
 export function updateAllTimeHighRating(currentRating: number): { isNewHigh: boolean; previousHigh: number } {
   const previous = getAllTimeHighRating();
   if (currentRating > previous) {
-    localStorage.setItem(ALL_TIME_HIGH_KEY, String(currentRating));
+    safeSetItem(ALL_TIME_HIGH_KEY, String(currentRating));
     return { isNewHigh: true, previousHigh: previous };
   }
   return { isNewHigh: false, previousHigh: previous };
@@ -2805,7 +2795,7 @@ export function getPuzzleTimes(): PuzzleTimesMap {
 
 function savePuzzleTimes(map: PuzzleTimesMap): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PUZZLE_TIMES_KEY, JSON.stringify(map));
+  safeSetItem(PUZZLE_TIMES_KEY, JSON.stringify(map));
 }
 
 /**
@@ -2911,7 +2901,7 @@ export function saveTimeStandard(seconds: number): void {
   try {
     const settings = JSON.parse(localStorage.getItem("ctt_puzzle_settings") || "{}");
     settings.timeStandard = seconds;
-    localStorage.setItem("ctt_puzzle_settings", JSON.stringify(settings));
+    safeSetItem("ctt_puzzle_settings", JSON.stringify(settings));
   } catch {
     // ignore
   }
@@ -2952,7 +2942,7 @@ export function updatePuzzleRating(puzzleRating: number, won: boolean): { newRat
     rating: newRating,
     totalPuzzlesRated: data.totalPuzzlesRated + 1,
   };
-  localStorage.setItem(PUZZLE_RATING_KEY, JSON.stringify(updated));
+  safeSetItem(PUZZLE_RATING_KEY, JSON.stringify(updated));
   return { newRating, delta };
 }
 
@@ -3000,7 +2990,7 @@ export function saveCalcGymSession(_session: CalcGymSession): void {
   try {
     const sessions = getCalcGymSessions();
     sessions.unshift(_session);
-    localStorage.setItem("ctt_calc_gym_sessions", JSON.stringify(sessions.slice(0, 50)));
+    safeSetItem("ctt_calc_gym_sessions", JSON.stringify(sessions.slice(0, 50)));
   } catch { /* ignore */ }
 }
 export function getCalcGymSessions(): CalcGymSession[] {
@@ -3044,7 +3034,7 @@ export function getCachedExplanation(_puzzleId: string): string | null {
 }
 export function setCachedExplanation(_puzzleId: string, _text: string): void {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(`ctt_explain_${_puzzleId}`, _text); } catch { /* ignore */ }
+  try { safeSetItem(`ctt_explain_${_puzzleId}`, _text); } catch { /* ignore */ }
 }
 
 // Move Comparison
@@ -3202,7 +3192,7 @@ export function saveGameSnapshot(games: Array<{ pgn: string; playerColor: string
     }
     // Keep last 12
     const trimmed = existing.slice(-12);
-    localStorage.setItem(GAME_SNAPSHOTS_KEY, JSON.stringify(trimmed));
+    safeSetItem(GAME_SNAPSHOTS_KEY, JSON.stringify(trimmed));
   } catch { /* ignore */ }
 }
 
@@ -3213,7 +3203,7 @@ export function recordVerbalization(_puzzleId: string, _pattern: VerbalizedPatte
 // Warm-up
 export function setWarmedUpToday(): void {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem("ctt_warmed_up", new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
+  try { safeSetItem("ctt_warmed_up", new Date().toISOString().slice(0, 10)); } catch { /* ignore */ }
 }
 
 // First puzzles start below calibration for confidence building
@@ -3291,7 +3281,7 @@ export function getMasteryProgress(): MasteryProgress {
 
 export function saveMasteryProgress(p: MasteryProgress): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(MASTERY_PROGRESS_KEY, JSON.stringify(p));
+  safeSetItem(MASTERY_PROGRESS_KEY, JSON.stringify(p));
 }
 
 export function getCurrentMasterySet(): MasterySet | null {
@@ -3421,7 +3411,7 @@ export function getCCTMode(): CCTMode {
 }
 
 export function saveCCTMode(v: CCTMode): void {
-  try { localStorage.setItem(CCT_MODE_KEY, v); } catch { /* ignore */ }
+  try { safeSetItem(CCT_MODE_KEY, v); } catch { /* ignore */ }
 }
 
 export function getCCTNudgeCount(): number {
@@ -3434,7 +3424,7 @@ export function getCCTNudgeCount(): number {
 
 export function incrementCCTNudgeCount(): number {
   const count = getCCTNudgeCount() + 1;
-  try { localStorage.setItem(CCT_NUDGE_COUNT_KEY, String(count)); } catch { /* ignore */ }
+  try { safeSetItem(CCT_NUDGE_COUNT_KEY, String(count)); } catch { /* ignore */ }
   return count;
 }
 
@@ -3448,7 +3438,7 @@ export function getCCTSessionCount(): number {
 
 export function incrementCCTSessionCount(): number {
   const count = getCCTSessionCount() + 1;
-  try { localStorage.setItem(CCT_SESSION_COUNT_KEY, String(count)); } catch { /* ignore */ }
+  try { safeSetItem(CCT_SESSION_COUNT_KEY, String(count)); } catch { /* ignore */ }
   return count;
 }
 
@@ -3474,7 +3464,7 @@ export function getCCTFamiliarity(): CCTFamiliarity | null {
 }
 
 export function saveCCTFamiliarity(v: CCTFamiliarity): void {
-  try { localStorage.setItem(CCT_FAMILIARITY_KEY, v); } catch { /* ignore */ }
+  try { safeSetItem(CCT_FAMILIARITY_KEY, v); } catch { /* ignore */ }
 }
 
 export function getCCTOnboardingComplete(): boolean {
@@ -3486,7 +3476,7 @@ export function getCCTOnboardingComplete(): boolean {
 }
 
 export function saveCCTOnboardingComplete(complete: boolean): void {
-  try { localStorage.setItem(CCT_ONBOARDING_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
+  try { safeSetItem(CCT_ONBOARDING_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
 }
 
 export function getCCTFirstSessionComplete(): boolean {
@@ -3498,7 +3488,7 @@ export function getCCTFirstSessionComplete(): boolean {
 }
 
 export function saveCCTFirstSessionComplete(complete: boolean): void {
-  try { localStorage.setItem(CCT_FIRST_SESSION_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
+  try { safeSetItem(CCT_FIRST_SESSION_COMPLETE_KEY, complete ? "true" : "false"); } catch { /* ignore */ }
 }
 
 // CCT Trainer first visit
@@ -3514,7 +3504,7 @@ export function getCCTTrainerFirstVisit(): boolean {
 }
 
 export function saveCCTTrainerFirstVisit(visited: boolean): void {
-  try { localStorage.setItem(CCT_TRAINER_FIRST_VISIT_KEY, visited ? "true" : "false"); } catch { /* ignore */ }
+  try { safeSetItem(CCT_TRAINER_FIRST_VISIT_KEY, visited ? "true" : "false"); } catch { /* ignore */ }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3543,7 +3533,7 @@ export function recordPatternSolveTime(pattern: string, solveTimeMs: number): vo
     if (data[pattern].length > 100) {
       data[pattern] = data[pattern].slice(-100);
     }
-    localStorage.setItem(PATTERN_SOLVE_TIMES_KEY, JSON.stringify(data));
+    safeSetItem(PATTERN_SOLVE_TIMES_KEY, JSON.stringify(data));
   } catch { /* ignore */ }
 }
 
@@ -3618,7 +3608,7 @@ export function incrementPatternMasteryTotal(pattern: string): void {
     const raw = localStorage.getItem(PATTERN_MASTERY_TOTALS_KEY);
     const data: Record<string, number> = raw ? JSON.parse(raw) : {};
     data[pattern] = (data[pattern] || 0) + 1;
-    localStorage.setItem(PATTERN_MASTERY_TOTALS_KEY, JSON.stringify(data));
+    safeSetItem(PATTERN_MASTERY_TOTALS_KEY, JSON.stringify(data));
   } catch { /* ignore */ }
 }
 

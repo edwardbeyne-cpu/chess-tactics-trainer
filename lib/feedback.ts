@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 /**
  * Sprint 5 — Feedback Storage
  *
@@ -46,6 +48,6 @@ export function saveFeedbackResponse(
   };
   const existing = getFeedbackResponses();
   existing.push(full);
-  localStorage.setItem(FEEDBACK_KEY, JSON.stringify(existing));
+  safeSetItem(FEEDBACK_KEY, JSON.stringify(existing));
   return full;
 }

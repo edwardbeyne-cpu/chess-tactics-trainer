@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import patterns from "@/data/patterns";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import {
   getCreatorSets,
   getCreatorProfile,
@@ -49,7 +49,8 @@ function getDbKeyForPattern(patternName: string): string {
 }
 
 // ── Match puzzles from DB based on patterns + rating range ────────────────
-function matchPuzzles(patternNames: string[], minRating: number, maxRating: number, limit = 50): string[] {
+async function matchPuzzles(patternNames: string[], minRating: number, maxRating: number, limit = 50): Promise<string[]> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const ids: string[] = [];
   const seen = new Set<string>();
 
@@ -68,8 +69,9 @@ function matchPuzzles(patternNames: string[], minRating: number, maxRating: numb
   return ids.slice(0, limit);
 }
 
-function getPreviewPuzzles(patternNames: string[], minRating: number, maxRating: number) {
-  const ids = matchPuzzles(patternNames, minRating, maxRating, 5);
+async function getPreviewPuzzles(patternNames: string[], minRating: number, maxRating: number) {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
+  const ids = await matchPuzzles(patternNames, minRating, maxRating, 5);
   const preview: Array<{ id: string; rating: number; pattern: string }> = [];
   for (const name of patternNames) {
     const dbKey = getDbKeyForPattern(name);
@@ -225,15 +227,21 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     if (selectedPatterns.length > 0) {
-      const prev = getPreviewPuzzles(selectedPatterns, minRating, maxRating);
-      setPreview(prev);
-      const all = matchPuzzles(selectedPatterns, minRating, maxRating, 50);
-      setMatchCount(all.length);
+      (async () => {
+        const prev = await getPreviewPuzzles(selectedPatterns, minRating, maxRating);
+        if (cancelled) return;
+        setPreview(prev);
+        const all = await matchPuzzles(selectedPatterns, minRating, maxRating, 50);
+        if (cancelled) return;
+        setMatchCount(all.length);
+      })();
     } else {
       setPreview([]);
       setMatchCount(0);
     }
+    return () => { cancelled = true; };
   }, [selectedPatterns, minRating, maxRating]);
 
   function togglePattern(name: string) {
@@ -242,7 +250,7 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
     );
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!name.trim()) { setError("Set name is required"); return; }
     if (selectedPatterns.length === 0) { setError("Select at least one pattern"); return; }
     if (matchCount === 0) { setError("No puzzles match your filters — try adjusting rating range"); return; }
@@ -251,7 +259,7 @@ function CreateSetModal({ onClose, onCreated }: { onClose: () => void; onCreated
     const sets = getCreatorSets();
     const existingCodes = sets.map((s) => s.shareCode);
     const shareCode = generateUniqueShareCode(existingCodes);
-    const puzzleIds = matchPuzzles(selectedPatterns, minRating, maxRating, 50);
+    const puzzleIds = await matchPuzzles(selectedPatterns, minRating, maxRating, 50);
 
     const newSet: CreatorSet = {
       id: `set_${Date.now()}`,

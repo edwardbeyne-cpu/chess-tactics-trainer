@@ -1,6 +1,7 @@
 // Lichess Puzzle API integration
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
+import { lichess as lichessApi } from "@/lib/chess-api";
 
 export interface LichessPuzzle {
   id: string;
@@ -148,21 +149,10 @@ function parseLichessPuzzleResponse(
 // In-memory puzzle cache: theme → queue of puzzles
 const puzzleCache: Record<string, LichessPuzzle[]> = {};
 const CACHE_SIZE = 5; // prefetch 5 puzzles per theme
-let lastFetchTime = 0;
-const MIN_FETCH_INTERVAL = 1000; // 1 second between Lichess API calls
-
-async function throttledFetch(url: string): Promise<Response> {
-  const now = Date.now();
-  const wait = MIN_FETCH_INTERVAL - (now - lastFetchTime);
-  if (wait > 0) await new Promise(r => setTimeout(r, wait));
-  lastFetchTime = Date.now();
-  return fetch(url, { headers: { Accept: "application/json" } });
-}
 
 async function prefetchForTheme(lichessTheme: string): Promise<void> {
-  const url = `https://lichess.org/api/puzzle/next?angle=${lichessTheme}`;
   try {
-    const response = await throttledFetch(url);
+    const response = await lichessApi.puzzle(lichessTheme);
     if (!response.ok) return;
     const data: LichessApiPuzzleResponse = await response.json();
     const puzzle = parseLichessPuzzleResponse(data);
@@ -184,6 +174,7 @@ export async function fetchPuzzleByTheme(theme: string): Promise<LichessPuzzle> 
   const lichessTheme = mapThemeToLichess(theme);
 
   // ── Local cache first (bundled puzzles — no API call needed) ────────────
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const localPuzzles = cachedPuzzlesByTheme[lichessTheme];
   if (localPuzzles && localPuzzles.length > 0) {
     const puzzle = localPuzzles[Math.floor(Math.random() * localPuzzles.length)];
@@ -205,9 +196,8 @@ export async function fetchPuzzleByTheme(theme: string): Promise<LichessPuzzle> 
     return puzzle;
   }
 
-  // ── Live Lichess API fallback (throttled) ────────────────────────────────
-  const url = `https://lichess.org/api/puzzle/next?angle=${lichessTheme}`;
-  const response = await throttledFetch(url);
+  // ── Live Lichess API fallback (via proxy) ────────────────────────────────
+  const response = await lichessApi.puzzle(lichessTheme);
 
   if (!response.ok) {
     throw new Error(`Lichess API error: ${response.status}`);
@@ -226,11 +216,7 @@ export async function fetchPuzzleByTheme(theme: string): Promise<LichessPuzzle> 
  * Fetch a random puzzle from Lichess (no theme filter).
  */
 export async function fetchRandomPuzzle(): Promise<LichessPuzzle> {
-  const url = `https://lichess.org/api/puzzle/next`;
-
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-  });
+  const response = await lichessApi.puzzle();
 
   if (!response.ok) {
     throw new Error(
@@ -246,11 +232,7 @@ export async function fetchRandomPuzzle(): Promise<LichessPuzzle> {
  * Fetch a specific puzzle by ID from Lichess.
  */
 export async function fetchPuzzleById(id: string): Promise<LichessPuzzle> {
-  const url = `https://lichess.org/api/puzzle/${id}`;
-
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-  });
+  const response = await lichessApi.puzzleById(id);
 
   if (!response.ok) {
     throw new Error(

@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 /**
  * Sprint 8 — Weekly Aggregate Stats Foundation
  *
@@ -52,7 +54,7 @@ function getAggregate(): WeeklyAggregate | null {
 
 function saveAggregate(data: WeeklyAggregate): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(AGGREGATE_KEY, JSON.stringify(data));
+  safeSetItem(AGGREGATE_KEY, JSON.stringify(data));
 }
 
 /**

@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 // Sprint 23 — Creator Mode Storage
 // Manages custom puzzle sets and creator profiles
 
@@ -44,7 +46,7 @@ export function getCreatorProfile(): CreatorProfile {
 
 export function saveCreatorProfile(profile: CreatorProfile): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CREATOR_PROFILE_KEY, JSON.stringify(profile));
+  safeSetItem(CREATOR_PROFILE_KEY, JSON.stringify(profile));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +64,7 @@ export function getCreatorSets(): CreatorSet[] {
 
 export function saveCreatorSets(sets: CreatorSet[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CREATOR_SETS_KEY, JSON.stringify(sets));
+  safeSetItem(CREATOR_SETS_KEY, JSON.stringify(sets));
 }
 
 export function addCreatorSet(set: CreatorSet): void {
@@ -114,7 +116,7 @@ export function setActiveCreatorSet(set: CreatorSet | null): void {
   if (set === null) {
     localStorage.removeItem(ACTIVE_CREATOR_SET_KEY);
   } else {
-    localStorage.setItem(ACTIVE_CREATOR_SET_KEY, JSON.stringify(set));
+    safeSetItem(ACTIVE_CREATOR_SET_KEY, JSON.stringify(set));
   }
 }
 

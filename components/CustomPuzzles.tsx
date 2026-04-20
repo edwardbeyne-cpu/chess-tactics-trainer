@@ -1,5 +1,7 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Chess } from "chess.js";
 import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
@@ -140,7 +142,7 @@ function loadCustomMastery(): CustomMasteryProgress {
 
 function saveCustomMastery(progress: CustomMasteryProgress) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CUSTOM_MASTERY_SET_KEY, JSON.stringify(progress));
+  safeSetItem(CUSTOM_MASTERY_SET_KEY, JSON.stringify(progress));
 }
 
 function buildCustomMasterySet(generatedPuzzles: GeneratedCustomPuzzle[], fallbackIds: string[]): MasterySet {
@@ -519,10 +521,7 @@ interface ChesscomGame {
 
 async function fetchChesscomGames(username: string): Promise<Array<{ pgn: string; playerColor: string }>> {
   // 1. Get archives
-  const archivesRes = await fetch(
-    `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
-    { headers: { 'User-Agent': 'ChessTacticsTrainer/1.0' } }
-  );
+  const archivesRes = await chesscomApi.archives(username);
   if (!archivesRes.ok) throw new Error(`Chess.com API error: ${archivesRes.status}`);
   const { archives } = await archivesRes.json() as { archives: string[] };
   if (!archives || archives.length === 0) throw new Error('No games found for this username');
@@ -535,9 +534,7 @@ async function fetchChesscomGames(username: string): Promise<Array<{ pgn: string
   for (let i = 0; i < maxArchivesToFetch && allGames.length < MAX_GAMES; i++) {
     const archiveUrl = archives[archives.length - 1 - i];
     try {
-      const gamesRes = await fetch(archiveUrl, {
-        headers: { 'User-Agent': 'ChessTacticsTrainer/1.0' }
-      });
+      const gamesRes = await chesscomApi.archive(archiveUrl);
       if (!gamesRes.ok) continue; // Skip failed fetches, try next archive
       const { games } = await gamesRes.json() as { games: ChesscomGame[] };
       if (!games || games.length === 0) continue;
@@ -561,10 +558,7 @@ async function fetchChesscomGames(username: string): Promise<Array<{ pgn: string
 // ── Lichess game fetcher ───────────────────────────────────────────────────
 
 async function fetchLichessGames(username: string): Promise<Array<{ pgn: string; playerColor: string }>> {
-  const url = `https://lichess.org/api/games/user/${username}?max=${MAX_GAMES}&moves=true&pgnInJson=false`;
-  const res = await fetch(url, {
-    headers: { Accept: 'application/x-ndjson' }
-  });
+  const res = await lichessApi.games(username, { max: MAX_GAMES, moves: true, pgnInJson: false });
   if (!res.ok) throw new Error(`Lichess API error: ${res.status}`);
 
   const text = await res.text();
@@ -1749,10 +1743,10 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
 
             // Save for future use
             try {
-              localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
-              localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
-              localStorage.setItem(CUSTOM_USERNAME_KEY, storedUsername);
-              localStorage.setItem(CUSTOM_PLATFORM_KEY, storedPlatform);
+              safeSetItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
+              safeSetItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
+              safeSetItem(CUSTOM_USERNAME_KEY, storedUsername);
+              safeSetItem(CUSTOM_PLATFORM_KEY, storedPlatform);
             } catch {
               // ignore storage errors
             }
@@ -1855,8 +1849,8 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
           onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
             setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
             try {
-              localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
-              localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
+              safeSetItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
+              safeSetItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
             } catch {
               // ignore storage errors during progressive generation
             }
@@ -1895,11 +1889,11 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
       };
 
       try {
-        localStorage.setItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
-        localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
-        localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
-        localStorage.setItem(CUSTOM_USERNAME_KEY, uname);
-        localStorage.setItem(CUSTOM_PLATFORM_KEY, plat);
+        safeSetItem(CUSTOM_ANALYSIS_KEY, JSON.stringify(result));
+        safeSetItem(CUSTOM_QUEUE_KEY, JSON.stringify(customQueue));
+        safeSetItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(generatedPuzzles));
+        safeSetItem(CUSTOM_USERNAME_KEY, uname);
+        safeSetItem(CUSTOM_PLATFORM_KEY, plat);
         saveCustomMastery(freshMastery);
       } catch {
         // ignore storage errors

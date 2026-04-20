@@ -1,8 +1,9 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Chess } from "chess.js";
-import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles";
+import { loadPuzzleData } from "@/lib/puzzle-data";
 import ChessBoard from "./ChessBoard";
 
 // ── Storage ────────────────────────────────────────────────────────────────
@@ -37,7 +38,7 @@ function loadStats(): BlunderSimStats {
 
 function saveStats(stats: BlunderSimStats): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
+  safeSetItem(STORAGE_KEY, JSON.stringify(stats));
 }
 
 export function getBlunderResistanceScore(): number {
@@ -170,7 +171,8 @@ function getBlunderExplanation(themes: string[]): string {
  * that walks into the tactic (i.e., NOT the solution).
  * The "safe move" is moves[1] (the actual puzzle solution).
  */
-function sampleBlunderPositions(count: number): BlunderPosition[] {
+async function sampleBlunderPositions(count: number): Promise<BlunderPosition[]> {
+  const { cachedPuzzlesByTheme } = await loadPuzzleData();
   const allThemes = Object.keys(cachedPuzzlesByTheme);
   const results: BlunderPosition[] = [];
   const usedIds = new Set<string>();
@@ -487,8 +489,8 @@ export default function BlunderSimulation() {
     setOverallScore(getBlunderResistanceScore());
   }, []);
 
-  const startSession = useCallback(() => {
-    const sampled = sampleBlunderPositions(SESSION_SIZE);
+  const startSession = useCallback(async () => {
+    const sampled = await sampleBlunderPositions(SESSION_SIZE);
     if (sampled.length < 3) {
       // Not enough positions — shouldn't happen with current data
       return;

@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Chess } from "chess.js";
 import { BETA_CODE, getUserProfile, saveUserProfile, applyBetaCode } from "@/lib/auth";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 import {
   getPGNs,
   savePGN,
@@ -242,8 +243,7 @@ function RatingTrackingSection() {
     setTestResult(null);
     try {
       const username = settings.chesscomUsername.toLowerCase().trim();
-      const url = `https://api.chess.com/pub/player/${encodeURIComponent(username)}/stats`;
-      const res = await fetch(url);
+      const res = await chesscomApi.stats(username);
       
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,7 +275,7 @@ function RatingTrackingSection() {
     setTesting("lichess");
     setTestResult(null);
     try {
-      const res = await fetch(`https://lichess.org/api/user/${settings.lichessUsername}`);
+      const res = await lichessApi.user(settings.lichessUsername);
       if (res.ok) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any = await res.json();

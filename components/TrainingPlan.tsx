@@ -1,5 +1,7 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
+import { chesscom as chesscomApi } from "@/lib/chess-api";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -314,7 +316,7 @@ function getPlatformRatings(): PlatformRatings | null {
 
 function savePlatformRatings(data: PlatformRatings): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PLATFORM_RATINGS_KEY, JSON.stringify(data));
+  safeSetItem(PLATFORM_RATINGS_KEY, JSON.stringify(data));
 }
 
 function getTrainingStartDate(): string | null {
@@ -605,17 +607,11 @@ export function ConnectModal({ onClose, onConnected }: {
     try {
       let res: Response;
       try {
-        res = await fetch(`https://api.chess.com/pub/player/${uname.toLowerCase()}/stats`, {
-          headers: { Accept: "application/json" },
-          redirect: "follow",
-        });
+        res = await chesscomApi.stats(uname);
       } catch {
         // Retry once after 1 second — handles transient mobile network issues
         await new Promise((r) => setTimeout(r, 1000));
-        res = await fetch(`https://api.chess.com/pub/player/${uname.toLowerCase()}/stats`, {
-          headers: { Accept: "application/json" },
-          redirect: "follow",
-        });
+        res = await chesscomApi.stats(uname);
       }
       if (!res.ok) {
         setError(`Username "${uname}" not found on Chess.com.`);
@@ -643,8 +639,8 @@ export function ConnectModal({ onClose, onConnected }: {
     if (!fetched) return;
     const ratings: PlatformRatings = { ...fetched, main: selectedMain };
     savePlatformRatings(ratings);
-    localStorage.setItem(CUSTOM_USERNAME_KEY, username.trim());
-    localStorage.setItem(CUSTOM_PLATFORM_KEY, "chesscom");
+    safeSetItem(CUSTOM_USERNAME_KEY, username.trim());
+    safeSetItem(CUSTOM_PLATFORM_KEY, "chesscom");
     onConnected(ratings, username.trim());
   }
 
@@ -946,9 +942,7 @@ export default function TrainingPlan() {
   // Fetch Chess.com avatar
   useEffect(() => {
     if (!username || platform !== "chesscom") return;
-    fetch(`https://api.chess.com/pub/player/${username.toLowerCase()}`, {
-      headers: { Accept: "application/json" },
-    })
+    chesscomApi.profile(username)
       .then((r) => r.json())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((d: any) => { if (d?.avatar) setChesscomAvatar(d.avatar); })
@@ -1292,7 +1286,7 @@ export default function TrainingPlan() {
               </button>
               <button
                 onClick={() => {
-                  try { localStorage.setItem("ctt_chesscom_prompt_dismissed", "1"); } catch { /* ignore */ }
+                  try { safeSetItem("ctt_chesscom_prompt_dismissed", "1"); } catch { /* ignore */ }
                   setChesscomPromptDismissed(true);
                 }}
                 style={{

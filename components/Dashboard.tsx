@@ -1,5 +1,7 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 import { useMemo, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -77,17 +79,14 @@ async function fetchAndSaveGameSnapshots(platform: string, username: string): Pr
   try {
     let games: Array<{ pgn: string; playerColor: string }> = [];
     if (platform === "chesscom") {
-      const archivesRes = await fetch(
-        `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
-        { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } }
-      );
+      const archivesRes = await chesscomApi.archives(username);
       if (!archivesRes.ok) return;
       const { archives } = await archivesRes.json() as { archives: string[] };
       if (!archives?.length) return;
       const reversedArchives = [...archives].reverse();
       for (const archive of reversedArchives) {
         if (games.length >= 50) break;
-        const gamesRes = await fetch(archive, { headers: { "User-Agent": "ChessTacticsTrainer/1.0" } });
+        const gamesRes = await chesscomApi.archive(archive);
         if (!gamesRes.ok) continue;
         const { games: archiveGames } = await gamesRes.json() as {
           games: Array<{ pgn: string; white: { username: string }; black: { username: string } }>;
@@ -102,10 +101,7 @@ async function fetchAndSaveGameSnapshots(platform: string, username: string): Pr
         }
       }
     } else {
-      const res = await fetch(
-        `https://lichess.org/api/games/user/${username}?max=10&moves=true&pgnInJson=false`,
-        { headers: { Accept: "application/x-ndjson" } }
-      );
+      const res = await lichessApi.games(username, { max: 10, moves: true, pgnInJson: false });
       if (!res.ok) return;
       const text = await res.text();
       games = text.trim().split("\n").filter(Boolean).map((line) => {
@@ -1236,7 +1232,7 @@ export default function Dashboard() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
     if (sessionId) {
-      localStorage.setItem("subscription_status", "active");
+      safeSetItem("subscription_status", "active");
       const url = new URL(window.location.href);
       url.searchParams.delete("session_id");
       window.history.replaceState({}, "", url.toString());

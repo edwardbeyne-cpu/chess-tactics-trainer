@@ -1,3 +1,4 @@
+import { safeSetItem } from "@/lib/safe-storage";
 import { Chess } from "chess.js";
 import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
 import { getTacticsRatingData } from "@/lib/storage";
@@ -67,7 +68,7 @@ export function loadThreatDetectionProgress(): ThreatDetectionProgress {
 
 export function saveThreatDetectionProgress(progress: ThreatDetectionProgress) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(THREAT_DETECTION_PROGRESS_KEY, JSON.stringify(progress));
+  safeSetItem(THREAT_DETECTION_PROGRESS_KEY, JSON.stringify(progress));
 }
 
 function normalizeTheme(themes: string[]): string {

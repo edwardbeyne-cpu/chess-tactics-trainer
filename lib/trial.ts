@@ -1,3 +1,5 @@
+import { safeSetItem } from "@/lib/safe-storage";
+
 /**
  * Trial management utilities
  */
@@ -51,7 +53,7 @@ export function startTrial() {
   }
 
   const now = new Date().toISOString();
-  localStorage.setItem('trial_start_date', now);
+  safeSetItem('trial_start_date', now);
   return true;
 }
 

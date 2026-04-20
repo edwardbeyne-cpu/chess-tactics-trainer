@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import CalibrationFlow from "@/components/CalibrationFlow";
@@ -22,14 +23,14 @@ export default function CalibrationPage() {
     setStep("intro");
   }, [router]);
 
-  function handleComplete(_finalElo: number) {
+  async function handleComplete(_finalElo: number) {
     try {
-      localStorage.setItem("ctt_calibration_complete", "true");
+      safeSetItem("ctt_calibration_complete", "true");
       // Sync calibration rating into tactics rating so both show same starting number
       const calibRating = _finalElo || parseInt(localStorage.getItem("ctt_calibration_rating") || "800", 10);
       const existingTactics = (() => { try { return JSON.parse(localStorage.getItem("ctt_tactics_rating") || "null"); } catch { return null; } })();
       if (!existingTactics || existingTactics.tacticsRating === 800) {
-        localStorage.setItem("ctt_tactics_rating", JSON.stringify({
+        safeSetItem("ctt_tactics_rating", JSON.stringify({
           tacticsRating: calibRating,
           tacticsRatingStart: calibRating,
           tacticsRatingHistory: [],
@@ -38,7 +39,7 @@ export default function CalibrationPage() {
       // Initialize mastery Set 1 so Training Plan shows it immediately
       const progress = getMasteryProgress();
       if (progress.sets.length === 0) {
-        const set1 = generateMasterySet(1);
+        const set1 = await generateMasterySet(1);
         saveMasteryProgress({
           ...progress,
           currentSetNumber: 1,

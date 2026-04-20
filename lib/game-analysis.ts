@@ -1,7 +1,9 @@
 // lib/game-analysis.ts
 // Shared connected-account game analysis for Training Plan coaching output
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { Chess, type Square } from "chess.js";
+import { chesscom as chesscomApi, lichess as lichessApi } from "@/lib/chess-api";
 
 type Platform = "chesscom" | "lichess";
 type GameResult = { pgn: string; playerColor: string };
@@ -418,10 +420,7 @@ export async function fetchRecentGames(
   platform: Platform = "chesscom"
 ): Promise<GameResult[]> {
   if (platform === "chesscom") {
-    const archivesRes = await fetch(
-      `https://api.chess.com/pub/player/${username.toLowerCase()}/games/archives`,
-      { headers: { Accept: "application/json" }, redirect: "follow" }
-    );
+    const archivesRes = await chesscomApi.archives(username);
     if (!archivesRes.ok) return [];
     const { archives } = (await archivesRes.json()) as { archives: string[] };
     if (!archives?.length) return [];
@@ -431,9 +430,7 @@ export async function fetchRecentGames(
 
     for (const archive of reversed) {
       if (allGames.length >= 50) break;
-      const res = await fetch(archive, {
-        headers: { Accept: "application/json" }, redirect: "follow",
-      });
+      const res = await chesscomApi.archive(archive);
       if (!res.ok) continue;
       const { games } = (await res.json()) as {
         games: Array<{
@@ -461,10 +458,7 @@ export async function fetchRecentGames(
   }
 
   // Lichess
-  const res = await fetch(
-    `https://lichess.org/api/games/user/${username}?max=50&pgnInJson=true&clocks=false&evals=false&opening=false`,
-    { headers: { Accept: "application/x-ndjson" } }
-  );
+  const res = await lichessApi.games(username, { max: 50, pgnInJson: true });
   if (!res.ok) return [];
   const text = await res.text();
   return text
@@ -616,10 +610,10 @@ export async function runGameAnalysis(
 ): Promise<boolean> {
   if (typeof window === "undefined") return false;
   const debugLines: string[] = [];
-  const dbg = (msg: string) => { debugLines.push(msg); console.log(msg); localStorage.setItem("ctt_analysis_debug", JSON.stringify(debugLines)); };
+  const dbg = (msg: string) => { debugLines.push(msg); console.log(msg); safeSetItem("ctt_analysis_debug", JSON.stringify(debugLines)); };
   try {
     // Signal that analysis is in progress so UI can show loading state
-    localStorage.setItem("ctt_analysis_status", "running");
+    safeSetItem("ctt_analysis_status", "running");
     dbg(`[CTT] Starting game analysis for ${username} ${platform}`);
 
     const games = await fetchRecentGames(username, platform);
@@ -633,7 +627,7 @@ export async function runGameAnalysis(
       console.log("[CTT] First game parsed moves:", testMoves.length, "sample:", testMoves.slice(0, 5));
     }
     if (games.length === 0) {
-      localStorage.setItem("ctt_analysis_status", "done");
+      safeSetItem("ctt_analysis_status", "done");
       return false;
     }
 
@@ -643,7 +637,7 @@ export async function runGameAnalysis(
     // If no missed tactics found, don't store empty data — let auto-retry handle it
     if (missed.length === 0) {
       console.warn("[CTT] No missed tactics detected — skipping localStorage write so auto-retry can re-analyze");
-      localStorage.setItem("ctt_analysis_status", "empty");
+      safeSetItem("ctt_analysis_status", "empty");
       return false;
     }
     const { strengths, weaknesses, recommendation } =
@@ -660,11 +654,11 @@ export async function runGameAnalysis(
       gameCount: games.length,
     };
 
-    localStorage.setItem("ctt_custom_analysis", JSON.stringify(payload));
-    localStorage.setItem("ctt_game_analysis", JSON.stringify(payload));
-    localStorage.setItem("ctt_custom_platform", platform);
-    localStorage.setItem("ctt_custom_username", username);
-    localStorage.setItem("ctt_analysis_status", "done");
+    safeSetItem("ctt_custom_analysis", JSON.stringify(payload));
+    safeSetItem("ctt_game_analysis", JSON.stringify(payload));
+    safeSetItem("ctt_custom_platform", platform);
+    safeSetItem("ctt_custom_username", username);
+    safeSetItem("ctt_analysis_status", "done");
 
     // Build threat detection puzzles from the user's games
     const threatPuzzles = buildThreatDetectionPuzzlesFromGames(
@@ -672,7 +666,7 @@ export async function runGameAnalysis(
       `${platform}:${username}`
     );
     dbg(`[CTT] Built ${threatPuzzles.length} threat detection puzzles from games`);
-    localStorage.setItem(THREAT_DETECTION_GAMES_KEY, JSON.stringify(threatPuzzles));
+    safeSetItem(THREAT_DETECTION_GAMES_KEY, JSON.stringify(threatPuzzles));
 
     if (missed.length > 0) {
       const queue = missed.slice(0, 50).map((m, i) => ({
@@ -681,7 +675,7 @@ export async function runGameAnalysis(
         theme: m.pattern,
         source: `${platform}:${username}`,
       }));
-      localStorage.setItem("ctt_custom_queue", JSON.stringify(queue));
+      safeSetItem("ctt_custom_queue", JSON.stringify(queue));
     }
 
     console.log("[CTT] Analysis saved to localStorage successfully");
@@ -689,7 +683,7 @@ export async function runGameAnalysis(
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     dbg(`[CTT] Game analysis FAILED: ${errMsg}`);
-    localStorage.setItem("ctt_analysis_status", "error");
+    safeSetItem("ctt_analysis_status", "error");
     return false;
   }
 }

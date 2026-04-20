@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect } from "react";
 import { Chess } from "chess.js";
 import puzzles from "@/data/puzzles";
@@ -40,7 +41,7 @@ function removeFromReviewQueue(puzzleId: string): void {
   if (typeof window === "undefined") return;
   try {
     const queue = getReviewQueue().filter((id) => id !== puzzleId);
-    localStorage.setItem(REVIEW_QUEUE_KEY, JSON.stringify(queue));
+    safeSetItem(REVIEW_QUEUE_KEY, JSON.stringify(queue));
   } catch {
     // ignore
   }

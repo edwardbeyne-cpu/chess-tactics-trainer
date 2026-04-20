@@ -1,10 +1,11 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { Chess } from "chess.js";
 import patterns from "@/data/patterns";
-import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS } from "@/data/lichess-puzzles";
+import { usePuzzleData } from "@/lib/puzzle-data";
 import PatternProgressModal from "./PatternProgressModal";
 import {
   recordAttempt,
@@ -97,7 +98,7 @@ function getMixedDrillElo(): number {
 function updateMixedDrillElo(won: boolean): number {
   const current = getMixedDrillElo();
   const newElo = Math.max(100, current + (won ? 15 : -10));
-  if (typeof window !== "undefined") localStorage.setItem(MIXED_DRILL_ELO_KEY, String(newElo));
+  if (typeof window !== "undefined") safeSetItem(MIXED_DRILL_ELO_KEY, String(newElo));
   return newElo;
 }
 
@@ -111,7 +112,7 @@ function addToReviewQueue(puzzleId: string): void {
     const queue: string[] = JSON.parse(localStorage.getItem(REVIEW_QUEUE_KEY) || "[]");
     if (!queue.includes(puzzleId)) {
       queue.push(puzzleId);
-      localStorage.setItem(REVIEW_QUEUE_KEY, JSON.stringify(queue));
+      safeSetItem(REVIEW_QUEUE_KEY, JSON.stringify(queue));
     }
   } catch {
     // ignore
@@ -123,7 +124,7 @@ function removeFromReviewQueue(puzzleId: string): void {
   try {
     const queue: string[] = JSON.parse(localStorage.getItem(REVIEW_QUEUE_KEY) || "[]");
     const updated = queue.filter((id) => id !== puzzleId);
-    localStorage.setItem(REVIEW_QUEUE_KEY, JSON.stringify(updated));
+    safeSetItem(REVIEW_QUEUE_KEY, JSON.stringify(updated));
   } catch {
     // ignore
   }
@@ -981,6 +982,10 @@ function LichessPatternMode({
   settingsOpen: boolean;
   onOpenSettings: () => void;
 }) {
+  const puzzleData = usePuzzleData();
+  const cachedPuzzlesByTheme = puzzleData?.cachedPuzzlesByTheme ?? {};
+  const PATTERN_PUZZLE_COUNTS = puzzleData?.PATTERN_PUZZLE_COUNTS ?? {};
+
   // Calculate tier lockout from SM2 attempts
   const { tier2Locked, tier3Locked } = useMemo(() => {
     const sm2 = getSM2Attempts();
@@ -1277,6 +1282,9 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
   const boardWidth = useResponsiveBoardWidth();
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<PuzzleMode>(defaultMode ?? "lichess");
+  const puzzleData = usePuzzleData();
+  const cachedPuzzlesByTheme = puzzleData?.cachedPuzzlesByTheme ?? {};
+  const PATTERN_PUZZLE_COUNTS = puzzleData?.PATTERN_PUZZLE_COUNTS ?? {};
 
   // Sprint 10: Puzzle settings
   const [puzzleSettings, setPuzzleSettings] = useState<PuzzleSettings>(DEFAULT_PUZZLE_SETTINGS);

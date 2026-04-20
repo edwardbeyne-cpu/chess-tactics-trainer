@@ -17,15 +17,16 @@ Next.js web app for chess improvement through personalized tactical training. Li
 - **Client-side only** — all analysis, storage, and puzzle logic runs in the browser
 - **localStorage for everything** — user data, mastery progress, analysis results, settings
 - **No backend** — Chess.com/Lichess APIs called directly from client
-- **Lazy-load lichess-puzzles** — `data/lichess-puzzles.ts` is a massive file (~3MB). NEVER import it at the top level of a component or lib file. Always use `const { cachedPuzzlesByTheme } = await import("@/data/lichess-puzzles")` inside async functions. Top-level imports crash pages on Vercel.
+- **Lazy-load lichess-puzzles via `lib/puzzle-data.ts`** — `data/lichess-puzzles.ts` is ~416KB. NEVER import its data exports (`cachedPuzzlesByTheme`, `PATTERN_PUZZLE_COUNTS`, `PUZZLES_PER_PATTERN`) at the top level. Use `usePuzzleData()` in render code or `await loadPuzzleData()` in async functions. Type-only imports (`import type { LichessCachedPuzzle }`) are fine.
+- **Quota-aware storage** — Use `safeSetItem` from `@/lib/safe-storage` instead of `localStorage.setItem`. It catches `QuotaExceededError`, prunes unbounded keys (`ctt_sm2_attempts`, `ctt_activity_log`, `ctt_puzzle_times`, `ctt_personal_puzzles`), and retries.
+- **Chess.com / Lichess API proxy** — Use `lib/chess-api.ts` (`chesscom.stats(u)`, `lichess.user(u)`, etc.) instead of fetching `api.chess.com` / `lichess.org` directly. The proxy at `/api/chess` adds Vercel edge caching (`s-maxage` 5min–6hr).
 
 ## Critical Gotchas
-1. **Lichess puzzle imports** — MUST be dynamic/lazy. Top-level `import { cachedPuzzlesByTheme } from "@/data/lichess-puzzles"` will crash any page that includes the component. Use `await import()` inside functions.
-2. **Vercel deployment** — Run `vercel --prod --yes` manually after each push. No auto-deploy.
-3. **Object.entries/Object.values** — Always null-guard: `Object.entries(data ?? {})`. localStorage data can be null/malformed.
-4. **Chess.com API** — Usernames must be `.toLowerCase()`. Don't use `User-Agent` header (mobile Safari blocks it). Use `Accept: application/json` + `redirect: "follow"`.
-5. **SSR guards** — Many functions need `if (typeof window === "undefined") return` guards since components are `"use client"` but may still SSR.
-6. **useState initialization from localStorage** — Use lazy initializer `useState(() => { if (typeof window === "undefined") return default; return readFromLocalStorage(); })` to avoid hydration mismatches and paywall flashes.
+1. **Vercel deployment** — Run `vercel --prod --yes` manually after each push. No auto-deploy.
+2. **Object.entries/Object.values** — Always null-guard: `Object.entries(data ?? {})`. localStorage data can be null/malformed.
+3. **Chess.com API** — Usernames must be `.toLowerCase()`. Don't use `User-Agent` header (mobile Safari blocks it). Prefer `lib/chess-api.ts` over direct fetches.
+4. **SSR guards** — Many functions need `if (typeof window === "undefined") return` guards since components are `"use client"` but may still SSR.
+5. **useState initialization from localStorage** — Use lazy initializer `useState(() => { if (typeof window === "undefined") return default; return readFromLocalStorage(); })` to avoid hydration mismatches and paywall flashes.
 
 ## Project Structure
 ```

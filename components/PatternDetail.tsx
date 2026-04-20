@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import patterns from "@/data/patterns";
-import { cachedPuzzlesByTheme, PATTERN_PUZZLE_COUNTS, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import type { LichessCachedPuzzle } from "@/data/lichess-puzzles";
+import { usePuzzleData } from "@/lib/puzzle-data";
 import {
   getPuzzleProgressMap,
   getPatternRating,
@@ -60,6 +61,7 @@ export default function PatternDetail() {
   const routeTheme = typeof params.theme === "string" ? params.theme : "";
 
   const [progressMap, setProgressMap] = useState<Record<string, PuzzleProgress>>({});
+  const puzzleData = usePuzzleData();
 
   useEffect(() => {
     setProgressMap(getPuzzleProgressMap());
@@ -80,20 +82,21 @@ export default function PatternDetail() {
       .map((t) => t.toLowerCase().replace(/[\s_]/g, ""))
       .filter(Boolean);
 
-    const directThemeMatch = normalizedThemes.find((t) => cachedPuzzlesByTheme[t]);
+    const byTheme = puzzleData?.cachedPuzzlesByTheme ?? {};
+    const directThemeMatch = normalizedThemes.find((t) => byTheme[t]);
     if (directThemeMatch) return directThemeMatch;
 
     const slug = pattern.name.toLowerCase().replace(/\s+/g, "");
-    if (cachedPuzzlesByTheme[slug]) return slug;
+    if (byTheme[slug]) return slug;
 
     return routeTheme.toLowerCase();
-  }, [pattern, routeTheme]);
+  }, [pattern, routeTheme, puzzleData]);
 
   const puzzles: LichessCachedPuzzle[] = useMemo(() => {
-    return cachedPuzzlesByTheme[canonicalThemeKey] ?? [];
-  }, [canonicalThemeKey]);
+    return puzzleData?.cachedPuzzlesByTheme[canonicalThemeKey] ?? [];
+  }, [canonicalThemeKey, puzzleData]);
 
-  const totalPuzzles = PATTERN_PUZZLE_COUNTS[canonicalThemeKey] ?? puzzles.length;
+  const totalPuzzles = puzzleData?.PATTERN_PUZZLE_COUNTS[canonicalThemeKey] ?? puzzles.length;
   const patternRating = getPatternRating(canonicalThemeKey);
   const summary = useMemo(() => getPatternCurriculumSummary(canonicalThemeKey, totalPuzzles), [canonicalThemeKey, totalPuzzles, progressMap]);
   const nextPuzzleIndex = useMemo(() => getNextPuzzleForPattern(canonicalThemeKey, totalPuzzles), [canonicalThemeKey, totalPuzzles, progressMap]);

@@ -1,5 +1,6 @@
 "use client";
 
+import { safeSetItem } from "@/lib/safe-storage";
 import { useState, useEffect, useCallback } from "react";
 import {
   getSessionState,
@@ -145,7 +146,7 @@ export default function CoachCard({
       // Cache the note
       const sessionState = getSessionState();
       const cached: CachedNote = { note: coachNote, sessionStart: sessionState.startedAt, stats: computedStats };
-      localStorage.setItem(COACH_NOTE_KEY, JSON.stringify(cached));
+      safeSetItem(COACH_NOTE_KEY, JSON.stringify(cached));
     } catch {
       const fallback = "Good session. Keep drilling your weakest patterns and focus on slowing down before moving.";
       setNote(fallback);
@@ -157,7 +158,7 @@ export default function CoachCard({
 
   function handleDismiss() {
     const sessionState = getSessionState();
-    localStorage.setItem(COACH_DISMISSED_KEY, sessionState.startedAt);
+    safeSetItem(COACH_DISMISSED_KEY, sessionState.startedAt);
     setDismissed(true);
     setVisible(false);
   }
