@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import CalibrationFlow from "@/components/CalibrationFlow";
+import CalibrationFlow, { clearCalibrationProgress } from "@/components/CalibrationFlow";
 import { getMasteryProgress, saveMasteryProgress } from "@/lib/storage";
 import { generateMasterySet } from "@/components/TrainingSession";
 
@@ -13,18 +13,26 @@ export default function CalibrationPage() {
   const [step, setStep] = useState<Step>("checking");
 
   useEffect(() => {
+    let next: Step = "intro";
     try {
       if (localStorage.getItem("ctt_calibration_complete") === "true") {
         router.replace("/app/training-plan");
         return;
       }
+      // If the user already started calibration (and possibly finished all 10
+      // puzzles), skip the intro and drop them straight back into the flow.
+      // CalibrationFlow restores its own state from ctt_calibration_progress.
+      if (localStorage.getItem("ctt_calibration_progress")) {
+        next = "calibrating";
+      }
     } catch { /* ignore */ }
-    setStep("intro");
+    setStep(next);
   }, [router]);
 
   function handleComplete(_finalElo: number) {
     try {
       localStorage.setItem("ctt_calibration_complete", "true");
+      clearCalibrationProgress();
       // Sync calibration rating into tactics rating so both show same starting number
       const calibRating = _finalElo || parseInt(localStorage.getItem("ctt_calibration_rating") || "800", 10);
       const existingTactics = (() => { try { return JSON.parse(localStorage.getItem("ctt_tactics_rating") || "null"); } catch { return null; } })();

@@ -13,6 +13,7 @@ export default function FreePage() {
     // Clear onboarding state so free testers get the full first-time experience
     try {
       localStorage.removeItem("ctt_calibration_complete");
+      localStorage.removeItem("ctt_calibration_progress");
       localStorage.removeItem("ctt_cct_onboarding_complete");
     } catch { /* ignore */ }
   }, []);

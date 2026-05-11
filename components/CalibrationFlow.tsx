@@ -22,6 +22,38 @@ const PLATFORM_RATINGS_V2_KEY = "ctt_platform_ratings_v2";
 const CUSTOM_QUEUE_KEY = "ctt_custom_queue";
 const CUSTOM_ANALYSIS_KEY = "ctt_custom_analysis";
 
+// Persisted calibration progress — survives sign-in / page reload so the user
+// doesn't get bounced back to puzzle 1 after signing in mid-calibration.
+const PROGRESS_KEY = "ctt_calibration_progress";
+
+interface PersistedProgress {
+  v: 1;
+  phase: "solving" | "between" | "reveal";
+  puzzleIndex: number;
+  calibElo: number;
+  finalElo: number;
+  revealStep: "rating" | "connect" | "daily_goal";
+  usedIds: string[];
+}
+
+function readPersistedProgress(): PersistedProgress | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedProgress;
+    if (parsed?.v !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCalibrationProgress(): void {
+  if (typeof window === "undefined") return;
+  try { localStorage.removeItem(PROGRESS_KEY); } catch { /* ignore */ }
+}
+
 type Platform = "chesscom" | "lichess";
 
 interface AllRatings {
@@ -196,11 +228,22 @@ interface CalibrationFlowProps {
 }
 
 export default function CalibrationFlow({ startingElo, onComplete }: CalibrationFlowProps) {
-  // Puzzle-solving state
-  const [phase, setPhase] = useState<"solving" | "between" | "reveal">("solving");
+  // Lazy initializers read persisted progress so an unmount/remount mid-flow
+  // (e.g. signing in via /login then navigating back) resumes where the user
+  // left off instead of bouncing them to puzzle 1.
+  const persisted = typeof window !== "undefined" ? readPersistedProgress() : null;
 
-  const [puzzleIndex, setPuzzleIndex] = useState(0);
-  const [calibElo, setCalibElo] = useState(startingElo);
+  // If the user already finished the 10 puzzles, resume at the reveal screen.
+  // Otherwise start fresh at "solving" — restarting the current puzzle is fine
+  // and keeps the rating math consistent (used puzzle IDs are restored below).
+  const initialPhase: "solving" | "between" | "reveal" =
+    persisted?.phase === "reveal" ? "reveal" : "solving";
+
+  // Puzzle-solving state
+  const [phase, setPhase] = useState<"solving" | "between" | "reveal">(initialPhase);
+
+  const [puzzleIndex, setPuzzleIndex] = useState(persisted?.puzzleIndex ?? 0);
+  const [calibElo, setCalibElo] = useState(persisted?.calibElo ?? startingElo);
   const [currentPuzzle, setCurrentPuzzle] = useState<LichessCachedPuzzle | null>(null);
   const [currentFen, setCurrentFen] = useState("");
   const [moveIndex, setMoveIndex] = useState(0);
@@ -208,14 +251,16 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const [lastMove, setLastMove] = useState<[string, string] | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
   const [skipVisible, setSkipVisible] = useState(false);
-  const [finalElo, setFinalElo] = useState(0);
+  const [finalElo, setFinalElo] = useState(persisted?.finalElo ?? 0);
   const [revealCount, setRevealCount] = useState(0);
   const [lastResult, setLastResult] = useState<"correct" | "wrong" | null>(null);
   const [newElo, setNewElo] = useState(0);
   const [eloChange, setEloChange] = useState(0);
 
   // Reveal sub-step: rating → daily_goal → connect
-  const [revealStep, setRevealStep] = useState<"rating" | "connect" | "daily_goal">("rating");
+  const [revealStep, setRevealStep] = useState<"rating" | "connect" | "daily_goal">(
+    persisted?.revealStep ?? "rating"
+  );
 
   // Daily goal step state
   const [selectedGoal, setSelectedGoal] = useState<number | null>(null);
@@ -239,7 +284,7 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   const madeErrorRef = useRef(madeError);
   const elapsedRef = useRef(elapsed);
   const phaseRef = useRef(phase);
-  const usedIds = useRef(new Set<string>());
+  const usedIds = useRef(new Set<string>(persisted?.usedIds ?? []));
   const startTimeRef = useRef(Date.now());
   const timerActiveRef = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
@@ -309,8 +354,32 @@ export default function CalibrationFlow({ startingElo, onComplete }: Calibration
   }, []);
 
   useEffect(() => {
-    loadPuzzle(startingElo, usedIds.current);
-  }, [loadPuzzle, startingElo]);
+    // Don't reload a puzzle if we restored into the reveal phase — the user
+    // already finished the 10 puzzles and shouldn't see the board again.
+    if (phase === "reveal") return;
+    loadPuzzle(calibEloRef.current, usedIds.current);
+    // We intentionally only run this on mount; subsequent puzzles are loaded
+    // by advancePuzzle / the between → solving transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist progress whenever a key checkpoint changes so an unmount/remount
+  // (sign-in flow, refresh, back-button) doesn't reset the user to puzzle 1.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const progress: PersistedProgress = {
+        v: 1,
+        phase,
+        puzzleIndex,
+        calibElo,
+        finalElo,
+        revealStep,
+        usedIds: Array.from(usedIds.current),
+      };
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress));
+    } catch { /* ignore quota / serialization errors */ }
+  }, [phase, puzzleIndex, calibElo, finalElo, revealStep]);
 
   useEffect(() => {
     if (phase !== "solving") {
