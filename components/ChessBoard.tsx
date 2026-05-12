@@ -328,17 +328,22 @@ export default function ChessBoard({
   // Apply programmatic arrows (autoShapes don't interfere with user-drawn annotations)
   useEffect(() => {
     if (!cgRef.current) return;
-    if (!customArrows || customArrows.length === 0) {
-      cgRef.current.setAutoShapes([]);
-      return;
-    }
-    cgRef.current.setAutoShapes(
-      customArrows.map((a) => ({
-        orig: a.from as Key,
-        dest: a.to as Key,
-        brush: a.brush || "red",
-      }))
-    );
+    const shapes = (!customArrows || customArrows.length === 0)
+      ? []
+      : customArrows.map((a) => {
+          // Chessground draws a circle on `orig` when `dest` is absent, and an
+          // arrow when both are present. Callers can request a single-square
+          // highlight by passing from === to.
+          if (a.from === a.to) {
+            return { orig: a.from as Key, brush: a.brush || "red" };
+          }
+          return { orig: a.from as Key, dest: a.to as Key, brush: a.brush || "red" };
+        });
+    cgRef.current.setAutoShapes(shapes);
+    // Chessground's internal debounced redraw can get stuck so the SVG layer
+    // doesn't update — force a synchronous redraw to make autoShapes visible.
+    const apiWithState = cgRef.current as unknown as { state?: { dom?: { redrawNow?: (skipSvg?: boolean) => void } } };
+    apiWithState.state?.dom?.redrawNow?.(false);
     // Re-apply movable after setting auto shapes to ensure dragging still works
     const movable = getMovable(fenRef.current, draggableRef.current);
     cgRef.current.set({

@@ -689,10 +689,18 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
   const [candidatesMarked, setCandidatesMarked] = useState<string[]>([]);
   const [candidateNudge, setCandidateNudge] = useState(false);
   const [candidateFeedback, setCandidateFeedback] = useState<{ marked: string[]; played: string; matched: boolean } | null>(null);
+
+  // Hint button: 0 = no hint, 1 = piece highlighted, 2 = full move shown.
+  // Using a hint denies mastery credit so the puzzle returns in the rotation.
+  const [hintLevel, setHintLevel] = useState(0);
+  const hintUsedRef = useRef(false);
+
   // Reset when puzzle position changes
   useEffect(() => {
     setCandidatesMarked([]);
     setCandidateFeedback(null);
+    setHintLevel(0);
+    hintUsedRef.current = false;
   }, [puzzleData.fen]);
 
   useEffect(() => {
@@ -894,7 +902,8 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
       if (nextIndex >= puzzleData.solution.length) {
         setTimerActive(false);
         setStatus("solved");
-        setMessage("Correct!");
+        const usedHint = hintUsedRef.current;
+        setMessage(usedHint ? "Correct (hint used — won't count toward mastery)" : "Correct!");
         if (cctMode !== "off") {
           if (cctAnyClickedRef.current) {
             setCctContextCard({
@@ -912,7 +921,8 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
         }
         if (!resultCalledRef.current) {
           resultCalledRef.current = true;
-          onResult(true);
+          // Hint = no mastery credit, so the puzzle returns in the rotation.
+          onResult(!usedHint);
         }
         return true;
       }
@@ -929,10 +939,11 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           setMessage("Keep going - find the next move!");
         } catch {
           setStatus("solved");
-          setMessage("Correct!");
+          const usedHint = hintUsedRef.current;
+          setMessage(usedHint ? "Correct (hint used — won't count toward mastery)" : "Correct!");
           if (!resultCalledRef.current) {
             resultCalledRef.current = true;
-            onResult(true);
+            onResult(!usedHint);
           }
         }
       }, 400);
@@ -1035,6 +1046,38 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
               )}
             </div>
           )}
+          {/* Hint - sidebar button. Two tiers: piece, then full move.
+              Using a hint disqualifies the puzzle from mastery credit. */}
+          <button
+            onClick={() => {
+              if (status !== "solve") return;
+              hintUsedRef.current = true;
+              setHintLevel((h) => Math.min(2, h + 1));
+            }}
+            disabled={status !== "solve" || hintLevel >= 2}
+            title={
+              hintLevel === 0
+                ? "Show which piece to move"
+                : hintLevel === 1
+                ? "Show the full move"
+                : "Move revealed"
+            }
+            style={{
+              backgroundColor: "transparent",
+              border: `1px solid ${hintLevel > 0 ? "#f59e0b" : "#2e3a5c"}`,
+              borderRadius: "6px",
+              padding: "0.45rem 0.6rem",
+              color: hintLevel > 0 ? "#f59e0b" : "#475569",
+              fontSize: "0.78rem",
+              cursor: status === "solve" && hintLevel < 2 ? "pointer" : "default",
+              textAlign: "left",
+              width: "100%",
+              opacity: status !== "solve" ? 0.5 : 1,
+            }}
+          >
+            💡 {hintLevel === 0 ? "Hint" : hintLevel === 1 ? "Show full move" : "Move shown"}
+          </button>
+
           {/* Analyze with Engine - sidebar button */}
           <button
             onClick={() => onAnalyzeClick?.()}
@@ -1169,7 +1212,28 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           onArrowDrawn={candidateGateActive ? (_from, to) => {
             setCandidatesMarked((prev) => prev.includes(to) ? prev : [...prev, to].slice(-3));
           } : undefined}
-          customArrows={puzzleSettings.showScaffolding && status === "solve" ? computeScaffoldingArrows(fen) : undefined}
+          customArrows={(() => {
+            const scaffolding = puzzleSettings.showScaffolding && status === "solve"
+              ? computeScaffoldingArrows(fen)
+              : [];
+            const hint: { from: string; to: string; brush?: string }[] = [];
+            if (status === "solve" && hintLevel > 0) {
+              const expected = puzzleData.solution[moveIndex];
+              if (expected && expected.length >= 4) {
+                const fromSq = expected.slice(0, 2);
+                const toSq = expected.slice(2, 4);
+                // Tier 1: circle the piece (chessground draws a circle when from === to).
+                // Tier 2: arrow from origin to destination.
+                hint.push(
+                  hintLevel >= 2
+                    ? { from: fromSq, to: toSq, brush: "yellow" }
+                    : { from: fromSq, to: fromSq, brush: "yellow" }
+                );
+              }
+            }
+            const merged = [...scaffolding, ...hint];
+            return merged.length > 0 ? merged : undefined;
+          })()}
         />
 
         {/* Wrong Answer Overlay - centered on board */}
