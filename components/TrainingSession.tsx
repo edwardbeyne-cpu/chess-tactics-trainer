@@ -46,6 +46,39 @@ import {
 
 export const MASTERY_TIME_LIMIT_MS = 10000; // 10 seconds
 
+// Persist puzzle IDs already shown today so a page reload / sign-in flow / any
+// remount doesn't reset the de-dup tracker and re-serve the same puzzle.
+const SEEN_TODAY_KEY = "ctt_training_seen_today";
+
+function todayDateKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadSeenToday(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(SEEN_TODAY_KEY);
+    if (!raw) return new Set();
+    const data = JSON.parse(raw) as { date?: string; ids?: string[] };
+    if (data.date !== todayDateKey()) return new Set();
+    return new Set(data.ids ?? []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSeenToday(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(
+      SEEN_TODAY_KEY,
+      JSON.stringify({ date: todayDateKey(), ids: Array.from(ids) })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function shuffleArray<T>(arr: T[]): T[] {
@@ -2188,7 +2221,11 @@ export default function TrainingSession() {
   const handleResultRef = useRef<(correct: boolean) => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
   const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
-  const sessionSeenPuzzleIdsRef = useRef<Set<string>>(new Set());
+  // Seeded lazily from localStorage so a remount doesn't reset the de-dup
+  // tracker and re-serve puzzles the user has already seen today.
+  const sessionSeenPuzzleIdsRef = useRef<Set<string>>(
+    typeof window === "undefined" ? new Set() : loadSeenToday()
+  );
   const consecutiveMissesRef = useRef(0); // tracks consecutive wrong answers for miss-streak nudge
   const missStreakNudgeShownRef = useRef(false); // show miss-streak nudge at most once per session
   const [showMissStreakNudge, setShowMissStreakNudge] = useState(false);
@@ -2297,8 +2334,9 @@ export default function TrainingSession() {
       return;
     }
 
-    // Pick first puzzle
-    sessionSeenPuzzleIdsRef.current = new Set();
+    // Pick first puzzle. We DO NOT reset sessionSeenPuzzleIdsRef here — the
+    // ref was seeded from today's persisted list so a remount mid-day keeps
+    // de-dup intact. (It resets automatically on a new calendar day.)
     const idx = pickNextPuzzleIdx(set, null, sessionSeenPuzzleIdsRef.current);
     if (idx === -1) {
       // All mastered - mark set complete
@@ -2308,6 +2346,7 @@ export default function TrainingSession() {
     setCurrentPuzzleIdx(idx);
     lastShownIdRef.current = set.puzzles[idx].id;
     sessionSeenPuzzleIdsRef.current.add(set.puzzles[idx].id);
+    saveSeenToday(sessionSeenPuzzleIdsRef.current);
     setPuzzleStartTime(Date.now());
     setPhase("solving");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2466,6 +2505,7 @@ export default function TrainingSession() {
       }
       lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
       sessionSeenPuzzleIdsRef.current.add(freshSet.puzzles[nextIdx].id);
+      saveSeenToday(sessionSeenPuzzleIdsRef.current);
       setCurrentPuzzleIdx(nextIdx);
       setPuzzleKey((k) => k + 1);
       setPuzzleStartTime(Date.now());
@@ -2519,6 +2559,7 @@ export default function TrainingSession() {
     }
     lastShownIdRef.current = freshSet.puzzles[nextIdx].id;
     sessionSeenPuzzleIdsRef.current.add(freshSet.puzzles[nextIdx].id);
+    saveSeenToday(sessionSeenPuzzleIdsRef.current);
     setCurrentPuzzleIdx(nextIdx);
     setPuzzleKey((k) => k + 1);
     setPuzzleStartTime(Date.now());
