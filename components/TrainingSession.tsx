@@ -796,13 +796,17 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
       if (typeof window === "undefined") return 440;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const maxFromHeight = Math.floor((vh - 220) * 0.88);
+      const maxFromHeight = Math.floor((vh - 200) * 0.92);
       if (vw < 700) {
         // Mobile: page padding ~16px each side = 32px total. Card padding now removed (0 horizontal).
         return Math.max(280, Math.min(vw - 36, maxFromHeight));
       }
-      const containerW = Math.min(900, vw - 64);
-      return Math.max(300, Math.min(500, containerW - 220 - 16, maxFromHeight));
+      // Desktop: let the board grow with the viewport instead of being pinned
+      // at 500px. Cap scales up on larger screens while respecting the sidebar
+      // (220 + 16 gap), page padding, and viewport height.
+      const containerW = Math.min(1280, vw - 64);
+      const upperCap = vw >= 1700 ? 760 : vw >= 1280 ? 680 : 560;
+      return Math.max(300, Math.min(upperCap, containerW - 220 - 16, maxFromHeight));
     }
     setBoardWidth(getWidth());
     setIsDesktop(window.innerWidth >= 700);
@@ -2596,7 +2600,7 @@ export default function TrainingSession() {
   const milestone5Accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
 
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
       {/* 5-puzzle milestone overlay */}
       {showMilestone5 && (
         <div style={{
@@ -2726,7 +2730,7 @@ export default function TrainingSession() {
 
       {/* Analyze with Engine - moved to left sidebar on desktop */}
       {showAnalysis && puzzle.type === "tactic" && puzzle.puzzleData && (
-        <div style={{ maxWidth: "900px" }}>
+        <div style={{ maxWidth: "1280px" }}>
           <StockfishAnalysis
             fen={(puzzle.puzzleData as {fen: string}).fen}
             orientation={(puzzle.puzzleData as {fen: string}).fen.includes(" b ") ? "black" : "white"}
