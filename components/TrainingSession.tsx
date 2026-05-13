@@ -249,6 +249,14 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
   const targetELO = calibrationRating + (setNumber - 1) * 50;
+  // Lower-biased rating band: the session starts at ~target-200 and tops out
+  // slightly above target. Puzzles are sorted ascending in pickNextPuzzleIdx
+  // so the difficulty ramps up through the day. Fallback widens on the LOW
+  // side only — it must never exceed RATING_CEILING (this is what let
+  // 2300+ puzzles into 2000-rated sessions before).
+  const RATING_FLOOR = targetELO - 200;
+  const RATING_CEILING = targetELO + 100;
+  const RATING_FALLBACK_FLOOR = Math.max(600, targetELO - 350);
   // Blunder puzzles removed from training set - standalone feature only
   const blunderCount = 0;
   const SET_SIZE = Math.min(30, Math.max(5, getDailyTargetSettings().dailyGoal));
@@ -317,8 +325,9 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
     const perWeak = Math.ceil(weakTacticTarget / weakestThemes.length);
     for (const theme of weakestThemes) {
       const pool = cachedPuzzlesByTheme[theme] ?? [];
-      const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
-      const minElo = Math.max(800, targetELO - 400); const fallback = pool.filter((p) => !usedIds.has(p.id) && p.rating >= minElo); const source = shuffleArray(eligible.length > 0 ? eligible : (fallback.length > 0 ? fallback : pool.filter((p) => !usedIds.has(p.id))));
+      const eligible = pool.filter((p) => p.rating >= RATING_FLOOR && p.rating <= RATING_CEILING && !usedIds.has(p.id));
+      const fallback = pool.filter((p) => p.rating >= RATING_FALLBACK_FLOOR && p.rating <= RATING_CEILING && !usedIds.has(p.id));
+      const source = shuffleArray(eligible.length > 0 ? eligible : fallback);
       for (let i = 0; i < Math.min(perWeak, source.length) && puzzles.filter(p => p.type === "tactic").length < weakTacticTarget; i++) {
         const raw = source[i];
         if (usedIds.has(raw.id)) continue;
@@ -347,8 +356,9 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
     const theme = otherThemes[otherIdx % otherThemes.length];
     otherIdx++;
     const pool = cachedPuzzlesByTheme[theme] ?? [];
-    const eligible = pool.filter((p) => Math.abs(p.rating - targetELO) <= 200 && !usedIds.has(p.id));
-    const minElo2 = Math.max(800, targetELO - 400); const fallback2 = pool.filter((p) => !usedIds.has(p.id) && p.rating >= minElo2); const source = eligible.length > 0 ? eligible : (fallback2.length > 0 ? fallback2 : pool.filter((p) => !usedIds.has(p.id)));
+    const eligible = pool.filter((p) => p.rating >= RATING_FLOOR && p.rating <= RATING_CEILING && !usedIds.has(p.id));
+    const fallback2 = pool.filter((p) => p.rating >= RATING_FALLBACK_FLOOR && p.rating <= RATING_CEILING && !usedIds.has(p.id));
+    const source = eligible.length > 0 ? eligible : fallback2;
     if (source.length === 0) continue;
     const raw = source[Math.floor(Math.random() * source.length)];
     if (usedIds.has(raw.id)) continue;
@@ -437,7 +447,18 @@ export function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, s
     return last;
   }
 
-  // FSRS-aware selection: 70% due / 20% new / 10% edge-of-ability.
+  // Ramp-up: serve never-attempted puzzles first, in ascending rating order.
+  // This makes the session start at the easy end of the set's rating band
+  // (target - 200) and progress toward the top (target + 100), instead of
+  // randomly hitting a hard puzzle as #1.
+  const fresh = candidates.filter(({ p }) => p.attempts === 0);
+  if (fresh.length > 0) {
+    fresh.sort((a, b) => getMasteryPuzzleRating(a.p) - getMasteryPuzzleRating(b.p));
+    return fresh[0].i;
+  }
+
+  // Once every puzzle has been attempted at least once, switch to FSRS-aware
+  // selection for spaced-repetition scheduling of subsequent mastery hits.
   // Falls back to lowest-mastery-hit grouping when FSRS bucketing yields nothing.
   const pool = candidates.map(({ p, i }) => ({
     item: i,
@@ -452,6 +473,14 @@ export function pickNextPuzzleIdx(set: MasterySet, lastShownId: string | null, s
   const minHits = Math.min(...candidates.map(({ p }) => p.masteryHits));
   const group = candidates.filter(({ p }) => p.masteryHits === minHits);
   return group[Math.floor(Math.random() * group.length)].i;
+}
+
+function getMasteryPuzzleRating(p: MasteryPuzzle): number {
+  if (p.type === "tactic" && p.puzzleData) {
+    const data = p.puzzleData as { rating?: number };
+    return data.rating ?? 0;
+  }
+  return 0;
 }
 
 // Inline FSRS state initialization for the picker (avoids storage save side-effect).
