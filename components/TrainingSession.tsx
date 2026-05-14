@@ -689,7 +689,10 @@ function CCTInfoModal({ open, onClose }: CCTInfoModalProps) {
 
 export interface TacticBoardProps {
   puzzleData: { fen: string; solution: string[]; rating: number; theme: string };
-  onResult: (correct: boolean) => void;
+  // `correct` drives mastery accounting (hint-solve passes false so the puzzle
+  // doesn't get mastery credit). `usedHint` lets the parent still auto-advance
+  // and avoid penalizing the miss streak when the user solved with help.
+  onResult: (correct: boolean, opts?: { usedHint?: boolean }) => void;
   onAdvance: () => void;
   onRetry: () => void;
   onCctUnlocked?: () => void; // called when CCT completes so parent resets timer
@@ -988,7 +991,8 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
         if (!resultCalledRef.current) {
           resultCalledRef.current = true;
           // Hint = no mastery credit, so the puzzle returns in the rotation.
-          onResult(!usedHint);
+          // The `usedHint` flag tells the parent to still auto-advance.
+          onResult(!usedHint, { usedHint });
         }
         return true;
       }
@@ -1009,7 +1013,7 @@ export function TacticBoard({ puzzleData, onResult, onAdvance, onRetry, onCctUnl
           setMessage(usedHint ? "Correct (hint used — won't count toward mastery)" : "Correct!");
           if (!resultCalledRef.current) {
             resultCalledRef.current = true;
-            onResult(!usedHint);
+            onResult(!usedHint, { usedHint });
           }
         }
       }, 400);
@@ -2247,7 +2251,7 @@ export default function TrainingSession() {
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceFnRef = useRef<() => void>(() => {});
-  const handleResultRef = useRef<(correct: boolean) => void>(() => {});
+  const handleResultRef = useRef<(correct: boolean, opts?: { usedHint?: boolean }) => void>(() => {});
   const retryModeRef = useRef(false); // tracks retry mode to skip mastery recording
   const retryPendingRef = useRef(false); // blocks advance() when user clicked Retry
   // Seeded lazily from localStorage so a remount doesn't reset the de-dup
@@ -2401,8 +2405,11 @@ export default function TrainingSession() {
   }
 
   // ── Handle puzzle result ───────────────────────────────────────────────────
-  const handleResult = useCallback((correct: boolean) => {
+  // `correct` controls mastery accounting; `opts.usedHint` lets us still
+  // auto-advance the session even though `correct === false` for mastery.
+  const handleResult = useCallback((correct: boolean, opts?: { usedHint?: boolean }) => {
     if (!currentSet || currentPuzzleIdx < 0) return;
+    const usedHint = !!opts?.usedHint;
 
     const solveTimeMs = Date.now() - puzzleStartTime;
     const puzzle = currentSet.puzzles[currentPuzzleIdx];
@@ -2477,8 +2484,10 @@ export default function TrainingSession() {
     setDailyCompleted(newDailyCount);
     recordActivityToday();
 
-    // Miss-streak nudge: track consecutive wrong answers (suggested mode only)
-    if (correct) {
+    // Miss-streak nudge: track consecutive wrong answers (suggested mode only).
+    // Hint-solves shouldn't count as misses — the user found the move, just
+    // with assistance — so don't increment the streak when usedHint is true.
+    if (correct || usedHint) {
       consecutiveMissesRef.current = 0;
     } else {
       consecutiveMissesRef.current += 1;
@@ -2543,8 +2552,11 @@ export default function TrainingSession() {
 
     advanceFnRef.current = advance;
 
-    if (correct || puzzle.type !== "tactic") {
-      // Auto-advance after 1.5s for correct answers and wrong blunder answers
+    if (correct || usedHint || puzzle.type !== "tactic") {
+      // Auto-advance after 1.5s for correct answers, hint-solves (board shows
+      // "solved" with no failure UI to interact with), and wrong blunder
+      // answers. A wrong tactic move still pauses on the failure overlay so
+      // the user can choose Retry / Engine review / Next.
       if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
       feedbackTimeoutRef.current = setTimeout(advance, 1500);
     }
@@ -2554,7 +2566,10 @@ export default function TrainingSession() {
 
   // Keep ref always pointing to latest handleResult so TacticBoard never calls a stale closure
   handleResultRef.current = handleResult;
-  const stableHandleResult = useCallback((correct: boolean) => handleResultRef.current(correct), []);
+  const stableHandleResult = useCallback(
+    (correct: boolean, opts?: { usedHint?: boolean }) => handleResultRef.current(correct, opts),
+    []
+  );
 
   // ── Handle advance (called by TacticBoard review panel) ───────────────────
   function handleAdvance() {
