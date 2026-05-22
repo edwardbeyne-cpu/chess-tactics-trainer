@@ -3,6 +3,7 @@ import Image from "next/image";
 import MarketingNav from "@/components/MarketingNav";
 import PricingCard from "@/components/PricingCard";
 import TryAPuzzle from "@/components/TryAPuzzle";
+import HeroCTA from "@/components/HeroCTA";
 
 const features = [
   {
@@ -101,37 +102,7 @@ export default function HomePage() {
           Science-based tactics training with spaced repetition — built around
           your games and your weaknesses.
         </p>
-        <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-          <Link
-            href="/app/calibration"
-            style={{
-              backgroundColor: "#4ade80",
-              color: "#0f0f1a",
-              padding: "0.85rem 2rem",
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontWeight: "bold",
-              fontSize: "1rem",
-            }}
-          >
-            Start Free — No credit card required
-          </Link>
-          <Link
-            href="/how-it-works"
-            style={{
-              backgroundColor: "transparent",
-              color: "#e2e8f0",
-              padding: "0.85rem 2rem",
-              borderRadius: "10px",
-              textDecoration: "none",
-              fontWeight: "600",
-              fontSize: "1rem",
-              border: "1px solid #2e3a5c",
-            }}
-          >
-            See How It Works →
-          </Link>
-        </div>
+        <HeroCTA />
       </section>
 
       {/* Stats bar */}

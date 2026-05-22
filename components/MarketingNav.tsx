@@ -2,11 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getUserProfile } from "@/lib/auth";
 
 export default function MarketingNav() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Detect returning users so the nav offers a way back into the app instead
+  // of pushing "Start Free" at someone who already has an account/progress.
+  const [returning, setReturning] = useState(false);
+  useEffect(() => {
+    try {
+      const hasProfile = !!getUserProfile();
+      const calibrated = localStorage.getItem("ctt_calibration_complete") === "true";
+      setReturning(hasProfile || calibrated);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Returning users land back in the app (which routes to their training plan);
+  // new visitors go through calibration onboarding.
+  const ctaHref = returning ? "/app" : "/app/calibration";
+  const ctaLabel = returning ? "Continue Training →" : "Start Free";
 
   const linkStyle = (path: string) => ({
     color: pathname === path || pathname.startsWith(path + "/") ? "#e2e8f0" : "#94a3b8",
@@ -29,8 +48,8 @@ export default function MarketingNav() {
           <Link href="/how-it-works" style={linkStyle("/how-it-works")}>How It Works</Link>
           <Link href="/pricing" style={linkStyle("/pricing")}>Pricing</Link>
           <Link href="/blog" style={linkStyle("/blog")}>Blog</Link>
-          <Link href="/app/calibration" style={{ backgroundColor: "#4ade80", color: "#0f0f1a", padding: "0.5rem 1.25rem", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "0.9rem", marginLeft: "0.5rem" }}>
-            Start Free
+          <Link href={ctaHref} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", padding: "0.5rem 1.25rem", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "0.9rem", marginLeft: "0.5rem" }}>
+            {ctaLabel}
           </Link>
         </div>
 
@@ -51,8 +70,8 @@ export default function MarketingNav() {
           <Link href="/how-it-works" onClick={() => setMenuOpen(false)} style={{ color: "#94a3b8", textDecoration: "none", fontSize: "1rem", padding: "0.75rem 0", borderBottom: "1px solid #1e2a3c" }}>How It Works</Link>
           <Link href="/pricing" onClick={() => setMenuOpen(false)} style={{ color: "#94a3b8", textDecoration: "none", fontSize: "1rem", padding: "0.75rem 0", borderBottom: "1px solid #1e2a3c" }}>Pricing</Link>
           <Link href="/blog" onClick={() => setMenuOpen(false)} style={{ color: "#94a3b8", textDecoration: "none", fontSize: "1rem", padding: "0.75rem 0", borderBottom: "1px solid #1e2a3c" }}>Blog</Link>
-          <Link href="/app/calibration" onClick={() => setMenuOpen(false)} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", padding: "0.85rem 1.25rem", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "1rem", textAlign: "center", marginTop: "0.5rem" }}>
-            Start Free →
+          <Link href={ctaHref} onClick={() => setMenuOpen(false)} style={{ backgroundColor: "#4ade80", color: "#0f0f1a", padding: "0.85rem 1.25rem", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontSize: "1rem", textAlign: "center", marginTop: "0.5rem" }}>
+            {returning ? "Continue Training →" : "Start Free →"}
           </Link>
         </div>
       )}
