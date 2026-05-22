@@ -2247,6 +2247,14 @@ export default function TrainingSession() {
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewQueue, setReviewQueue] = useState<Array<{id: string; fen: string; solution: string[]}>>([]);
   const [reviewIdx, setReviewIdx] = useState(0);
+  // Refs mirror review state so handleResult (memoized) never reads a stale
+  // index when advancing through the review queue.
+  const reviewModeRef = useRef(false);
+  const reviewIdxRef = useRef(0);
+  const reviewQueueRef = useRef<Array<{id: string; fen: string; solution: string[]}>>([]);
+  reviewModeRef.current = reviewMode;
+  reviewIdxRef.current = reviewIdx;
+  reviewQueueRef.current = reviewQueue;
   const [showAnalysis, setShowAnalysis] = useState(false);
   const lastShownIdRef = useRef<string | null>(null);
   const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2408,8 +2416,50 @@ export default function TrainingSession() {
   // `correct` controls mastery accounting; `opts.usedHint` lets us still
   // auto-advance the session even though `correct === false` for mastery.
   const handleResult = useCallback((correct: boolean, opts?: { usedHint?: boolean }) => {
-    if (!currentSet || currentPuzzleIdx < 0) return;
     const usedHint = !!opts?.usedHint;
+
+    // ── Review mode ─────────────────────────────────────────────────────────
+    // Pure practice walk-through of the puzzles missed this session. It must
+    // NOT touch mastery, daily count, or session stats — just step through the
+    // review queue and exit when done.
+    if (reviewModeRef.current) {
+      if (retryModeRef.current) retryModeRef.current = false;
+      setFeedback({ correct, masteryAwarded: false, overTimeLimit: false, newMasteryHits: 0 });
+      setPhase("feedback");
+
+      const advanceReview = () => {
+        if (retryPendingRef.current) {
+          retryPendingRef.current = false;
+          return;
+        }
+        setFeedback(null);
+        setCctContextCard(null);
+        const nextReviewIdx = reviewIdxRef.current + 1;
+        if (nextReviewIdx >= reviewQueueRef.current.length) {
+          // Review finished — back to the session summary.
+          setReviewMode(false);
+          setReviewIdx(0);
+          setPhase("session_complete");
+          return;
+        }
+        setReviewIdx(nextReviewIdx);
+        setPuzzleKey((k) => k + 1);
+        setPuzzleStartTime(Date.now());
+        setPhase("solving");
+      };
+
+      advanceFnRef.current = advanceReview;
+
+      // Correct / hint-solve auto-advances; a wrong tactic waits for the user
+      // to use the failure overlay's Next button.
+      if (correct || usedHint) {
+        if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+        feedbackTimeoutRef.current = setTimeout(advanceReview, 1500);
+      }
+      return;
+    }
+
+    if (!currentSet || currentPuzzleIdx < 0) return;
 
     const solveTimeMs = Date.now() - puzzleStartTime;
     const puzzle = currentSet.puzzles[currentPuzzleIdx];
@@ -2468,13 +2518,14 @@ export default function TrainingSession() {
 
     if (puzzle.type === "tactic" && puzzle.puzzleData) {
       const pd = puzzle.puzzleData as { fen: string; solution: string[] };
-      if (!correct) {
-        // Add to missed if not already there
+      if (!correct && !usedHint) {
+        // Add to missed if not already there. A hint-solve isn't a true miss,
+        // so it's excluded from the review queue.
         setSessionMissedPuzzles((prev) => {
           if (prev.some((p) => p.id === puzzle.id)) return prev;
           return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
         });
-      } else if (isRetry) {
+      } else if (correct && isRetry) {
         // Solved on retry - remove from missed list
         setSessionMissedPuzzles((prev) => prev.filter((p) => p.id !== puzzle.id));
       }
@@ -2663,6 +2714,9 @@ export default function TrainingSession() {
           setReviewIdx(0);
           setReviewMode(true);
           setShowAnalysis(false);
+          setPuzzleKey((k) => k + 1); // force board remount onto the first missed puzzle
+          setFeedback(null);
+          setPuzzleStartTime(Date.now());
           setPhase("solving");
           setKeepGoing(true);
         }}
@@ -2670,7 +2724,26 @@ export default function TrainingSession() {
     );
   }
 
-  const puzzle = currentSet?.puzzles[currentPuzzleIdx];
+  // In review mode, show the missed puzzle from the review queue (resolved back
+  // to its original set entry so rating/theme are preserved), not the last
+  // puzzle from the normal session.
+  let puzzle = currentSet?.puzzles[currentPuzzleIdx];
+  if (reviewMode && reviewQueue[reviewIdx]) {
+    const rq = reviewQueue[reviewIdx];
+    puzzle =
+      currentSet?.puzzles.find((p) => p.id === rq.id) ?? {
+        id: rq.id,
+        type: "tactic",
+        puzzleData: { fen: rq.fen, solution: rq.solution, rating: 0, theme: "" },
+        masteryHits: 0,
+        lastSolvedAt: [],
+        lastMasteryHitCounter: 0,
+        attempts: 0,
+        correctAttempts: 0,
+        avgSolveTime: 0,
+        lastAttemptAt: 0,
+      };
+  }
   if (!puzzle || !currentSet) {
     return (
       <div style={{ maxWidth: "600px", margin: "0 auto", padding: "3rem", textAlign: "center", color: "#64748b" }}>
