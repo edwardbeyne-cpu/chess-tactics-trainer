@@ -10,8 +10,8 @@ export interface BetaFeedbackEntry {
 }
 
 export function isBetaTester(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(BETA_TESTER_KEY) === "true";
+  // Personal edition: the owner always has full (debug-capable) access.
+  return true;
 }
 
 export function enableBetaAccess(): void {

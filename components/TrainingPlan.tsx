@@ -1539,15 +1539,9 @@ export default function TrainingPlan() {
                         return "Analyzing your games for tactical weaknesses...";
                       }
                     } catch { /* ignore */ }
-                    if (!username) {
-                      return (
-                        <span>
-                          Connect your Chess.com account to see which patterns are costing you games.{" "}
-                          <a href="/app/calibration" style={{ color: "#4ade80", textDecoration: "none", fontWeight: "600" }}>Connect →</a>
-                        </span>
-                      );
-                    }
-                    return "Solve more puzzles to unlock your pattern breakdown.";
+                    // Personal edition: the account is seeded automatically and
+                    // analysis runs in the background — no connect step needed.
+                    return "Waiting for your first game analysis — it runs automatically in the background.";
                   })()}
                 </div>
               ) : (

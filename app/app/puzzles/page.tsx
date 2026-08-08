@@ -2,12 +2,11 @@
 
 import { Suspense } from "react";
 import PuzzlePage from "@/components/Puzzle";
-import Paywall from "@/components/Paywall";
 import { HelpModal, HelpBulletList } from "@/components/HelpModal";
 
 function PuzzlePageContent() {
   return (
-    <Paywall>
+    <>
       {/* Sprint 3: Compact page header — one line, Guide button inline */}
       <div style={{
         display: "flex",
@@ -39,7 +38,7 @@ function PuzzlePageContent() {
         </HelpModal>
       </div>
       <PuzzlePage defaultMode="mixed" />
-    </Paywall>
+    </>
   );
 }
 

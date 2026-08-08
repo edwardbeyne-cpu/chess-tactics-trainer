@@ -1,6 +1,5 @@
 import AppNav from "@/components/AppNav";
-import TrialBanner from "@/components/TrialBanner";
-import FeedbackButton from "@/components/FeedbackButton";
+import PersonalBootstrap from "@/components/PersonalBootstrap";
 
 export default function AppShellLayout({
   children,
@@ -9,13 +8,11 @@ export default function AppShellLayout({
 }) {
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#0f0f1a" }}>
+      <PersonalBootstrap />
       <AppNav />
-      <TrialBanner />
       <main style={{ padding: "clamp(0.5rem, 4vw, 2rem)" }}>
         {children}
       </main>
-      {/* Sprint 5: Persistent feedback button */}
-      <FeedbackButton />
     </div>
   );
 }

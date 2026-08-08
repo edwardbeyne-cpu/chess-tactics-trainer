@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import RewardfulScript from "@/components/RewardfulScript";
 
 export const viewport: Viewport = {
   themeColor: "#0f1a2e",
@@ -10,9 +9,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "ChessTrainer — Science-Based Tactics Training",
+  title: "ChessTrainer — Eddy's Tactics Training",
   description:
-    "Chess tactics training with spaced repetition — built around your games and your weaknesses. 3M+ Lichess puzzles, 28 tactical patterns, SM-2 algorithm.",
+    "Personal chess tactics training — spaced repetition built around my games and my weaknesses.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -37,9 +36,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <RewardfulScript />
-      </head>
       <body style={{ margin: 0, padding: 0, backgroundColor: "#0f0f1a", color: "#e2e8f0", fontFamily: "Inter, system-ui, -apple-system, sans-serif" }}>
         {children}
       </body>

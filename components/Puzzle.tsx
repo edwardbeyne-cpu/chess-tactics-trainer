@@ -62,10 +62,8 @@ function getTacticsRatingDataForAgg(): number {
 }
 import type { SM2Outcome, SM2Attempt } from "@/lib/storage";
 import AchievementToast from "./AchievementToast";
-import SocialProofBanner from "./SocialProofBanner";
 import { fetchPuzzleByTheme, lichessPuzzleToApp, type AppPuzzle } from "@/lib/lichess";
 import { startTrial, hasActiveSubscription } from "@/lib/trial";
-import { isSocialProofSuppressed } from "@/lib/socialProof";
 import { recordAggregateAttempt, updateWeeklyRatingGain } from "@/lib/aggregate";
 import { getSubscriptionTier as getPercentileTier } from "@/lib/percentile";
 import ChessBoard from "./ChessBoard";
@@ -1311,10 +1309,8 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
   const isNemesisPuzzleRef = useRef(false);
   const pendingPuzzleRef = useRef<{ pattern: string; isMixed: boolean } | null>(null);
 
-  // Session puzzle count for social proof
+  // Session puzzle count (was social proof; still used for session pacing)
   const sessionCountRef = useRef(0);
-  const [showSocialProof, setShowSocialProof] = useState(false);
-  const [socialProofType, setSocialProofType] = useState<"fifth-puzzle" | "failed-puzzle">("fifth-puzzle");
 
   // Sprint 7: Tactics rating milestone toast
   const [ratingMilestoneToast, setRatingMilestoneToast] = useState<{ rating: number } | null>(null);
@@ -1831,18 +1827,6 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
       puzzlesInSession: sessionStateForAgg.puzzleCount,
     });
 
-    // Sprint 8: Social proof — show after every 5th puzzle (free users only)
-    const isFree = !hasActiveSubscription();
-    if (isFree && !isSocialProofSuppressed()) {
-      if (sessionState.puzzleCount > 0 && sessionState.puzzleCount % 5 === 0) {
-        setSocialProofType("fifth-puzzle");
-        setShowSocialProof(true);
-      } else if (!isSolved) {
-        // Show fail prompt if no other prompt shown yet this session
-        setSocialProofType("failed-puzzle");
-        setShowSocialProof(true);
-      }
-    }
   }
 
   function handleNext() {
@@ -1960,15 +1944,6 @@ export default function Puzzle({ defaultMode }: { defaultMode?: PuzzleMode }) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Sprint 8: Social proof banner (free users, max once per session) */}
-      {showSocialProof && (
-        <SocialProofBanner
-          type={socialProofType}
-          onDismiss={() => setShowSocialProof(false)}
-          onUpgrade={() => { setShowSocialProof(false); window.location.href = "/pricing"; }}
-        />
       )}
 
       {/* Mode toggle — only show when not in a dedicated single-mode page */}

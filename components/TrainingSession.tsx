@@ -9,7 +9,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Chess } from "chess.js";
 import ChessBoard from "@/components/ChessBoard";
-import BetaSessionFeedbackPrompt from "./BetaSessionFeedbackPrompt";
 import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { loadPuzzleSettings, savePuzzleSettings, type PuzzleSettings } from "@/components/PuzzleSettingsModal";
 import { cachedPuzzlesByTheme, type LichessCachedPuzzle } from "@/data/lichess-puzzles";
@@ -2009,7 +2008,6 @@ function SessionCompleteScreen({
   onContinue,
   onReviewMissed,
 }: SessionCompleteProps) {
-  const [showFeedbackPrompt, setShowFeedbackPrompt] = useState(true);
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
     <div style={{ maxWidth: "560px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -2108,9 +2106,6 @@ function SessionCompleteScreen({
           Keep Going Anyway →
         </button>
       </div>
-      {showFeedbackPrompt && (
-        <BetaSessionFeedbackPrompt page="training-session-complete" onClose={() => setShowFeedbackPrompt(false)} />
-      )}
     </div>
   );
 }

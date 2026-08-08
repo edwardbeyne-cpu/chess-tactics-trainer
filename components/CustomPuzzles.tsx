@@ -6,8 +6,6 @@ import { runGameAnalysis, type StoredGameAnalysis } from "@/lib/game-analysis";
 import { getDailyTargetSettings, type MasteryPuzzle, type MasterySet } from "@/lib/storage";
 import { isBetaTester } from "@/lib/beta";
 import { TacticBoard, type TacticBoardProps, pickNextPuzzleIdx, MASTERY_TIME_LIMIT_MS } from "./TrainingSession";
-import UpgradeModal from "./UpgradeModal";
-import BetaSessionFeedbackPrompt from "./BetaSessionFeedbackPrompt";
 // GeneratedCustomPuzzle type inlined to avoid importing the stockfish module at page load
 interface GeneratedCustomPuzzle {
   id: string;
@@ -110,8 +108,8 @@ interface CustomMasteryProgress {
 // ── Utility: check Pro tier ─────────────────────────────────────────────────
 
 function isProUser(): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem("ctt_sub_tier") === "2" || isBetaTester();
+  // Personal edition: always full access.
+  return true;
 }
 
 function todayIso() {
@@ -636,49 +634,6 @@ async function buildCustomQueue(
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function UpgradePrompt() {
-  const [showModal, setShowModal] = useState(false);
-  return (
-    <div style={{
-      backgroundColor: '#1a1a2e',
-      border: '1px solid #2e3a5c',
-      borderRadius: '16px',
-      padding: '3rem 2rem',
-      textAlign: 'center',
-      maxWidth: '520px',
-      margin: '2rem auto',
-    }}>
-      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
-      <h2 style={{ color: '#e2e8f0', fontWeight: 'bold', marginBottom: '0.75rem', fontSize: '1.5rem' }}>
-        Custom Puzzles is a Pro Feature
-      </h2>
-      <p style={{ color: '#94a3b8', marginBottom: '0.5rem', lineHeight: 1.6 }}>
-        Upgrade to Pro to connect your Chess.com or Lichess account, analyze your games,
-        and get a personalized puzzle queue targeting your weakest patterns.
-      </p>
-      <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '2rem' }}>
-        Have a beta code? Enter <strong style={{ color: '#4ade80' }}>BETA2026</strong> in Settings to unlock Pro instantly.
-      </p>
-      <button
-        onClick={() => setShowModal(true)}
-        style={{
-          backgroundColor: '#4ade80',
-          color: '#0f0f1a',
-          padding: '0.875rem 2.5rem',
-          borderRadius: '10px',
-          border: 'none',
-          fontWeight: 'bold',
-          fontSize: '1rem',
-          cursor: 'pointer',
-        }}
-      >
-        Upgrade to Pro
-      </button>
-      {showModal && <UpgradeModal onClose={() => setShowModal(false)} />}
-    </div>
-  );
-}
-
 function ConnectState({
   onConnect,
 }: {
@@ -1202,7 +1157,6 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
   const [keepGoing, setKeepGoing] = useState(false);
   const [sessionSolved, setSessionSolved] = useState(0);
   const [sessionMasteredToday, setSessionMasteredToday] = useState(0);
-  const [showFeedbackPrompt, setShowFeedbackPrompt] = useState(true);
   const sessionSeenIdsRef = useRef<Set<string>>(new Set());
   const dailyGoal = getDailyTargetSettings().dailyGoal;
 
@@ -1371,7 +1325,6 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>{masteredCount}/{totalPuzzles} mastered · Daily goal reached ({dailyGoal})</div>
           <button
             onClick={() => {
-              setShowFeedbackPrompt(false);
               setKeepGoing(true);
               const seen = new Set<string>();
               sessionSeenIdsRef.current = seen;
@@ -1383,9 +1336,6 @@ function CustomQueueTraining({ onBack }: { onBack: () => void }) {
           >
             Session done — keep going anyway →
           </button>
-          {showFeedbackPrompt && (
-            <BetaSessionFeedbackPrompt page="custom-puzzles-session-complete" onClose={() => setShowFeedbackPrompt(false)} />
-          )}
         </div>
       </div>
     );
@@ -1951,8 +1901,6 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
       setMasteryProgress(syncDailySession(loadCustomMastery()));
     } catch { /**/ }
   }, []);
-
-  if (!isPro) return <UpgradePrompt />;
 
   if (training) return <CustomQueueTraining onBack={handleBackFromTraining} />;
 

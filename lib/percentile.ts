@@ -174,16 +174,8 @@ export function getBellCurvePoints(
 export type SubscriptionTier = "free" | "improver" | "serious";
 
 export function getSubscriptionTier(): SubscriptionTier {
-  if (typeof window === "undefined") return "free";
-  if (isBetaTester()) return "serious";
-  const status = localStorage.getItem("subscription_status");
-  if (status === "active") return "serious"; // legacy flag — treat as serious
-  if (status === "improver") return "improver";
-  if (status === "serious") return "serious";
-  // Trial users get improver-level access
-  const trialStart = localStorage.getItem("trial_start");
-  if (trialStart) return "improver";
-  return "free";
+  // Personal edition: always full access.
+  return "serious";
 }
 
 /**
