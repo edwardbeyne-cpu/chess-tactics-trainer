@@ -65,6 +65,14 @@ const PATTERN_TO_THEME: Record<string, string> = {
   "Zwischenzug": "intermezzo",
   "Smothered Mate": "smotheredMate",
   "Trapped Piece": "trappedPiece",
+  // Labels produced by the engine motif classifier (lib/game-analysis.ts)
+  "Winning Captures": "fork",
+  "Discovered Attacks": "discoveredAttack",
+  "Discovered Checks": "discoveredCheck",
+  "Back Rank Mates": "backRankMate",
+  "Smothered Mates": "smotheredMate",
+  "Checkmates": "backRankMate",
+  "Checks": "fork",
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────

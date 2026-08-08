@@ -294,12 +294,16 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
       );
       for (const p of eligible) {
         if (puzzles.length >= ownGameTarget) break;
+        // Defensive parity trim: solutions must end on the player's move
+        // (odd length) or TacticBoard can never reach its completion check.
+        const solution = p.moves.length % 2 === 0 ? p.moves.slice(0, -1) : p.moves;
+        if (solution.length === 0) continue;
         puzzles.push({
           id: `tactic_${p.id}`,
           type: "tactic",
           puzzleData: {
             fen: p.fen,
-            solution: p.moves,
+            solution,
             rating: p.rating ?? 1500,
             theme: (p.pattern ?? "custom").toLowerCase(),
           },
@@ -2583,9 +2587,6 @@ export default function TrainingSession() {
           if (prev.some((p) => p.id === puzzle.id)) return prev;
           return [...prev, { id: puzzle.id, fen: pd.fen, solution: pd.solution }];
         });
-      } else if (correct && isRetry) {
-        // Solved on retry - remove from missed list
-        setSessionMissedPuzzles((prev) => prev.filter((p) => p.id !== puzzle.id));
       }
     }
 
@@ -2615,6 +2616,13 @@ export default function TrainingSession() {
       incrementCCTSessionCount();
     }
     } // end if (!isRetry)
+
+    // Solved on retry — remove from the missed list so the end-of-session
+    // review only contains puzzles that are still unsolved. (This must live
+    // OUTSIDE the !isRetry block; it was previously unreachable dead code.)
+    if (isRetry && correct && puzzle.type === "tactic") {
+      setSessionMissedPuzzles((prev) => prev.filter((p) => p.id !== puzzle.id));
+    }
 
     // Show feedback
     setFeedback({ correct, masteryAwarded, overTimeLimit, newMasteryHits: masteryHits });

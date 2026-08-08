@@ -233,14 +233,14 @@ export async function buildThreatDetectionSession(count = 10): Promise<ThreatPuz
 
   // Ghost Tactic: ~30% of session is quiet positions (no tactic) — trains the trigger.
   const quietTarget = Math.max(1, Math.floor(count * 0.3));
-  let tacticTarget = count - quietTarget;
+  const tacticTarget = count - quietTarget;
 
-  // Blend in threats from the user's OWN games first (built by game analysis):
-  // real "your opponent played a tactic against you" positions. Up to ~40%
-  // of the tactic portion.
-  const ownGamePuzzles = shuffle(loadGameThreatPuzzles().map(gamePuzzleToThreatPuzzle));
-  const ownGamePicks = ownGamePuzzles.slice(0, Math.round(tacticTarget * 0.4));
-  tacticTarget -= ownGamePicks.length;
+  // NOTE: own-game threat puzzles (ctt_threat_detection_game_puzzles) are NOT
+  // blended yet — GameThreatPuzzle's fen/defenderFen convention doesn't match
+  // the ThreatPuzzle phase machine (it would present the position with the
+  // OPPONENT to move, making the defense phase unplayable). Wire this in only
+  // with a proper conversion + phase handling.
+  const ownGamePicks: ThreatPuzzle[] = [];
 
   // Try progressively wider rating windows until we have enough puzzles
   for (const ratingWindow of [250, 400, 600, 99999]) {

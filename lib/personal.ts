@@ -85,28 +85,71 @@ function stampOlderThan(key: string, maxAgeMs: number): boolean {
 
 /** Background: re-run the Chess.com game analysis if it has gone stale. */
 function refreshAnalysisIfStale(): void {
-  const hasAnalysis = !!localStorage.getItem("ctt_game_analysis");
-  if (hasAnalysis && !stampOlderThan(ANALYSIS_STAMP, ANALYSIS_REFRESH_MS)) return;
-  // Stamp before running so a failing analysis doesn't retry on every load.
+  // Stamp-gated: the stamp is written before every run (success, empty, or
+  // failure), so a run that finds nothing doesn't retry on every page load —
+  // only after the TTL. A concurrent run in another tab is also skipped via
+  // the analysis-status flag (best effort).
+  if (!stampOlderThan(ANALYSIS_STAMP, ANALYSIS_REFRESH_MS)) return;
+  if (localStorage.getItem("ctt_analysis_status") === "running") return;
   localStorage.setItem(ANALYSIS_STAMP, String(Date.now()));
   import("@/lib/game-analysis")
     .then(({ runGameAnalysis }) => runGameAnalysis(PERSONAL.username, PERSONAL.platform))
     .catch(() => { /* offline or fetch failure — next visit retries after TTL */ });
 }
 
+const FALLBACK_SEED_FLAG = "ctt_seed_used_fallback";
+
+// Single-flight: /app/page.tsx and the app-shell PersonalBootstrap both call
+// this on first paint — only one seed/refresh pass should run per page load.
+let inflight: Promise<void> | null = null;
+
 /**
  * Idempotent. Safe to call on every app entry; only the first call on a fresh
  * browser does the full seed (one network fetch), later calls just refresh.
  */
-export async function ensurePersonalBootstrap(): Promise<void> {
-  if (typeof window === "undefined") return;
+export function ensurePersonalBootstrap(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (!inflight) {
+    inflight = bootstrapOnce().finally(() => {
+      // Allow later invocations (e.g. long-lived tab crossing the refresh
+      // TTL) to run the cheap refresh pass again.
+      setTimeout(() => { inflight = null; }, 60_000);
+    });
+  }
+  return inflight;
+}
 
+async function bootstrapOnce(): Promise<void> {
   const alreadySeeded = localStorage.getItem("ctt_calibration_complete") === "true";
 
   if (alreadySeeded) {
     // Keep displayed platform ratings fresh (daily) and analysis fresh (weekly).
     if (stampOlderThan(RATINGS_REFRESH_STAMP, RATINGS_REFRESH_MS)) {
-      fetchChessComStats().then((stats) => { if (stats) writePlatformRatings(stats); }).catch(() => {});
+      fetchChessComStats()
+        .then((stats) => {
+          if (!stats) return;
+          writePlatformRatings(stats);
+          // If the original seed happened offline (fallback rating) and the
+          // user hasn't trained yet, upgrade to the real Chess.com rating.
+          if (localStorage.getItem(FALLBACK_SEED_FLAG) === "true") {
+            try {
+              const tactics = JSON.parse(localStorage.getItem("ctt_tactics_rating") || "null") as
+                | { tacticsRatingHistory?: unknown[] }
+                | null;
+              const untouched = !tactics?.tacticsRatingHistory?.length;
+              if (untouched) {
+                const rating = deriveTacticsRating(stats);
+                localStorage.setItem("ctt_calibration_rating", String(rating));
+                localStorage.setItem(
+                  "ctt_tactics_rating",
+                  JSON.stringify({ tacticsRating: rating, tacticsRatingStart: rating, tacticsRatingHistory: [] })
+                );
+              }
+              localStorage.removeItem(FALLBACK_SEED_FLAG);
+            } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {});
     }
     refreshAnalysisIfStale();
     return;
@@ -119,6 +162,7 @@ export async function ensurePersonalBootstrap(): Promise<void> {
   try {
     localStorage.setItem("ctt_calibration_rating", String(tacticsRating));
     localStorage.setItem("ctt_calibration_complete", "true");
+    if (!stats) localStorage.setItem(FALLBACK_SEED_FLAG, "true");
     if (!localStorage.getItem("ctt_tactics_rating")) {
       localStorage.setItem(
         "ctt_tactics_rating",
@@ -140,4 +184,14 @@ export async function ensurePersonalBootstrap(): Promise<void> {
   } catch { /* quota — app still works with defaults */ }
 
   refreshAnalysisIfStale();
+}
+
+/** True once the one-time seed has been written (cheap sync check). */
+export function isPersonalSeeded(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return localStorage.getItem("ctt_calibration_complete") === "true";
+  } catch {
+    return true;
+  }
 }

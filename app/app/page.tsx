@@ -1,17 +1,14 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ensurePersonalBootstrap } from "@/lib/personal";
 
+// The app-shell layout's PersonalBootstrap gate handles first-run seeding;
+// this route just forwards to the training plan.
 export default function AppRoot() {
   const router = useRouter();
 
   useEffect(() => {
-    let cancelled = false;
-    ensurePersonalBootstrap().finally(() => {
-      if (!cancelled) router.replace("/app/training-plan");
-    });
-    return () => { cancelled = true; };
+    router.replace("/app/training-plan");
   }, [router]);
 
   return null;

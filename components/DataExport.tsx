@@ -79,14 +79,22 @@ export default function DataExport() {
         const keyCount = Object.keys(parsed.keys).length;
         const confirmed = window.confirm(
           `Restore backup from ${parsed.exportedAt?.slice(0, 10) ?? "unknown date"}?\n\n` +
-          `This will overwrite your current training data with ${keyCount} stored entries, then reload the app.`
+          `This will REPLACE your current training data with ${keyCount} stored entries, then reload the app.`
         );
         if (!confirmed) return;
+        // Replace, not merge: clear existing state first so keys created
+        // after the backup was taken don't survive and mix generations.
+        localStorage.clear();
+        let failed = 0;
         for (const [key, value] of Object.entries(parsed.keys)) {
-          try { localStorage.setItem(key, value); } catch { /* quota — keep going */ }
+          try { localStorage.setItem(key, value); } catch { failed++; }
         }
-        setRestoreStatus({ ok: true, message: `Restored ${keyCount} entries. Reloading…` });
-        setTimeout(() => window.location.reload(), 800);
+        if (failed > 0) {
+          setRestoreStatus({ ok: false, message: `Restore incomplete: ${failed}/${keyCount} entries failed to write (storage quota?). Reloading anyway…` });
+        } else {
+          setRestoreStatus({ ok: true, message: `Restored ${keyCount} entries. Reloading…` });
+        }
+        setTimeout(() => window.location.reload(), failed > 0 ? 2500 : 800);
       } catch {
         setRestoreStatus({ ok: false, message: "Could not read that file as JSON." });
       }

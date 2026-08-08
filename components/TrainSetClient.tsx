@@ -218,7 +218,7 @@ function SetNotFound({ code }: { code: string }) {
         Train with all puzzles →
       </Link>
       <div style={{ marginTop: "1rem" }}>
-        <Link href="/sets" style={{ color: "#475569", fontSize: "0.8rem", textDecoration: "none" }}>
+        <Link href="/app/tools" style={{ color: "#475569", fontSize: "0.8rem", textDecoration: "none" }}>
           Browse featured sets →
         </Link>
       </div>

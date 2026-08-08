@@ -94,8 +94,12 @@ function getAttackedPieceValues(fen: string, square: string): number[] {
     parts[3] = "-"; // clear en passant
     const flippedFen = parts.join(" ");
     const c = new Chess(flippedFen);
+    // Exclude king captures: in this deliberately illegal flipped position
+    // chess.js DOES generate them, and counting the king here double-counts
+    // checks (callers count the king separately via attackers()) — that bug
+    // made every checking move classify as a "fork".
     return c.moves({ square: square as Square, verbose: true })
-      .filter((m) => m.captured)
+      .filter((m) => m.captured && m.captured !== "k")
       .map((m) => PIECE_VALUES[m.captured!] ?? 0);
   } catch {
     return [];
@@ -343,6 +347,24 @@ interface MissCandidate {
   severity: number;
 }
 
+// Cooperative yield that is NOT subject to background-tab timer throttling.
+// setTimeout(0) in a backgrounded Chrome tab can be clamped to once per
+// MINUTE, which made a 6-second scan appear to hang forever. MessageChannel
+// posts a macrotask that fires immediately regardless of tab visibility.
+function yieldToEventLoop(): Promise<void> {
+  if (typeof MessageChannel === "undefined") {
+    return new Promise((r) => setTimeout(r, 0));
+  }
+  return new Promise((resolve) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => {
+      ch.port1.close();
+      resolve();
+    };
+    ch.port2.postMessage(null);
+  });
+}
+
 const HEURISTIC_SEVERITY: Record<string, number> = {
   "checkmate": 5,
   "back rank mate": 4,
@@ -353,12 +375,16 @@ const HEURISTIC_SEVERITY: Record<string, number> = {
   "skewer": 2,
 };
 
-function collectMissCandidates(games: GameResult[]): MissCandidate[] {
+async function collectMissCandidates(games: GameResult[]): Promise<MissCandidate[]> {
   const candidates: MissCandidate[] = [];
   let totalParsedMoves = 0;
   let totalPlayerMoves = 0;
 
   for (const { pgn, playerColor } of games) {
+    // This scan is CPU-heavy (chess.js clones per candidate move). Yield to
+    // the event loop between games so the UI stays responsive while the
+    // analysis runs in the background.
+    await yieldToEventLoop();
     const moves = parsePgnMoves(pgn);
     totalParsedMoves += moves.length;
     const isWhite = playerColor.toLowerCase().startsWith("w");
@@ -608,22 +634,29 @@ function classifyMotif(fen: string, pv: string[], mate: number | null): string {
 // ── Stage 2: engine verification ────────────────────────────────────────────
 
 const VERIFY_DEPTH = 13;
+const VERIFY_MOVETIME_MS = 1500; // bounds a 120-candidate run to ~3 minutes
 const MAX_VERIFY_CANDIDATES = 120;
 const MIN_MISS_GAP_CP = 150;
 
-async function verifyCandidatesWithEngine(candidates: MissCandidate[]): Promise<MissedTactic[]> {
-  const { StockfishClient, scoreToCentipawns, estimateRating } = await import("@/lib/stockfish-client");
+async function verifyCandidatesWithEngine(
+  candidates: MissCandidate[],
+  onProgress?: (done: number, total: number) => void
+): Promise<MissedTactic[]> {
+  const { StockfishClient, scoreToCentipawns, estimateRating, pvToSolution } = await import("@/lib/stockfish-client");
   const client = new StockfishClient();
   const verified: MissedTactic[] = [];
   const normalize = (u: string) => u.replace(/undefined$/, "").toLowerCase();
 
   try {
     await client.init();
-    for (const cand of candidates) {
+    for (let ci = 0; ci < candidates.length; ci++) {
+      const cand = candidates[ci];
+      if (ci % 10 === 0) onProgress?.(ci, candidates.length);
       let snapshots;
       try {
-        snapshots = await client.analyzeFen(cand.fen, VERIFY_DEPTH);
-      } catch {
+        snapshots = await client.analyzeFen(cand.fen, VERIFY_DEPTH, VERIFY_MOVETIME_MS);
+      } catch (posErr) {
+        console.warn("[CTT] analyzeFen failed for candidate", ci, posErr);
         continue; // one bad position shouldn't kill the run
       }
       const best = snapshots.get(1);
@@ -640,13 +673,16 @@ async function verifyCandidatesWithEngine(candidates: MissCandidate[]): Promise<
       if (gap < MIN_MISS_GAP_CP || bestCp < -50) continue;
       if (normalize(best.pv[0]) === normalize(cand.playedUci)) continue;
 
+      // Odd-length line ending on the player's move — see pvToSolution.
+      const bestLine = pvToSolution(best.pv, 4);
+      if (bestLine.length === 0) continue;
       verified.push({
         pattern: classifyMotif(cand.fen, best.pv, best.mate),
         fen: cand.fen,
         moveNumber: cand.moveNumber,
-        bestLine: best.pv.slice(0, 4),
+        bestLine,
         evalGap: Math.round(Math.min(gap, 100000)),
-        rating: estimateRating(bestCp, gap, best.depth, Math.min(best.pv.length, 4)),
+        rating: estimateRating(bestCp, gap, best.depth, bestLine.length),
         engineVerified: true,
       });
     }
@@ -809,14 +845,16 @@ function detectOpponentThreat(fen: string): { pattern: ThreatPattern; moves: str
   return null;
 }
 
-export function buildThreatDetectionPuzzlesFromGames(
+export async function buildThreatDetectionPuzzlesFromGames(
   games: Array<{ pgn: string; playerColor: string }>,
   source: string
-): GameThreatPuzzle[] {
+): Promise<GameThreatPuzzle[]> {
   const results: GameThreatPuzzle[] = [];
   let puzzleIdx = 0;
 
   for (const { pgn, playerColor } of games) {
+    // Yield between games — same responsiveness concern as candidate collection.
+    await yieldToEventLoop();
     const moves = parsePgnMoves(pgn);
     const isWhite = playerColor.toLowerCase().startsWith("w");
     const c = new Chess();
@@ -904,7 +942,7 @@ export async function runGameAnalysis(
   try {
     // Signal that analysis is in progress so UI can show loading state
     localStorage.setItem("ctt_analysis_status", "running");
-    dbg(`[CTT] Starting game analysis for ${username} ${platform}`);
+    dbg(`[CTT] Starting game analysis v3 for ${username} ${platform}`);
 
     const games = await fetchRecentGames(username, platform);
     dbg(`[CTT] Fetched ${games.length} games`);
@@ -922,7 +960,7 @@ export async function runGameAnalysis(
     }
 
     // Stage 1: cheap candidate collection
-    const candidates = collectMissCandidates(games);
+    const candidates = await collectMissCandidates(games);
     const capped = [...candidates]
       .sort((a, b) => b.severity - a.severity)
       .slice(0, MAX_VERIFY_CANDIDATES);
@@ -933,7 +971,10 @@ export async function runGameAnalysis(
     let missed: MissedTactic[];
     let engineVerified = true;
     try {
-      missed = await verifyCandidatesWithEngine(capped);
+      dbg(`[CTT] Verifying ${capped.length} candidates with Stockfish...`);
+      missed = await verifyCandidatesWithEngine(capped, (done, total) =>
+        dbg(`[CTT] Verified ${done}/${total} candidates (${new Date().toLocaleTimeString()})`)
+      );
       dbg(`[CTT] Engine verified ${missed.length}/${capped.length} candidate misses`);
     } catch (engineErr) {
       engineVerified = false;
@@ -967,23 +1008,43 @@ export async function runGameAnalysis(
       engineVerified,
     };
 
-    localStorage.setItem("ctt_custom_analysis", JSON.stringify(payload));
+    // NOTE: do NOT write ctt_custom_analysis here — that key belongs to
+    // CustomPuzzles and uses a different schema (StoredAnalysis); writing
+    // this payload there silently wiped Custom Puzzles state on every
+    // weekly auto-analysis.
     localStorage.setItem("ctt_game_analysis", JSON.stringify(payload));
     localStorage.setItem("ctt_custom_platform", platform);
     localStorage.setItem("ctt_custom_username", username);
     localStorage.setItem("ctt_analysis_status", "done");
 
     // Build threat detection puzzles from the user's games
-    const threatPuzzles = buildThreatDetectionPuzzlesFromGames(
+    const threatPuzzles = await buildThreatDetectionPuzzlesFromGames(
       games,
       `${platform}:${username}`
     );
     dbg(`[CTT] Built ${threatPuzzles.length} threat detection puzzles from games`);
     localStorage.setItem(THREAT_DETECTION_GAMES_KEY, JSON.stringify(threatPuzzles));
 
-    // NOTE: ctt_custom_queue is owned by CustomPuzzles (a string[] of puzzle
-    // ids). The old code wrote objects here, which its consumer couldn't
-    // read — Custom Puzzles now builds directly from missedTactics instead.
+    // Auto-build own-game puzzles from the verified misses so the daily
+    // training blend (generateMasterySet) and Custom Puzzles work with zero
+    // manual steps. ctt_custom_queue is a string[] of puzzle ids (the old
+    // code wrote objects here, which its consumer couldn't read).
+    try {
+      if (engineVerified) {
+        const { buildPuzzleFromVerifiedMiss } = await import("@/lib/custom-puzzle-generator");
+        const generated = missed
+          .map((m, i) => buildPuzzleFromVerifiedMiss(m, i))
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+        if (generated.length > 0) {
+          localStorage.setItem("ctt_custom_puzzles_generated", JSON.stringify(generated));
+          localStorage.setItem("ctt_custom_queue", JSON.stringify(generated.map((p) => p.id)));
+          dbg(`[CTT] Auto-built ${generated.length} own-game puzzles from verified misses`);
+        }
+      }
+    } catch (autoErr) {
+      // non-fatal — Custom Puzzles can still build on demand
+      dbg(`[CTT] Auto-build of own-game puzzles failed: ${autoErr instanceof Error ? autoErr.message : autoErr}`);
+    }
 
     console.log("[CTT] Analysis saved to localStorage successfully");
     return true;

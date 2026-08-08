@@ -21,6 +21,18 @@ export function scoreToCentipawns(snapshot: AnalysisSnapshot | undefined): numbe
   return snapshot.score;
 }
 
+/**
+ * Trim an engine PV to a playable puzzle solution: at most `maxPlies`, and
+ * always ODD length so the line ends on the solver's own move. TacticBoard
+ * treats solution[0], [2], ... as player moves and auto-plays odd indices —
+ * an even-length line would end on an opponent reply and never complete.
+ */
+export function pvToSolution(pv: string[], maxPlies = 4): string[] {
+  const moves = pv.slice(0, maxPlies);
+  if (moves.length % 2 === 0 && moves.length > 0) moves.pop();
+  return moves;
+}
+
 /** Heuristic puzzle-rating estimate from engine output. */
 export function estimateRating(best: number | null, gap: number, depth: number, moveCount: number): number {
   const bestMagnitude = Math.min(Math.abs(best ?? 0), 600);
@@ -72,11 +84,12 @@ export class StockfishClient {
         return;
       }
       if (line === 'readyok') {
+        // Just flip the flag — the init poll tick (every 50ms) sees it and
+        // resolves. The original code also cleared the scheduled tick here,
+        // which orphaned the init promise forever: readyok almost always
+        // arrives while a tick is pending, so init would hang and callers'
+        // outer timeouts fired instead ("Stockfish generation timed out").
         this.ready = true;
-        if (this.lastReadyTimer) {
-          window.clearTimeout(this.lastReadyTimer);
-          this.lastReadyTimer = null;
-        }
         return;
       }
       const info = parseInfoLine(line);
@@ -123,7 +136,12 @@ export class StockfishClient {
     this.worker.postMessage('setoption name Hash value 16');
   }
 
-  async analyzeFen(fen: string, depth = 18): Promise<Map<number, AnalysisSnapshot>> {
+  /**
+   * Analyze a position. `movetimeMs` bounds wall-clock per position (the
+   * search stops at depth OR movetime, whichever comes first) — essential
+   * when verifying a batch of a hundred positions in the background.
+   */
+  async analyzeFen(fen: string, depth = 18, movetimeMs?: number): Promise<Map<number, AnalysisSnapshot>> {
     await this.init();
     if (!this.worker) throw new Error('Stockfish worker unavailable');
     this.currentSnapshots.clear();
@@ -134,12 +152,14 @@ export class StockfishClient {
     return new Promise<Map<number, AnalysisSnapshot>>((resolve, reject) => {
       this.pendingResolve = resolve;
       this.pendingReject = reject;
-      this.worker?.postMessage(`go depth ${depth}`);
+      const goCmd = movetimeMs ? `go depth ${depth} movetime ${movetimeMs}` : `go depth ${depth}`;
+      this.worker?.postMessage(goCmd);
+      const hardStop = movetimeMs ? movetimeMs + 5000 : 20000;
       window.setTimeout(() => {
         if (this.pendingReject === reject) {
           this.worker?.postMessage('stop');
         }
-      }, 20000);
+      }, hardStop);
     });
   }
 

@@ -2,6 +2,7 @@ import {
   StockfishClient,
   scoreToCentipawns,
   estimateRating,
+  pvToSolution,
   type AnalysisSnapshot,
 } from '@/lib/stockfish-client';
 
@@ -49,7 +50,7 @@ function buildGeneratedPuzzle(missed: MissedTacticInput, best: AnalysisSnapshot 
   const gap = secondCp === null ? Math.abs(bestCp) : Math.abs(bestCp - secondCp);
   if (gap < MIN_EVAL_GAP_CP) return null;
 
-  const moves = best.pv.slice(0, MAX_PV_MOVES);
+  const moves = pvToSolution(best.pv, MAX_PV_MOVES);
   if (!moves.length) return null;
 
   return {
@@ -79,7 +80,8 @@ export function buildPuzzleFromVerifiedMiss(
   index: number
 ): GeneratedCustomPuzzle | null {
   if (!miss.bestLine || miss.bestLine.length === 0) return null;
-  const moves = miss.bestLine.slice(0, MAX_PV_MOVES);
+  const moves = pvToSolution(miss.bestLine, MAX_PV_MOVES);
+  if (moves.length === 0) return null;
   return {
     id: `custom-${index}-${miss.moveNumber ?? 0}-${moves[0]}`,
     fen: miss.fen,
