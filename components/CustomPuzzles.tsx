@@ -1779,44 +1779,58 @@ export default function CustomPuzzles({ onTrainingStateChange }: CustomPuzzlesPr
 
       if (cancelRef.current) return;
 
-      // Extract missed tactics for Stockfish generation (limit to first 12)
-      // Convert from the shared format to the custom puzzle format
-      const missedTactics = (gameAnalysis.missedTactics?.slice(0, 12) ?? []).map((mt, idx) => ({
-        pattern: mt.pattern,
-        fen: mt.fen,
-        moveNumber: mt.moveNumber ?? idx,
-        gameIndex: idx,
-      }));
-      
       let generatedPuzzles: GeneratedCustomPuzzle[] = [];
       let customQueue: string[] = [];
       let generationMode: 'stockfish' | 'fallback' = 'stockfish';
 
-      try {
-        setStatusMsg(`Loading Stockfish engine...`);
-        const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
-        
-        // Race Stockfish generation against a 30-second overall timeout
-        const timeoutPromise = new Promise<GeneratedCustomPuzzle[]>((_, reject) => 
-          setTimeout(() => reject(new Error('Stockfish generation timed out after 30s')), 30000)
-        );
-        
-        const generatePromise = generateCustomPuzzlesFromMissedTactics(missedTactics, {
-          onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
-            setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
-            try {
-              localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
-              localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
-            } catch {
-              // ignore storage errors during progressive generation
-            }
-          },
-        });
-        
-        generatedPuzzles = await Promise.race([generatePromise, timeoutPromise]);
-      } catch (err) {
-        console.warn('[CustomPuzzles] Stockfish generation failed, falling back:', err);
-        generatedPuzzles = [];
+      // Fast path: game analysis already engine-verified each miss and stored
+      // the solution line — build puzzles directly, no second engine run.
+      const verifiedMisses = (gameAnalysis.missedTactics ?? []).filter(
+        (mt) => Array.isArray(mt.bestLine) && mt.bestLine.length > 0
+      );
+
+      if (verifiedMisses.length >= 3) {
+        setStatusMsg(`Building puzzles from ${verifiedMisses.length} engine-verified misses...`);
+        const { buildPuzzleFromVerifiedMiss } = await import("@/lib/custom-puzzle-generator");
+        generatedPuzzles = verifiedMisses
+          .map((mt, idx) => buildPuzzleFromVerifiedMiss(mt, idx))
+          .filter((p): p is GeneratedCustomPuzzle => p !== null);
+      } else {
+        // Legacy path: analysis has no stored lines (heuristic-only run) —
+        // verify with Stockfish here. No count cap and no all-or-nothing
+        // timeout: progress saves incrementally, and on failure we keep
+        // whatever was generated so far.
+        const missedTactics = (gameAnalysis.missedTactics?.slice(0, 50) ?? []).map((mt, idx) => ({
+          pattern: mt.pattern,
+          fen: mt.fen,
+          moveNumber: mt.moveNumber ?? idx,
+          gameIndex: idx,
+        }));
+
+        try {
+          setStatusMsg(`Loading Stockfish engine...`);
+          const { generateCustomPuzzlesFromMissedTactics } = await import("@/lib/custom-puzzle-generator");
+          generatedPuzzles = await generateCustomPuzzlesFromMissedTactics(missedTactics, {
+            onProgress: ({ completed, total, generated, currentPattern, puzzles }) => {
+              setStatusMsg(`Building custom puzzles... (${completed}/${total} complete${currentPattern ? ` · ${currentPattern}` : ''} · ${generated} puzzles ready)`);
+              try {
+                localStorage.setItem(CUSTOM_GENERATED_PUZZLES_KEY, JSON.stringify(puzzles));
+                localStorage.setItem(CUSTOM_QUEUE_KEY, JSON.stringify(puzzles.map((p) => p.id)));
+              } catch {
+                // ignore storage errors during progressive generation
+              }
+            },
+          });
+        } catch (err) {
+          console.warn('[CustomPuzzles] Stockfish generation failed — keeping partial results:', err);
+          try {
+            generatedPuzzles = JSON.parse(
+              localStorage.getItem(CUSTOM_GENERATED_PUZZLES_KEY) || '[]'
+            ) as GeneratedCustomPuzzle[];
+          } catch {
+            generatedPuzzles = [];
+          }
+        }
       }
 
       if (generatedPuzzles.length === 0) {

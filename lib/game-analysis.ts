@@ -12,8 +12,19 @@ export interface PatternSummary {
   share: number;
 }
 
+export interface MissedTactic {
+  pattern: string;
+  fen: string;
+  moveNumber?: number;
+  /** Engine-verified fields (present when Stockfish confirmed the miss). */
+  bestLine?: string[];
+  evalGap?: number;
+  rating?: number;
+  engineVerified?: boolean;
+}
+
 export interface StoredGameAnalysis {
-  missedTactics: Array<{ pattern: string; fen: string; moveNumber?: number }>;
+  missedTactics: MissedTactic[];
   strengths: PatternSummary[];
   weaknesses: PatternSummary[];
   recommendation: string;
@@ -21,6 +32,8 @@ export interface StoredGameAnalysis {
   username: string;
   analyzedAt: string;
   gameCount: number;
+  /** True when the miss list was verified by Stockfish rather than heuristics. */
+  engineVerified?: boolean;
 }
 
 const CANONICAL_PATTERN_LABELS: Record<string, string> = {
@@ -315,12 +328,33 @@ function detectMissedTactic(fen: string, actualPlayerMove?: string): TacticLabel
   return bestTactic;
 }
 
-function analyzeGamesForQueue(
-  games: GameResult[]
-): Array<{ pattern: string; fen: string; moveNumber?: number }> {
-  const results: Array<{ pattern: string; fen: string; moveNumber?: number }> = [];
-  let playerMoveIndex = 0;
+// ── Candidate collection (cheap chess.js pre-filter) ────────────────────────
+//
+// Stage 1 of the two-stage pipeline: quickly flag positions where a tactic
+// MIGHT have existed. Stage 2 (Stockfish) verifies each candidate and
+// classifies the real motif. The heuristic label is only used as a fallback
+// when the engine is unavailable.
 
+interface MissCandidate {
+  fen: string;
+  playedUci: string;
+  moveNumber: number;
+  heuristicLabel: string;
+  severity: number;
+}
+
+const HEURISTIC_SEVERITY: Record<string, number> = {
+  "checkmate": 5,
+  "back rank mate": 4,
+  "fork": 3,
+  "winning capture": 3,
+  "discovered attack": 2,
+  "pin": 2,
+  "skewer": 2,
+};
+
+function collectMissCandidates(games: GameResult[]): MissCandidate[] {
+  const candidates: MissCandidate[] = [];
   let totalParsedMoves = 0;
   let totalPlayerMoves = 0;
 
@@ -352,24 +386,274 @@ function analyzeGamesForQueue(
       const wasPlayerTurn = isWhite
         ? fen.split(" ")[1] === "w"
         : fen.split(" ")[1] === "b";
+      if (!wasPlayerTurn) continue;
+      totalPlayerMoves++;
 
-      if (wasPlayerTurn) {
-        totalPlayerMoves++;
-        // Pass the actual move played so we only flag genuinely missed tactics
-        const pattern = detectMissedTactic(fen, uci);
-        if (pattern) {
-          results.push({
-            pattern: normalizePatternLabel(pattern),
-            fen,
-            moveNumber: moveNum,
-          });
-        }
+      // Primary detector (captures/forks/checks), excludes tactics the player played
+      let label: string | null = detectMissedTactic(fen, uci);
+      // Widen the net with the ray-based detectors so pin/skewer/back-rank
+      // positions reach engine verification too.
+      if (!label) {
+        if (hasBackRankThreat(fen)) label = "back rank mate";
+        else if (hasPinOpportunity(fen)) label = "pin";
+        else if (hasSkewerOpportunity(fen)) label = "skewer";
+      }
+      if (label) {
+        candidates.push({
+          fen,
+          playedUci: uci,
+          moveNumber: moveNum,
+          heuristicLabel: label,
+          severity: HEURISTIC_SEVERITY[label] ?? 1,
+        });
       }
     }
   }
 
-  console.log(`[CTT] Parsed ${totalParsedMoves} total moves, analyzed ${totalPlayerMoves} player moves, found ${results.length} missed tactics`);
-  return results.slice(0, 150);
+  console.log(`[CTT] Parsed ${totalParsedMoves} moves, ${totalPlayerMoves} player moves, ${candidates.length} miss candidates`);
+  return candidates;
+}
+
+// ── Motif classification of an engine line ──────────────────────────────────
+
+function isSmotheredMate(mated: Chess): boolean {
+  // Mated king has every adjacent square occupied by its own pieces.
+  const board = mated.board();
+  const color = mated.turn();
+  for (let r = 0; r < 8; r++) {
+    for (let f = 0; f < 8; f++) {
+      const p = boardPieceAt(board, f, r);
+      if (p && p.type === "k" && p.color === color) {
+        for (let df = -1; df <= 1; df++) {
+          for (let dr = -1; dr <= 1; dr++) {
+            if (df === 0 && dr === 0) continue;
+            const nf = f + df, nr = r + dr;
+            if (nf < 0 || nf > 7 || nr < 0 || nr > 7) continue;
+            const adj = boardPieceAt(board, nf, nr);
+            if (!adj || adj.color !== color) return false;
+          }
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function matedKingOnBackRank(mated: Chess): boolean {
+  const color = mated.turn();
+  const backRank = color === "w" ? 0 : 7; // rank index (0 = rank 1)
+  const board = mated.board();
+  for (let f = 0; f < 8; f++) {
+    const p = boardPieceAt(board, f, backRank);
+    if (p && p.type === "k" && p.color === color) return true;
+  }
+  return false;
+}
+
+// Walk a ray from `square`; returns the first two pieces encountered in order.
+function piecesOnRay(c: Chess, square: string, df: number, dr: number) {
+  const board = c.board();
+  const out: Array<{ type: string; color: string }> = [];
+  let f = square.charCodeAt(0) - 97 + df;
+  let r = parseInt(square[1]) - 1 + dr;
+  while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+    const p = boardPieceAt(board, f, r);
+    if (p) {
+      out.push(p);
+      if (out.length >= 2) break;
+    }
+    f += df;
+    r += dr;
+  }
+  return out;
+}
+
+const SLIDER_RAYS: Record<string, [number, number][]> = {
+  b: [[1, 1], [1, -1], [-1, 1], [-1, -1]],
+  r: [[1, 0], [-1, 0], [0, 1], [0, -1]],
+  q: [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]],
+};
+
+// After our slider lands on `to`: pin = first opp piece then opp king behind;
+// skewer = first opp piece (value ≥5 incl. king) with a lesser opp piece behind.
+function sliderCreatesPinOrSkewer(afterFen: string, to: string, sliderType: string, ourColor: string): "pin" | "skewer" | null {
+  if (!SLIDER_RAYS[sliderType]) return null;
+  try {
+    const c = new Chess(afterFen);
+    for (const [df, dr] of SLIDER_RAYS[sliderType]) {
+      const ray = piecesOnRay(c, to, df, dr);
+      if (ray.length < 2) continue;
+      const [front, back] = ray;
+      if (front.color === ourColor || back.color === ourColor) continue;
+      if (back.type === "k") return "pin";
+      const frontVal = PIECE_VALUES[front.type] ?? 0;
+      const backVal = PIECE_VALUES[back.type] ?? 0;
+      if (frontVal >= 5 && backVal < frontVal) return "skewer";
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+// Does one of our sliders (not the moved piece) attack through the vacated
+// square at an opponent rook/queen/king? → discovered attack/check.
+function detectDiscovered(afterFen: string, vacated: string, movedTo: string, ourColor: string): "check" | "attack" | null {
+  try {
+    const c = new Chess(afterFen);
+    const board = c.board();
+    const vf = vacated.charCodeAt(0) - 97;
+    const vr = parseInt(vacated[1]) - 1;
+
+    for (const [df, dr] of SLIDER_RAYS.q) {
+      // Walk backwards from the vacated square to find one of our sliders
+      let f = vf - df, r = vr - dr;
+      let slider: { type: string; color: string } | null = null;
+      while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+        const p = boardPieceAt(board, f, r);
+        if (p) {
+          const isOurs = p.color === ourColor;
+          const coversDir = (df !== 0 && dr !== 0)
+            ? (p.type === "b" || p.type === "q")
+            : (p.type === "r" || p.type === "q");
+          if (isOurs && coversDir) slider = p;
+          break;
+        }
+        f -= df; r -= dr;
+      }
+      if (!slider) continue;
+
+      // Walk forwards from the vacated square to the first piece
+      f = vf + df; r = vr + dr;
+      while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+        const p = boardPieceAt(board, f, r);
+        if (p) {
+          if (p.color !== ourColor) {
+            if (p.type === "k") return "check";
+            if ((PIECE_VALUES[p.type] ?? 0) >= 5) return "attack";
+          }
+          break;
+        }
+        f += df; r += dr;
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+/**
+ * Classify the tactical motif of an engine best line, returning a display
+ * label. Falls back to "Winning Captures" / "Checks" when no specific
+ * motif is recognized.
+ */
+function classifyMotif(fen: string, pv: string[], mate: number | null): string {
+  try {
+    const c = new Chess(fen);
+    const first = pv[0];
+    const from = first.slice(0, 2);
+    const to = first.slice(2, 4);
+    const firstMove = c.move({ from, to, promotion: first.length === 5 ? first[4] : undefined });
+    if (!firstMove) return "Winning Captures";
+    const ourColor = firstMove.color;
+    const afterFen = c.fen();
+
+    // ── Mate motifs: play the PV out and inspect the mating pattern ──
+    if (mate !== null && mate > 0) {
+      const cm = new Chess(fen);
+      let lastMove: ReturnType<Chess["move"]> | null = null;
+      try {
+        for (const uci of pv) {
+          lastMove = cm.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length === 5 ? uci[4] : undefined });
+        }
+      } catch { /* partial PV — fall through */ }
+      if (cm.isCheckmate() && lastMove) {
+        if (lastMove.piece === "n" && isSmotheredMate(cm)) return "Smothered Mates";
+        if ((lastMove.piece === "r" || lastMove.piece === "q") && matedKingOnBackRank(cm)) return "Back Rank Mates";
+        return "Checkmates";
+      }
+    }
+
+    // ── Fork: moved piece attacks 2+ valuable targets (check counts as one) ──
+    const attackedVals = getAttackedPieceValues(afterFen, to);
+    const givesCheck = c.inCheck();
+    // Does the moved piece itself attack the enemy king? (chess.js never
+    // generates king captures, so getAttackedPieceValues can't tell us.)
+    const oppColor = ourColor === "w" ? "b" : "w";
+    const kingSquares = c.findPiece({ type: "k", color: oppColor });
+    const movedAttacksKing =
+      kingSquares.length > 0 &&
+      c.attackers(kingSquares[0], ourColor).includes(to as Square);
+    const bigTargets = attackedVals.filter((v) => v >= 3).length + (movedAttacksKing ? 1 : 0);
+    if (bigTargets >= 2) return "Fork";
+
+    // ── Discovered check / attack ──
+    if (givesCheck && !movedAttacksKing) return "Discovered Checks";
+    const disc = detectDiscovered(afterFen, from, to, ourColor);
+    if (disc === "attack") return "Discovered Attacks";
+
+    // ── Pin / skewer created by the moved slider ──
+    if (["b", "r", "q"].includes(firstMove.piece)) {
+      const ps = sliderCreatesPinOrSkewer(afterFen, to, firstMove.piece, ourColor);
+      if (ps === "pin") return "Pin";
+      if (ps === "skewer") return "Skewer";
+    }
+
+    if (firstMove.captured) return "Winning Captures";
+    if (givesCheck) return "Checks";
+    return "Winning Captures";
+  } catch {
+    return "Winning Captures";
+  }
+}
+
+// ── Stage 2: engine verification ────────────────────────────────────────────
+
+const VERIFY_DEPTH = 13;
+const MAX_VERIFY_CANDIDATES = 120;
+const MIN_MISS_GAP_CP = 150;
+
+async function verifyCandidatesWithEngine(candidates: MissCandidate[]): Promise<MissedTactic[]> {
+  const { StockfishClient, scoreToCentipawns, estimateRating } = await import("@/lib/stockfish-client");
+  const client = new StockfishClient();
+  const verified: MissedTactic[] = [];
+  const normalize = (u: string) => u.replace(/undefined$/, "").toLowerCase();
+
+  try {
+    await client.init();
+    for (const cand of candidates) {
+      let snapshots;
+      try {
+        snapshots = await client.analyzeFen(cand.fen, VERIFY_DEPTH);
+      } catch {
+        continue; // one bad position shouldn't kill the run
+      }
+      const best = snapshots.get(1);
+      const second = snapshots.get(2);
+      if (!best?.pv?.length) continue;
+      const bestCp = scoreToCentipawns(best);
+      if (bestCp === null) continue;
+      const secondCp = scoreToCentipawns(second);
+      const gap = secondCp === null ? Math.abs(bestCp) : bestCp - secondCp;
+
+      // A real miss: a single clearly-best move existed (big gap), the
+      // resulting position is at least OK for the player, and the player
+      // played something else.
+      if (gap < MIN_MISS_GAP_CP || bestCp < -50) continue;
+      if (normalize(best.pv[0]) === normalize(cand.playedUci)) continue;
+
+      verified.push({
+        pattern: classifyMotif(cand.fen, best.pv, best.mate),
+        fen: cand.fen,
+        moveNumber: cand.moveNumber,
+        bestLine: best.pv.slice(0, 4),
+        evalGap: Math.round(Math.min(gap, 100000)),
+        rating: estimateRating(bestCp, gap, best.depth, Math.min(best.pv.length, 4)),
+        engineVerified: true,
+      });
+    }
+  } finally {
+    client.dispose();
+  }
+  return verified;
 }
 
 function buildPatternSummaries(
@@ -637,7 +921,29 @@ export async function runGameAnalysis(
       return false;
     }
 
-    const missed = analyzeGamesForQueue(games);
+    // Stage 1: cheap candidate collection
+    const candidates = collectMissCandidates(games);
+    const capped = [...candidates]
+      .sort((a, b) => b.severity - a.severity)
+      .slice(0, MAX_VERIFY_CANDIDATES);
+
+    // Stage 2: Stockfish verification + motif classification.
+    // Falls back to heuristic labels if the engine can't start (e.g. WASM
+    // unavailable) so analysis still produces something.
+    let missed: MissedTactic[];
+    let engineVerified = true;
+    try {
+      missed = await verifyCandidatesWithEngine(capped);
+      dbg(`[CTT] Engine verified ${missed.length}/${capped.length} candidate misses`);
+    } catch (engineErr) {
+      engineVerified = false;
+      dbg(`[CTT] Engine unavailable (${engineErr instanceof Error ? engineErr.message : engineErr}) — using heuristic labels`);
+      missed = capped.map((cand) => ({
+        pattern: normalizePatternLabel(cand.heuristicLabel),
+        fen: cand.fen,
+        moveNumber: cand.moveNumber,
+      }));
+    }
     console.log("[CTT] Analysis complete. Missed tactics:", missed.length);
 
     // If no missed tactics found, don't store empty data — let auto-retry handle it
@@ -658,6 +964,7 @@ export async function runGameAnalysis(
       username,
       analyzedAt: new Date().toISOString(),
       gameCount: games.length,
+      engineVerified,
     };
 
     localStorage.setItem("ctt_custom_analysis", JSON.stringify(payload));
@@ -674,15 +981,9 @@ export async function runGameAnalysis(
     dbg(`[CTT] Built ${threatPuzzles.length} threat detection puzzles from games`);
     localStorage.setItem(THREAT_DETECTION_GAMES_KEY, JSON.stringify(threatPuzzles));
 
-    if (missed.length > 0) {
-      const queue = missed.slice(0, 50).map((m, i) => ({
-        id: `custom_${i}`,
-        fen: m.fen,
-        theme: m.pattern,
-        source: `${platform}:${username}`,
-      }));
-      localStorage.setItem("ctt_custom_queue", JSON.stringify(queue));
-    }
+    // NOTE: ctt_custom_queue is owned by CustomPuzzles (a string[] of puzzle
+    // ids). The old code wrote objects here, which its consumer couldn't
+    // read — Custom Puzzles now builds directly from missedTactics instead.
 
     console.log("[CTT] Analysis saved to localStorage successfully");
     return true;

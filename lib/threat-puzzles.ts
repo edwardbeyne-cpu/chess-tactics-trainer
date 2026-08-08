@@ -233,7 +233,14 @@ export async function buildThreatDetectionSession(count = 10): Promise<ThreatPuz
 
   // Ghost Tactic: ~30% of session is quiet positions (no tactic) — trains the trigger.
   const quietTarget = Math.max(1, Math.floor(count * 0.3));
-  const tacticTarget = count - quietTarget;
+  let tacticTarget = count - quietTarget;
+
+  // Blend in threats from the user's OWN games first (built by game analysis):
+  // real "your opponent played a tactic against you" positions. Up to ~40%
+  // of the tactic portion.
+  const ownGamePuzzles = shuffle(loadGameThreatPuzzles().map(gamePuzzleToThreatPuzzle));
+  const ownGamePicks = ownGamePuzzles.slice(0, Math.round(tacticTarget * 0.4));
+  tacticTarget -= ownGamePicks.length;
 
   // Try progressively wider rating windows until we have enough puzzles
   for (const ratingWindow of [250, 400, 600, 99999]) {
@@ -263,13 +270,16 @@ export async function buildThreatDetectionSession(count = 10): Promise<ThreatPuz
     if (tacticPool.length >= tacticTarget && quietPool.length >= quietTarget) {
       const tactics = shuffle(tacticPool).slice(0, tacticTarget);
       const quiets = shuffle(quietPool).slice(0, quietTarget);
-      return shuffle([...tactics, ...quiets]);
+      return shuffle([...ownGamePicks, ...tactics, ...quiets]);
     }
     // Fallback: if not enough quiet puzzles, fill with tactics
-    if (tacticPool.length >= count) return shuffle(tacticPool).slice(0, count);
+    if (ownGamePicks.length + tacticPool.length >= count) {
+      return shuffle([...ownGamePicks, ...shuffle(tacticPool).slice(0, count - ownGamePicks.length)]);
+    }
   }
 
-  return [];
+  // Last resort: own-game threats alone
+  return shuffle(ownGamePicks).slice(0, count);
 }
 
 // ── Stockfish-powered defense evaluation ──────────────────────────────────

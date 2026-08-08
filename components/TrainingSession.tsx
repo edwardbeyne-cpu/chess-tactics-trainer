@@ -268,17 +268,62 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
   }
   const puzzles: MasteryPuzzle[] = [];
 
+  // ── Own-game puzzles first ──────────────────────────────────────────────
+  // Engine-verified positions from the user's own games where they missed a
+  // tactic. These ARE the "train what you miss" core — take up to 30% of the
+  // set. Their fen already has the player to move and moves[0] is the
+  // player's move (no applyFirstMove needed).
+  const ownGameTarget = Math.round(newTacticCount * 0.3);
+  try {
+    const generatedRaw = localStorage.getItem("ctt_custom_puzzles_generated");
+    if (generatedRaw && ownGameTarget > 0) {
+      const generated = JSON.parse(generatedRaw) as Array<{
+        id: string; fen: string; moves: string[]; rating?: number; pattern?: string;
+      }>;
+      const eligible = shuffleArray(
+        (generated ?? []).filter(
+          (p) => p && Array.isArray(p.moves) && p.moves.length > 0 && p.fen && !usedIds.has(p.id)
+        )
+      );
+      for (const p of eligible) {
+        if (puzzles.length >= ownGameTarget) break;
+        puzzles.push({
+          id: `tactic_${p.id}`,
+          type: "tactic",
+          puzzleData: {
+            fen: p.fen,
+            solution: p.moves,
+            rating: p.rating ?? 1500,
+            theme: (p.pattern ?? "custom").toLowerCase(),
+          },
+          masteryHits: 0,
+          lastSolvedAt: [],
+          lastMasteryHitCounter: 0,
+          attempts: 0,
+          correctAttempts: 0,
+          avgSolveTime: 0,
+          lastAttemptAt: 0,
+        });
+        usedIds.add(p.id);
+      }
+    }
+  } catch { /* malformed storage — skip own-game blend */ }
+
   // ── Tactic puzzles ──────────────────────────────────────────────────────
   const allThemes = Object.keys(cachedPuzzlesByTheme);
 
-  // Map game analysis pattern labels to puzzle theme keys
+  // Map game analysis pattern labels (from the engine motif classifier) to
+  // puzzle theme keys in the Lichess cache.
   const gameAnalysisToTheme: Record<string, string> = {
     "Fork": "fork",
     "Pin": "pin",
     "Skewer": "skewer",
     "Winning Captures": "fork",       // closest tactical theme
     "Discovered Attacks": "discoveredAttack",
+    "Discovered Checks": "discoveredCheck",
     "Back Rank Mates": "backRankMate",
+    "Smothered Mates": "smotheredMate",
+    "Checkmates": "backRankMate",     // closest mate-heavy pool
     "Checks": "fork",                 // fallback
   };
 
