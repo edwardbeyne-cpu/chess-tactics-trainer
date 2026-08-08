@@ -232,10 +232,15 @@ export function pickFromFeed<T>(
     r -= b.weight;
   }
 
-  // Within bucket: pick most overdue (due bucket) or random (new/edge)
+  // Within bucket: pick most overdue (due), first-in-order (new — the caller
+  // orders its set by ascending rating so sessions ramp from easier to
+  // harder), or random (edge).
   if (chosen.name === "due") {
     const sorted = chosen.pool.slice().sort((a, b) => a.fsrs.dueDate - b.fsrs.dueDate);
     return { index: sorted[0]._i, bucket: chosen.name };
+  }
+  if (chosen.name === "new") {
+    return { index: chosen.pool[0]._i, bucket: chosen.name };
   }
   const pick = chosen.pool[Math.floor(Math.random() * chosen.pool.length)];
   return { index: pick._i, bucket: chosen.name };

@@ -35,6 +35,8 @@ import {
   incrementCCTSessionCount,
   recordPatternSolveTime,
   incrementPatternMasteryTotal,
+  getTacticsRatingData,
+  updateTacticsRating,
   type CCTMode,
   type MasteryPuzzle,
   type MasterySet,
@@ -247,7 +249,12 @@ function computeBlunderRatio(): number {
 export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuzzle[] = []): MasterySet {
   const calibRaw = localStorage.getItem("ctt_calibration_rating");
   const calibrationRating = calibRaw ? Math.max(400, parseInt(calibRaw, 10) || 800) : 800;
-  const targetELO = calibrationRating + (setNumber - 1) * 50;
+  // Difficulty tracks the LIVE tactics rating (updated on every training
+  // solve), not a frozen calibration + blind per-set escalator. Sets draw
+  // from [rating-200, rating+100] and are ordered ascending, so each session
+  // starts ~200 below your level and ramps up.
+  const liveRating = getTacticsRatingData().tacticsRating;
+  const targetELO = liveRating > 400 ? liveRating : calibrationRating;
   // Lower-biased rating band: the session starts at ~target-200 and tops out
   // slightly above target. Puzzles are sorted ascending in pickNextPuzzleIdx
   // so the difficulty ramps up through the day. Fallback widens on the LOW
@@ -455,8 +462,14 @@ export function generateMasterySet(setNumber: number, carriedPuzzles: MasteryPuz
     ...p, masteryHits: 0, lastSolvedAt: [], lastMasteryHitCounter: 0, attempts: 0, correctAttempts: 0,
   }));
 
-  // Hard cap - never exceed SET_SIZE regardless of what loops produced
-  const finalPuzzles = [...resetCarried, ...shuffleArray(puzzles)].slice(0, SET_SIZE);
+  // Hard cap - never exceed SET_SIZE regardless of what loops produced.
+  // Order ascending by rating: sessions start ~200 below your level and ramp
+  // up (the feed picker serves new puzzles in set order).
+  const puzzleRating = (p: MasteryPuzzle) =>
+    (p.puzzleData as { rating?: number } | undefined)?.rating ?? 0;
+  const finalPuzzles = [...resetCarried, ...shuffleArray(puzzles)]
+    .slice(0, SET_SIZE)
+    .sort((a, b) => puzzleRating(a) - puzzleRating(b));
 
   return {
     setNumber,
@@ -2523,6 +2536,11 @@ export default function TrainingSession() {
     if (puzzle.type === "tactic" && puzzle.puzzleData) {
       const pd = puzzle.puzzleData as { fen: string; solution: string[]; rating: number; theme: string };
       recordPatternSolveTime(pd.theme, solveTimeMs);
+      // Live Elo update: main training now feeds the tactics rating, which in
+      // turn drives the next set's difficulty band (see generateMasterySet).
+      if (pd.rating > 0) {
+        updateTacticsRating(pd.rating, correct);
+      }
       // Increment mastery total when puzzle reaches 3 hits
       if (masteryAwarded && masteryHits === 3) {
         incrementPatternMasteryTotal(pd.theme);
