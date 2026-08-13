@@ -951,6 +951,7 @@ export default function TrainingPlan() {
   const [masteredCount, setMasteredCount] = useState(0);
   const [masterySetSize, setMasterySetSize] = useState(20);
   const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
+  const [unmasteredCount, setUnmasteredCount] = useState(0);
 
   // Session stats (for post-session banner)
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -1003,6 +1004,10 @@ export default function TrainingPlan() {
       setMasteredCount(getMasteredCount());
       setMasterySetSize(masterySet.puzzles.length);
       setMasteryDailyCompleted(getDailySessionCompleted());
+      // Attempted-but-unmastered puzzles — offered as a deliberate-study set
+      setUnmasteredCount(
+        masterySet.puzzles.filter((p) => p.type === "tactic" && p.masteryHits < 3 && p.attempts > 0).length
+      );
     }
 
     // Build training tasks
@@ -1397,6 +1402,29 @@ export default function TrainingPlan() {
               ? "Keep Training →"
               : "Start Training →"}
           </a>
+
+          {/* Deliberate study of attempted-but-unmastered puzzles (pure
+              practice — doesn't touch mastery, daily count, or rating) */}
+          {unmasteredCount > 0 && (
+            <a
+              href="/app/training?study=unmastered"
+              style={{
+                display: "block",
+                backgroundColor: "transparent",
+                border: "1px solid #f59e0b",
+                color: "#f59e0b",
+                textAlign: "center",
+                padding: "0.7rem",
+                borderRadius: "10px",
+                fontSize: "0.88rem",
+                fontWeight: "600",
+                textDecoration: "none",
+                marginTop: "0.6rem",
+              }}
+            >
+              📖 Study {unmasteredCount} Unmastered Puzzle{unmasteredCount > 1 ? "s" : ""} →
+            </a>
+          )}
 
         </div>
 

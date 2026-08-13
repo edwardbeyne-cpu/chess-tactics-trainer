@@ -2055,6 +2055,8 @@ interface SessionCompleteProps {
   streak: number;
   onContinue: () => void;
   onReviewMissed: () => void;
+  unmasteredCount: number;
+  onStudyUnmastered: () => void;
 }
 
 function SessionCompleteScreen({
@@ -2069,6 +2071,8 @@ function SessionCompleteScreen({
   streak,
   onContinue,
   onReviewMissed,
+  unmasteredCount,
+  onStudyUnmastered,
 }: SessionCompleteProps) {
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
@@ -2155,6 +2159,19 @@ function SessionCompleteScreen({
             }}
           >
             Review {missedCount} Missed Puzzle{missedCount > 1 ? "s" : ""} →
+          </button>
+        )}
+        {unmasteredCount > 0 && (
+          <button
+            onClick={onStudyUnmastered}
+            style={{
+              backgroundColor: "#1a1a2e", border: "1px solid #f59e0b",
+              borderRadius: "10px", padding: "0.75rem",
+              color: "#f59e0b", fontSize: "0.88rem", cursor: "pointer", width: "100%",
+              fontWeight: "600",
+            }}
+          >
+            📖 Study {unmasteredCount} Unmastered Puzzle{unmasteredCount > 1 ? "s" : ""} →
           </button>
         )}
         <button
@@ -2303,6 +2320,7 @@ export default function TrainingSession() {
   const [sessionMissedPuzzles, setSessionMissedPuzzles] = useState<Array<{id: string; fen: string; solution: string[]}>>([]);
   const [reviewMode, setReviewMode] = useState(false);
   const [reviewQueue, setReviewQueue] = useState<Array<{id: string; fen: string; solution: string[]}>>([]);
+  const [reviewSource, setReviewSource] = useState<"missed" | "study">("missed");
   const [reviewIdx, setReviewIdx] = useState(0);
   // Refs mirror review state so handleResult (memoized) never reads a stale
   // index when advancing through the review queue.
@@ -2425,6 +2443,16 @@ export default function TrainingSession() {
       return;
     }
 
+    // Study mode: /app/training?study=unmastered — deliberate practice of
+    // the current set's attempted-but-unmastered puzzles. Pure practice:
+    // review-mode machinery, no mastery/daily/stat side effects.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("study") === "unmastered" && enterStudyMode(set)) {
+        return;
+      }
+    } catch { /* ignore */ }
+
     // Check if daily session already done
     const todayCompleted = progress.dailySessionDate === today ? progress.dailySessionCompleted : 0;
     if (todayCompleted >= settings.dailyGoal) {
@@ -2449,6 +2477,33 @@ export default function TrainingSession() {
     setPhase("solving");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
+
+  // Puzzles the user has attempted but not yet mastered — the ones worth
+  // deliberate study. Used by the "Study unmastered" flow.
+  function unmasteredStudyQueue(set: MasterySet): Array<{ id: string; fen: string; solution: string[] }> {
+    return set.puzzles
+      .filter((p) => p.type === "tactic" && p.masteryHits < 3 && p.attempts > 0 && p.puzzleData)
+      .map((p) => {
+        const pd = p.puzzleData as { fen: string; solution: string[] };
+        return { id: p.id, fen: pd.fen, solution: pd.solution };
+      });
+  }
+
+  function enterStudyMode(set: MasterySet): boolean {
+    const queue = unmasteredStudyQueue(set);
+    if (queue.length === 0) return false;
+    setReviewQueue(queue);
+    setReviewIdx(0);
+    setReviewMode(true);
+    setReviewSource("study");
+    setShowAnalysis(false);
+    setFeedback(null);
+    setKeepGoing(true);
+    setPuzzleKey((k) => k + 1);
+    setPuzzleStartTime(Date.now());
+    setPhase("solving");
+    return true;
+  }
 
   function markSetComplete(progress: MasteryProgress, set: MasterySet) {
     const updatedSet = { ...set, completedAt: Date.now() };
@@ -2493,7 +2548,15 @@ export default function TrainingSession() {
         setCctContextCard(null);
         const nextReviewIdx = reviewIdxRef.current + 1;
         if (nextReviewIdx >= reviewQueueRef.current.length) {
-          // Review finished — back to the session summary.
+          // Review finished — back to the session summary. Strip a ?study
+          // param so a refresh doesn't re-enter study mode.
+          try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has("study")) {
+              url.searchParams.delete("study");
+              window.history.replaceState({}, "", url.pathname + (url.search || ""));
+            }
+          } catch { /* ignore */ }
           setReviewMode(false);
           setReviewIdx(0);
           setPhase("session_complete");
@@ -2779,12 +2842,17 @@ export default function TrainingSession() {
           setReviewQueue([...sessionMissedPuzzles]);
           setReviewIdx(0);
           setReviewMode(true);
+          setReviewSource("missed");
           setShowAnalysis(false);
           setPuzzleKey((k) => k + 1); // force board remount onto the first missed puzzle
           setFeedback(null);
           setPuzzleStartTime(Date.now());
           setPhase("solving");
           setKeepGoing(true);
+        }}
+        unmasteredCount={currentSet ? currentSet.puzzles.filter((p) => p.type === "tactic" && p.masteryHits < 3 && p.attempts > 0).length : 0}
+        onStudyUnmastered={() => {
+          if (currentSet) enterStudyMode(currentSet);
         }}
       />
     );
@@ -2969,7 +3037,9 @@ export default function TrainingSession() {
           textAlign: "center", color: "#f59e0b", fontSize: "0.72rem", fontWeight: "700",
           textTransform: "uppercase", letterSpacing: "0.06em", padding: "0.4rem",
         }}>
-          Review Mode - Missed Puzzle {reviewIdx + 1}/{reviewQueue.length}
+          {reviewSource === "study"
+            ? `Study Mode - Unmastered Puzzle ${reviewIdx + 1}/${reviewQueue.length}`
+            : `Review Mode - Missed Puzzle ${reviewIdx + 1}/${reviewQueue.length}`}
         </div>
       )}
     </div>
