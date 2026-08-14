@@ -2057,6 +2057,7 @@ interface SessionCompleteProps {
   onReviewMissed: () => void;
   unmasteredCount: number;
   onStudyUnmastered: () => void;
+  setSize: number;
 }
 
 function SessionCompleteScreen({
@@ -2073,6 +2074,7 @@ function SessionCompleteScreen({
   onReviewMissed,
   unmasteredCount,
   onStudyUnmastered,
+  setSize,
 }: SessionCompleteProps) {
   const accuracy = sessionTotal > 0 ? Math.round((sessionCorrect / sessionTotal) * 100) : 0;
   return (
@@ -2127,7 +2129,7 @@ function SessionCompleteScreen({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.65rem" }}>
           {[
             { label: "Under 10s", value: `${sessionUnder10s}/${sessionTotal}`, color: "#60a5fa" },
-            { label: "Set progress", value: `${masteredCount}/100`, color: "#e2e8f0" },
+            { label: "Set progress", value: `${masteredCount}/${setSize || "?"}`, color: "#e2e8f0" },
           ].map(({ label, value, color }) => (
             <div key={label} style={{
               backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
@@ -2830,6 +2832,7 @@ export default function TrainingSession() {
         dailyGoal={dailyGoal}
         dailyCompleted={dailyCompleted}
         masteredCount={masteredCount}
+        setSize={currentSet?.puzzles.length ?? 0}
         sessionCorrect={sessionCorrect}
         sessionTotal={sessionTotal}
         sessionUnder10s={sessionUnder10s}
