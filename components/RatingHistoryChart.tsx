@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import { isBetaTester } from "@/lib/beta";
 import {
   LineChart,
   Line,
@@ -19,19 +18,6 @@ import {
   type TacticsRatingEntry,
   type PlatformRatingSnapshot,
 } from "@/lib/storage";
-
-// ── Tier gating ──────────────────────────────────────────────────────────
-// Free:    current rating only (no chart)
-// Improver: 30-day history
-// Serious: full history + overlays
-// We detect tier from localStorage subscription_status.
-// For now: no subscription = free tier display.
-type Tier = "free" | "improver" | "serious";
-
-function getTier(): Tier {
-  // Personal edition: always full access.
-  return "serious";
-}
 
 // ── Chart data merging ────────────────────────────────────────────────────
 
@@ -123,7 +109,6 @@ function CustomTooltip({ active, payload, label }: any) {
 // ── Main Chart Component ──────────────────────────────────────────────────
 
 export default function RatingHistoryChart() {
-  const tier = useMemo(() => getTier(), []);
   const tacticsData = useMemo(() => getTacticsRatingData(), []);
   const platformData = useMemo(() => getPlatformRatingsData(), []);
   const settings = useMemo(() => getUserSettings(), []);
@@ -131,49 +116,20 @@ export default function RatingHistoryChart() {
   const showChesscom = settings.trackChesscom && !!settings.chesscomUsername;
   const showLichess = settings.trackLichess && !!settings.lichessUsername;
 
-  // Tier gating: free users see no chart
-  if (tier === "free") {
-    return (
-      <div style={{
-        backgroundColor: "#1a1a2e",
-        border: "1px solid #2e3a5c",
-        borderRadius: "12px",
-        padding: "1.5rem",
-        textAlign: "center",
-      }}>
-        <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📈</div>
-        <div style={{ color: "#e2e8f0", fontWeight: "bold", marginBottom: "0.4rem" }}>Rating History</div>
-        <div style={{ color: "#64748b", fontSize: "0.85rem", marginBottom: "1rem" }}>
-          Upgrade to track your rating history over time.
-        </div>
-        <a
-          href="/pricing"
-          style={{
-            display: "inline-block",
-            backgroundColor: "#4ade80",
-            color: "#0f0f1a",
-            borderRadius: "8px",
-            padding: "0.5rem 1.25rem",
-            fontWeight: "bold",
-            fontSize: "0.85rem",
-            textDecoration: "none",
-          }}
-        >
-          Start free trial →
-        </a>
-      </div>
-    );
-  }
-
-  const daysLimit = tier === "improver" ? 30 : null;
   const chartData = buildChartData(
     tacticsData.tacticsRatingHistory,
     platformData.chesscom,
     platformData.lichess,
-    daysLimit,
-    showChesscom && tier === "serious",
-    showLichess && tier === "serious"
+    null,
+    showChesscom,
+    showLichess
   );
+
+  // Net change across the visible tactics history for the header badge
+  const tacticsPoints = chartData.filter((p) => p.tactics !== undefined);
+  const netChange = tacticsPoints.length >= 2
+    ? (tacticsPoints[tacticsPoints.length - 1].tactics ?? 0) - (tacticsPoints[0].tactics ?? 0)
+    : 0;
 
   if (chartData.length < 2) {
     return (
@@ -187,7 +143,7 @@ export default function RatingHistoryChart() {
         <div style={{ fontSize: "2rem", marginBottom: "0.75rem" }}>📈</div>
         <div style={{ color: "#e2e8f0", fontWeight: "bold", marginBottom: "0.4rem" }}>Rating History</div>
         <div style={{ color: "#64748b", fontSize: "0.85rem" }}>
-          Solve more puzzles to build your rating history chart.
+          Your tactics rating is recorded once per training day — the chart appears after your second day.
         </div>
       </div>
     );
@@ -208,10 +164,20 @@ export default function RatingHistoryChart() {
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h2 style={{ color: "#e2e8f0", fontSize: "1rem", fontWeight: "bold", margin: 0 }}>
-          📈 Rating History
+          📈 Tactics Rating Over Time
         </h2>
-        {daysLimit && (
-          <span style={{ color: "#475569", fontSize: "0.72rem" }}>Last 30 days · Upgrade for full history</span>
+        {netChange !== 0 && (
+          <span style={{
+            color: netChange > 0 ? "#4ade80" : "#ef4444",
+            backgroundColor: netChange > 0 ? "rgba(74,222,128,0.1)" : "rgba(239,68,68,0.1)",
+            border: `1px solid ${netChange > 0 ? "#1a4a2a" : "#4a1a1a"}`,
+            borderRadius: "999px",
+            padding: "0.2rem 0.7rem",
+            fontSize: "0.8rem",
+            fontWeight: 700,
+          }}>
+            {netChange > 0 ? "+" : ""}{netChange}
+          </span>
         )}
       </div>
       <ResponsiveContainer width="100%" height={200}>
@@ -229,6 +195,8 @@ export default function RatingHistoryChart() {
             axisLine={{ stroke: "#2e3a5c" }}
             tickLine={false}
             width={40}
+            domain={["dataMin - 50", "dataMax + 50"]}
+            allowDecimals={false}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend
@@ -240,29 +208,32 @@ export default function RatingHistoryChart() {
             name="Tactics Rating"
             stroke="#4ade80"
             strokeWidth={2}
+            isAnimationActive={false}
             dot={false}
             activeDot={{ r: 4, fill: "#4ade80" }}
             connectNulls
           />
-          {showChesscom && tier === "serious" && (
+          {showChesscom && (
             <Line
               type="monotone"
               dataKey="chesscomBlitz"
               name="Chess.com Blitz"
               stroke="#f59e0b"
               strokeWidth={2}
+              isAnimationActive={false}
               dot={false}
               activeDot={{ r: 4, fill: "#f59e0b" }}
               connectNulls
             />
           )}
-          {showLichess && tier === "serious" && (
+          {showLichess && (
             <Line
               type="monotone"
               dataKey="lichessRapid"
               name="Lichess Rapid"
               stroke="#a855f7"
               strokeWidth={2}
+              isAnimationActive={false}
               dot={false}
               activeDot={{ r: 4, fill: "#a855f7" }}
               connectNulls

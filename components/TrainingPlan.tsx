@@ -3,6 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+// Recharts is client-only; load lazily like Dashboard does.
+const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
 import {
   getTacticsRatingData,
   getAllPatternStats,
@@ -1427,6 +1431,9 @@ export default function TrainingPlan() {
           )}
 
         </div>
+
+        {/* ── Tactics rating over time ─────────────────────────────────────── */}
+        <RatingHistoryChart />
 
         {/* ── FIX 1: Chess.com connect banner — single location ─────────────── */}
         {!username && !chesscomPromptDismissed && (
