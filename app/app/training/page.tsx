@@ -1,9 +1,9 @@
-import TrainingSession from "@/components/TrainingSession";
+import WoodpeckerTrainer from "@/components/WoodpeckerTrainer";
 
 export const metadata = {
   title: "Training — ChessTrainer",
 };
 
 export default function TrainingPage() {
-  return <TrainingSession />;
+  return <WoodpeckerTrainer />;
 }

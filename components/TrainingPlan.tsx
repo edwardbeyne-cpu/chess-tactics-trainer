@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import WoodpeckerSummaryCard from "./WoodpeckerSummaryCard";
 
 // Recharts is client-only; load lazily like Dashboard does.
 const RatingHistoryChart = dynamic(() => import("./RatingHistoryChart"), { ssr: false });
@@ -18,9 +19,6 @@ import {
   getPuzzlesSolvedAllTime,
   getDailyTargetSettings,
   getTodaySolvedCount,
-  getCurrentMasterySet,
-  getMasteredCount,
-  getDailySessionCompleted,
   getCCTMode,
   saveCCTMode,
   getCCTSessionCount,
@@ -535,16 +533,6 @@ function getSessionStats(): SessionStats | null {
   }
 }
 
-function isSessionWithin4Hours(stats: SessionStats): boolean {
-  if (stats.timestamp) {
-    const sessionTime = new Date(stats.timestamp).getTime();
-    return Date.now() - sessionTime < 4 * 60 * 60 * 1000;
-  }
-  // No timestamp — treat as recent if date is today
-  return stats.date === getTodayKey();
-}
-
-// ── Check if trained today ─────────────────────────────────────────────────
 function hasTrainedToday(): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -560,177 +548,6 @@ function hasTrainedToday(): boolean {
 }
 
 // ── Status Banner ──────────────────────────────────────────────────────────
-function StatusBanner({
-  streak,
-  trainedToday,
-  masteryDailyCompleted,
-  dailyGoal,
-  masterySetSize,
-}: {
-  streak: number;
-  trainedToday: boolean;
-  masteryDailyCompleted: number;
-  dailyGoal: number;
-  masterySetSize: number;
-}) {
-  const today = getTodayKey();
-  const sessionStats = getSessionStats();
-  const goalMet = masteryDailyCompleted >= dailyGoal && dailyGoal > 0;
-  const sessionIsRecent = sessionStats && isSessionWithin4Hours(sessionStats);
-  const sessionWasToday = sessionStats?.date === today;
-
-  // STATE 1 — Streak at risk
-  if (streak >= 2 && !trainedToday) {
-    return (
-      <div style={{
-        backgroundColor: "#1c0f00",
-        border: "2px solid #f97316",
-        borderRadius: "14px",
-        padding: "1.25rem 1.5rem",
-      }}>
-        <div style={{ color: "#fb923c", fontWeight: 700, fontSize: "1rem", marginBottom: "0.35rem" }}>
-          🔥 Day {streak} streak — train today to keep it alive
-        </div>
-        <div style={{ color: "#92400e", fontSize: "0.82rem", marginBottom: "1rem" }}>
-          Your {streak}-day streak resets at midnight. 10 puzzles, ~15 min.
-        </div>
-        <a
-          href="/app/training"
-          style={{
-            display: "inline-block",
-            backgroundColor: "#f97316",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: "0.9rem",
-            padding: "0.65rem 1.4rem",
-            borderRadius: "8px",
-            textDecoration: "none",
-          }}
-        >
-          Start Training Now →
-        </a>
-      </div>
-    );
-  }
-
-  // STATE 2 — Daily goal complete
-  if (goalMet) {
-    return (
-      <div style={{
-        backgroundColor: "#0a1a0f",
-        border: "1px solid #4ade80",
-        borderRadius: "12px",
-        padding: "0.85rem 1.25rem",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexWrap: "wrap",
-        gap: "0.5rem",
-      }}>
-        <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "0.88rem" }}>
-          ✅ Daily goal complete — {dailyGoal} puzzles done
-        </div>
-        <a
-          href="/app/training"
-          style={{ color: "#4ade80", fontSize: "0.8rem", textDecoration: "none" }}
-        >
-          Want more? Keep going →
-        </a>
-      </div>
-    );
-  }
-
-  // STATE 3 — Post-session celebration (trained today, within 4 hours)
-  if (trainedToday && (sessionIsRecent || sessionWasToday) && sessionStats) {
-    const accuracy = Math.round((sessionStats.correct / Math.max(1, sessionStats.total)) * 100);
-    return (
-      <div style={{
-        backgroundColor: "#0a1a0f",
-        border: "1px solid #22c55e",
-        borderRadius: "12px",
-        padding: "1rem 1.25rem",
-      }}>
-        <div style={{ color: "#4ade80", fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.3rem" }}>
-          ✅ Great session — Day {streak} 🔥
-        </div>
-        <div style={{ color: "#64748b", fontSize: "0.82rem", marginBottom: "0.4rem" }}>
-          {sessionStats.total} puzzles | {accuracy}% accuracy | {sessionStats.mastered} mastered today
-        </div>
-        <div style={{ color: "#475569", fontSize: "0.78rem" }}>
-          Come back tomorrow to keep your streak going.
-        </div>
-      </div>
-    );
-  }
-
-  // STATE 4 — Call to action (default)
-  return (
-    <div style={{
-      backgroundColor: "#13132b",
-      border: "1px solid #2e3a5c",
-      borderRadius: "14px",
-      padding: "1.25rem 1.5rem",
-    }}>
-      <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "0.95rem", marginBottom: "0.3rem" }}>
-        ♟️ Ready to train?
-      </div>
-      <div style={{ color: "#64748b", fontSize: "0.82rem", marginBottom: "1rem" }}>
-        Your {masterySetSize}-puzzle set is waiting. ~15 minutes.
-      </div>
-      <a
-        href="/app/training"
-        style={{
-          display: "inline-block",
-          backgroundColor: "#f97316",
-          color: "#fff",
-          fontWeight: 700,
-          fontSize: "0.88rem",
-          padding: "0.6rem 1.25rem",
-          borderRadius: "8px",
-          textDecoration: "none",
-        }}
-      >
-        Start Training →
-      </a>
-    </div>
-  );
-}
-
-// ── Progress Bar ───────────────────────────────────────────────────────────
-function ProgressBar({
-  value,
-  max,
-  color = "#4ade80",
-  pulsing = false,
-}: {
-  value: number;
-  max: number;
-  color?: string;
-  pulsing?: boolean;
-}) {
-  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
-  return (
-    <div style={{
-      backgroundColor: "#0f0f1a",
-      borderRadius: "999px",
-      height: "8px",
-      overflow: "hidden",
-      border: "1px solid #1e2a3a",
-      flex: 1,
-    }}>
-      <div style={{
-        height: "100%",
-        backgroundColor: pct >= 100 ? "#4ade80" : color,
-        borderRadius: "999px",
-        width: `${pct}%`,
-        transition: "width 0.4s ease",
-        animation: pulsing ? "pulsebar 1.4s ease-in-out infinite" : undefined,
-      }} />
-    </div>
-  );
-}
-
-// ── Connect Chess.com Modal ────────────────────────────────────────────────
 export function ConnectModal({ onClose, onConnected }: {
   onClose: () => void;
   onConnected: (ratings: PlatformRatings, username: string) => void;
@@ -951,11 +768,6 @@ export default function TrainingPlan() {
   const [tasks, setTasks] = useState<TrainingTask[]>([]);
 
   // Sprint 36: Mastery set state
-  const [masterySetNumber, setMasterySetNumber] = useState<number | null>(null);
-  const [masteredCount, setMasteredCount] = useState(0);
-  const [masterySetSize, setMasterySetSize] = useState(20);
-  const [masteryDailyCompleted, setMasteryDailyCompleted] = useState(0);
-  const [unmasteredCount, setUnmasteredCount] = useState(0);
 
   // Session stats (for post-session banner)
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -1000,19 +812,6 @@ export default function TrainingPlan() {
     setDailyGoal(getDailyTargetSettings().dailyGoal);
     setTodaySolved(getTodaySolvedCount());
     setSessionStats(getSessionStats());
-
-    // Sprint 36: Mastery set stats
-    const masterySet = getCurrentMasterySet();
-    if (masterySet) {
-      setMasterySetNumber(masterySet.setNumber);
-      setMasteredCount(getMasteredCount());
-      setMasterySetSize(masterySet.puzzles.length);
-      setMasteryDailyCompleted(getDailySessionCompleted());
-      // Attempted-but-unmastered puzzles — offered as a deliberate-study set
-      setUnmasteredCount(
-        masterySet.puzzles.filter((p) => p.type === "tactic" && p.masteryHits < 3 && p.attempts > 0).length
-      );
-    }
 
     // Build training tasks
     const generatedTasks = buildTrainingTasks(allPatternStats, failureModeStats, userGoal ?? "structured_plan");
@@ -1186,62 +985,6 @@ export default function TrainingPlan() {
 
       <div style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-        {/* ── FIX 2: Session Summary Hero — shown first when trained today ──── */}
-        {trainedToday && sessionStats && (() => {
-          const accuracy = Math.round((sessionStats.correct / Math.max(1, sessionStats.total)) * 100);
-          const goalMet = masteryDailyCompleted >= dailyGoal && dailyGoal > 0;
-          return (
-            <div style={{
-              backgroundColor: "#071a0f",
-              border: "2px solid #22c55e",
-              borderRadius: "16px",
-              padding: "1.5rem",
-              width: "100%",
-              boxSizing: "border-box",
-            }}>
-              <div style={{ color: "#4ade80", fontWeight: 800, fontSize: "1.1rem", marginBottom: "0.5rem" }}>
-                Well done — session complete ✅
-              </div>
-              <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Solved today</div>
-                  <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "1.2rem" }}>{sessionStats.total}</div>
-                </div>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Accuracy</div>
-                  <div style={{ color: accuracy >= 70 ? "#4ade80" : "#f59e0b", fontWeight: 700, fontSize: "1.2rem" }}>{accuracy}%</div>
-                </div>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Mastered</div>
-                  <div style={{ color: "#e2e8f0", fontWeight: 700, fontSize: "1.2rem" }}>{sessionStats.mastered}</div>
-                </div>
-                <div>
-                  <div style={{ color: "#64748b", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.07em" }}>Streak</div>
-                  <div style={{ color: "#f97316", fontWeight: 700, fontSize: "1.2rem" }}>{streakDays} 🔥</div>
-                </div>
-              </div>
-              {goalMet && (
-                <div style={{ color: "#64748b", fontSize: "0.82rem" }}>
-                  Come back tomorrow to keep your streak 🔥
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* ── Status Banner — only show if streak at risk or trained today (not the default CTA — Today's Training has its own Start button) */}
-        {masterySetNumber !== null && (streakDays >= 2 || trainedToday) && (
-          <StatusBanner
-            streak={streakDays}
-            trainedToday={trainedToday}
-            masteryDailyCompleted={masteryDailyCompleted}
-            dailyGoal={dailyGoal}
-            masterySetSize={masterySetSize}
-          />
-        )}
-
-
-
         {/* ── Section 2: Where You Are ──────────────────────────────────────── */}
         <div style={{
           backgroundColor: "#13132b",
@@ -1400,35 +1143,8 @@ export default function TrainingPlan() {
               marginTop: "1rem",
             }}
           >
-            {masteryDailyCompleted > 0 && masteryDailyCompleted < dailyGoal
-              ? "Continue Training →"
-              : masteryDailyCompleted >= dailyGoal
-              ? "Keep Training →"
-              : "Start Training →"}
+            Train →
           </a>
-
-          {/* Deliberate study of attempted-but-unmastered puzzles (pure
-              practice — doesn't touch mastery, daily count, or rating) */}
-          {unmasteredCount > 0 && (
-            <a
-              href="/app/training?study=unmastered"
-              style={{
-                display: "block",
-                backgroundColor: "transparent",
-                border: "1px solid #f59e0b",
-                color: "#f59e0b",
-                textAlign: "center",
-                padding: "0.7rem",
-                borderRadius: "10px",
-                fontSize: "0.88rem",
-                fontWeight: "600",
-                textDecoration: "none",
-                marginTop: "0.6rem",
-              }}
-            >
-              📖 Study {unmasteredCount} Unmastered Puzzle{unmasteredCount > 1 ? "s" : ""} →
-            </a>
-          )}
 
         </div>
 
@@ -1517,9 +1233,6 @@ export default function TrainingPlan() {
           const hasGameData = gameWeakPatterns.length > 0;
           const hasTrainingData = weakFromTraining.length > 0;
           const displayPatterns = hasGameData ? gameWeakPatterns : (hasTrainingData ? weakFromTraining.map((s) => ({ pattern: s.theme, missRate: 1 - s.solveRate })) : []);
-
-          // Get mastery set for "How your training fixes this"
-          const masterySet = getCurrentMasterySet();
 
           return (
             <div style={{
@@ -1671,111 +1384,8 @@ export default function TrainingPlan() {
         {/* ── Feature 2: Pattern Mastery Progression ────────────────────────── */}
         <PatternMasteryProgressionCard />
 
-        {/* ── Sprint 36: Today's Training ──────────────────────────────────── */}
-        <div style={{
-            backgroundColor: "#13132b",
-            border: "1px solid #2e3a5c",
-            borderRadius: "16px",
-            padding: "1.5rem",
-          }}>
-            <div style={sectionHeaderStyle}>Today&apos;s Training</div>
-            {masterySetNumber === null && (
-              <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
-                <div style={{ color: "#94a3b8", marginBottom: "1rem", fontSize: "0.9rem" }}>No active set — start training to generate your first set.</div>
-                <a href="/app/training" style={{ backgroundColor: "#f97316", color: "#fff", padding: "0.6rem 1.5rem", borderRadius: "8px", fontWeight: 700, fontSize: "0.9rem", textDecoration: "none" }}>Start Training →</a>
-              </div>
-            )}
-            {masterySetNumber !== null && (<>
-
-            {/* Set progress */}
-            <div style={{
-              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
-              borderRadius: "10px", padding: "0.85rem 1rem", marginBottom: "0.75rem",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <span style={{ color: "#94a3b8", fontSize: "0.88rem", fontWeight: 600 }}>
-                  Set {masterySetNumber}
-                </span>
-                <span style={{ color: "#4ade80", fontSize: "0.88rem", fontWeight: "bold" }}>
-                  {masteredCount}/{masterySetSize} mastered
-                </span>
-              </div>
-              <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "8px", overflow: "hidden", border: "1px solid #1e2a3a" }}>
-                <div style={{
-                  height: "100%", backgroundColor: "#4ade80", borderRadius: "999px",
-                  width: `${Math.min(100, Math.round((masteredCount / masterySetSize) * 100))}%`,
-                  transition: "width 0.4s ease",
-                }} />
-              </div>
-              {/* Pace estimate */}
-              {(() => {
-                const daysLeft = Math.ceil((masterySetSize - masteredCount) / Math.max(1, dailyGoal));
-                const paceText = daysLeft === 0
-                  ? "Set complete! 🎉"
-                  : masteredCount === 0
-                    ? `Start training to begin mastering your set`
-                    : daysLeft === 1
-                      ? "Almost done — 1 day left"
-                      : `At ${dailyGoal} puzzles/day — you finish this set in ${daysLeft} days`;
-                return (
-                  <div style={{ color: "#64748b", fontSize: "0.75rem", marginTop: "0.4rem" }}>
-                    {paceText}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Daily goal */}
-            <div style={{
-              backgroundColor: "#0d1621", border: "1px solid #1e3a5c",
-              borderRadius: "10px", padding: "0.85rem 1rem", marginBottom: "1rem",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Daily goal</span>
-                <span style={{ color: masteryDailyCompleted >= dailyGoal ? "#4ade80" : "#f59e0b", fontSize: "0.85rem", fontWeight: "bold" }}>
-                  {masteryDailyCompleted}/{dailyGoal} puzzles
-                </span>
-              </div>
-              <div style={{ backgroundColor: "#0f0f1a", borderRadius: "999px", height: "6px", overflow: "hidden", border: "1px solid #1e2a3a" }}>
-                <div style={{
-                  height: "100%", backgroundColor: masteryDailyCompleted >= dailyGoal ? "#4ade80" : "#f59e0b",
-                  borderRadius: "999px",
-                  width: `${Math.min(100, dailyGoal > 0 ? Math.round((masteryDailyCompleted / dailyGoal) * 100) : 0)}%`,
-                  transition: "width 0.4s ease",
-                }} />
-              </div>
-              {masteryDailyCompleted < dailyGoal && (
-                <div style={{ color: "#475569", fontSize: "0.75rem", marginTop: "0.4rem" }}>
-                  Est. ~{Math.round((dailyGoal - masteryDailyCompleted) * 0.75)} minutes remaining today
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => router.push("/app/training")}
-              style={{
-                backgroundColor: masteryDailyCompleted >= dailyGoal ? "transparent" : "#4ade80",
-                color: masteryDailyCompleted >= dailyGoal ? "#64748b" : "#0f1a0a",
-                border: masteryDailyCompleted >= dailyGoal ? "1px solid #2e3a5c" : "none",
-                borderRadius: "10px", padding: "0.9rem",
-                fontSize: "0.95rem", fontWeight: "bold", cursor: "pointer", width: "100%",
-              }}
-            >
-              {masteryDailyCompleted >= dailyGoal ? "Session done — keep going anyway →" : masteryDailyCompleted === 0 ? "Start Training →" : "Continue Training →"}
-            </button>
-
-            {/* Set context */}
-            <div style={{ marginTop: "1rem", padding: "0.85rem", backgroundColor: "#0d1621", borderRadius: "8px", fontSize: "0.82rem", color: "#64748b", lineHeight: 1.7 }}>
-              <div style={{ marginBottom: "0.5rem" }}>
-                <div style={{ color: "#94a3b8", fontWeight: 600, marginBottom: "0.2rem" }}>Mastery rule</div>
-                Solve any puzzle correctly in under 10 seconds to master it. Mastered puzzles are replaced with new ones each day — missed puzzles carry forward until you nail them.
-              </div>
-              <div>
-                <span style={{ color: "#94a3b8" }}>Est. completion:</span> At {dailyGoal} puzzles/day — about {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal)))} {Math.max(1, Math.round(masterySetSize / Math.max(1, dailyGoal))) === 1 ? "day" : "days"}.
-              </div>
-            </div>
-            </>)}
-          </div>
+        {/* ── Woodpecker training progress ─────────────────────────────────── */}
+        <WoodpeckerSummaryCard />
 
         <div style={{
           backgroundColor: "#2a160d",
