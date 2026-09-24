@@ -19,9 +19,23 @@
 import { Chess } from "chess.js";
 import { getTacticsRatingData } from "@/lib/storage";
 
-export type SetKind = "speed" | "calculation";
+export type SetKind = "speed" | "calculation" | "own";
+
+/** How a puzzle earns "mastered" in a given set. */
+export type MasteryRule = "under10s" | "anySolve";
 
 export type PuzzleStatus = "new" | "missed" | "slow" | "fast" | "mastered";
+
+/** Context carried by puzzles built from the user's own games. */
+export interface PuzzleMeta {
+  youPlayed?: string;
+  best?: string;
+  drop?: number;
+  gameUrl?: string;
+  refutation?: string;
+  timeClass?: string;
+  moveNo?: number;
+}
 
 export interface WoodpeckerPuzzle {
   id: string;
@@ -34,6 +48,7 @@ export interface WoodpeckerPuzzle {
   solves: number;       // clean correct solves (no hint, not a retry)
   bestTimeMs: number | null;
   lastAttemptAt: number;
+  meta?: PuzzleMeta;
 }
 
 export interface WoodpeckerSet {
@@ -47,6 +62,10 @@ export interface WoodpeckerSet {
   cursor: number;       // next index to serve in sequential mode
   createdAt: number;
   completedAt: number | null;
+  /** Absent on sets stored before mastery rules were configurable. */
+  masteryRule?: MasteryRule;
+  /** Display name for imported sets. */
+  label?: string;
 }
 
 interface WoodpeckerStore {
@@ -85,7 +104,7 @@ export function loadStore(): WoodpeckerStore {
 function reconcile(store: WoodpeckerStore): WoodpeckerStore {
   let changed = false;
   for (const set of store.sets) {
-    if (!set.completedAt && set.puzzles.length > 0 && set.puzzles.every((p) => isMastered(p, set.kind))) {
+    if (!set.completedAt && set.puzzles.length > 0 && set.puzzles.every((p) => isMastered(p, setRule(set)))) {
       set.completedAt = Date.now();
       changed = true;
     }
@@ -111,17 +130,31 @@ export function solvedToday(store: WoodpeckerStore): number {
 
 // ── Status ──────────────────────────────────────────────────────────────────
 
-export function puzzleStatus(p: WoodpeckerPuzzle, kind: SetKind): PuzzleStatus {
+/** A set's mastery rule, defaulting by kind for sets stored before the field. */
+export function setRule(set: WoodpeckerSet): MasteryRule {
+  return set.masteryRule ?? (set.kind === "calculation" ? "anySolve" : "under10s");
+}
+
+export function puzzleStatus(p: WoodpeckerPuzzle, rule: MasteryRule): PuzzleStatus {
   if (p.attempts === 0) return "new";
   if (p.bestTimeMs === null) return "missed";
-  if (kind === "calculation") return "mastered";
+  if (rule === "anySolve") return "mastered";
   if (p.bestTimeMs < MASTERY_MS) return "mastered";
   if (p.bestTimeMs < FAST_MS) return "fast";
   return "slow";
 }
 
-export function isMastered(p: WoodpeckerPuzzle, kind: SetKind): boolean {
-  return puzzleStatus(p, kind) === "mastered";
+export function isMastered(p: WoodpeckerPuzzle, rule: MasteryRule): boolean {
+  return puzzleStatus(p, rule) === "mastered";
+}
+
+/** Switch a set's mastery rule. Statuses are derived, so this is instant. */
+export function setMasteryRule(store: WoodpeckerStore, setId: string, rule: MasteryRule): void {
+  const set = store.sets.find((s) => s.id === setId);
+  if (!set) return;
+  set.masteryRule = rule;
+  if (set.completedAt && !set.puzzles.every((p) => isMastered(p, rule))) set.completedAt = null;
+  saveStore(store);
 }
 
 export interface SetSummary {
@@ -134,9 +167,10 @@ export interface SetSummary {
 }
 
 export function summarize(set: WoodpeckerSet): SetSummary {
+  const rule = setRule(set);
   const s: SetSummary = { total: set.puzzles.length, mastered: 0, fast: 0, slow: 0, missed: 0, fresh: 0 };
   for (const p of set.puzzles) {
-    const st = puzzleStatus(p, set.kind);
+    const st = puzzleStatus(p, rule);
     if (st === "mastered") s.mastered++;
     else if (st === "fast") s.fast++;
     else if (st === "slow") s.slow++;
@@ -155,9 +189,10 @@ export function summarize(set: WoodpeckerSet): SetSummary {
 export function nextIndex(set: WoodpeckerSet, from = set.cursor): number {
   const n = set.puzzles.length;
   if (n === 0) return -1;
+  const rule = setRule(set);
   for (let step = 0; step < n; step++) {
     const i = (from + step) % n;
-    if (!isMastered(set.puzzles[i], set.kind)) return i;
+    if (!isMastered(set.puzzles[i], rule)) return i;
   }
   return -1;
 }
@@ -196,7 +231,8 @@ export function recordAttempt(store: WoodpeckerStore, a: AttemptInput): AttemptO
   const p = set.puzzles[a.index];
   if (!p) return null;
 
-  const previousStatus = puzzleStatus(p, set.kind);
+  const rule = setRule(set);
+  const previousStatus = puzzleStatus(p, rule);
   const firstAttempt = p.attempts === 0;
   const wasMastered = previousStatus === "mastered";
 
@@ -219,9 +255,9 @@ export function recordAttempt(store: WoodpeckerStore, a: AttemptInput): AttemptO
 
   set.cursor = (a.index + 1) % set.puzzles.length;
 
-  const status = puzzleStatus(p, set.kind);
+  const status = puzzleStatus(p, rule);
   const newlyMastered = status === "mastered" && !wasMastered;
-  const setComplete = set.puzzles.every((q) => isMastered(q, set.kind));
+  const setComplete = set.puzzles.every((q) => isMastered(q, rule));
   if (setComplete && !set.completedAt) set.completedAt = Date.now();
 
   saveStore(store);
@@ -441,6 +477,7 @@ export async function generateSet(store: WoodpeckerStore, kind: SetKind): Promis
     cursor: 0,
     createdAt: Date.now(),
     completedAt: null,
+    masteryRule: kind === "calculation" ? "anySolve" : "under10s",
   };
   store.sets.push(set);
   saveStore(store);
@@ -464,4 +501,156 @@ export function defaultSet(store: WoodpeckerStore, kind: SetKind): WoodpeckerSet
   if (live) return live;
   const all = setsOfKind(store, kind);
   return all.length ? all[all.length - 1] : null;
+}
+
+// ── Importing puzzles built from the user's own games ───────────────────────
+//
+// Input format (produced by Eddy's analysis script): an array of
+//   { PuzzleId, FEN, Moves, Rating, Themes, GameUrl, time_class,
+//     you_played, best, drop, refutation, move_no }
+// FEN is the position BEFORE the opponent's move; Moves[0] is that move and
+// Moves[1] is the move the user should have found — same convention as the
+// Lichess cache, so applyFirstMove normalizes it.
+
+const MAX_IMPORT_PLIES = 5;
+
+interface RawOwnPuzzle {
+  PuzzleId?: string;
+  FEN?: string;
+  Moves?: string;
+  Rating?: number;
+  Themes?: string;
+  GameUrl?: string;
+  time_class?: string;
+  you_played?: string;
+  best?: string;
+  drop?: number;
+  refutation?: string;
+  move_no?: number;
+}
+
+// Most specific tactical motif first; falls back to the blunder tag, then phase.
+const THEME_PRIORITY = [
+  "mateIn1", "mateIn2", "mate", "smotheredMate", "backRankMate",
+  "fork", "pin", "skewer", "discoveredAttack", "discoveredCheck", "doubleCheck",
+  "hangingPiece", "deflection", "interference", "overloading", "trappedPiece",
+  "defensiveMove", "check",
+  "missedWin", "ownBlunder",
+  "endgame", "middlegame", "opening",
+];
+
+function pickTheme(themes: string): string {
+  const tags = (themes || "").split(/\s+/).filter(Boolean);
+  for (const want of THEME_PRIORITY) if (tags.includes(want)) return want;
+  return tags[0] ?? "own game";
+}
+
+export interface ImportResult {
+  set: WoodpeckerSet | null;
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
+export function importOwnPuzzles(
+  store: WoodpeckerStore,
+  raw: unknown,
+  opts: { label?: string; masteryRule?: MasteryRule } = {}
+): ImportResult {
+  const list: RawOwnPuzzle[] = Array.isArray(raw)
+    ? (raw as RawOwnPuzzle[])
+    : Array.isArray((raw as { puzzles?: unknown })?.puzzles)
+    ? ((raw as { puzzles: RawOwnPuzzle[] }).puzzles)
+    : [];
+
+  if (list.length === 0) {
+    return { set: null, imported: 0, skipped: 0, errors: ["No puzzles found — expected a JSON array."] };
+  }
+
+  const puzzles: WoodpeckerPuzzle[] = [];
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  let skipped = 0;
+
+  for (const r of list) {
+    const id = r?.PuzzleId;
+    const fen = r?.FEN;
+    const movesStr = r?.Moves;
+    if (!id || !fen || !movesStr) { skipped++; continue; }
+    if (seen.has(id)) { skipped++; continue; }
+
+    const moves = movesStr.trim().split(/\s+/).filter(Boolean);
+    const applied = applyFirstMove(fen, moves);
+    if (!applied) {
+      skipped++;
+      errors.push(`${id}: could not apply the opponent's move`);
+      continue;
+    }
+
+    // Verify the whole line is legal, and trim to a playable length.
+    let solution = applied.solution.slice(0, MAX_IMPORT_PLIES);
+    if (solution.length % 2 === 0) solution = solution.slice(0, -1);
+    if (solution.length === 0) { skipped++; continue; }
+    try {
+      const c = new Chess(applied.fen);
+      for (const uci of solution) {
+        const mv = c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] || undefined });
+        if (!mv) throw new Error("illegal");
+      }
+    } catch {
+      skipped++;
+      errors.push(`${id}: solution line is not legal from the position`);
+      continue;
+    }
+
+    seen.add(id);
+    const p = makePuzzle(
+      id, applied.fen, solution,
+      typeof r.Rating === "number" ? r.Rating : 1500,
+      pickTheme(r.Themes ?? ""),
+      "own-game"
+    );
+    p.meta = {
+      youPlayed: r.you_played,
+      best: r.best,
+      drop: typeof r.drop === "number" ? r.drop : undefined,
+      gameUrl: r.GameUrl,
+      refutation: r.refutation,
+      timeClass: r.time_class,
+      moveNo: r.move_no,
+    };
+    puzzles.push(p);
+  }
+
+  if (puzzles.length === 0) {
+    return { set: null, imported: 0, skipped, errors: errors.length ? errors : ["Nothing importable in that file."] };
+  }
+
+  // Gentle ramp, biggest blunders first within a rating tier.
+  puzzles.sort((a, b) => a.rating - b.rating || (b.meta?.drop ?? 0) - (a.meta?.drop ?? 0));
+
+  const setNumber = setsOfKind(store, "own").length + 1;
+  const ratings = puzzles.map((p) => p.rating);
+  const set: WoodpeckerSet = {
+    id: `own_${setNumber}_${Date.now().toString(36)}`,
+    kind: "own",
+    setNumber,
+    label: opts.label?.trim() || `My Games ${setNumber}`,
+    targetRating: Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length),
+    ratingFloor: Math.min(...ratings),
+    ratingCeiling: Math.max(...ratings),
+    puzzles,
+    cursor: 0,
+    createdAt: Date.now(),
+    completedAt: null,
+    masteryRule: opts.masteryRule ?? "under10s",
+  };
+  store.sets.push(set);
+  saveStore(store);
+  return { set, imported: puzzles.length, skipped, errors };
+}
+
+export function deleteSet(store: WoodpeckerStore, setId: string): void {
+  const i = store.sets.findIndex((s) => s.id === setId);
+  if (i >= 0) { store.sets.splice(i, 1); saveStore(store); }
 }

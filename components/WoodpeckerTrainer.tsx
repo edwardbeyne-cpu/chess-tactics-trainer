@@ -6,18 +6,23 @@ import StockfishAnalysis from "@/components/StockfishAnalysis";
 import { recordActivityToday, updateTacticsRating } from "@/lib/storage";
 import {
   defaultSet,
+  deleteSet,
   ensureActiveSets,
   generateSet,
+  importOwnPuzzles,
   loadStore,
   nextIndex,
   puzzleStatus,
   recordAttempt,
+  setMasteryRule,
+  setRule,
   setsOfKind,
   skipPuzzle,
   solvedToday,
   summarize,
   FAST_MS,
   MASTERY_MS,
+  type MasteryRule,
   type PuzzleStatus,
   type SetKind,
   type WoodpeckerPuzzle,
@@ -74,10 +79,11 @@ function TrackerGrid({
   set, currentIndex, onPick,
 }: { set: WoodpeckerSet; currentIndex: number; onPick: (i: number) => void }) {
   const cols = 25;
+  const rule = setRule(set);
   return (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: "3px" }}>
       {set.puzzles.map((p, i) => {
-        const st = puzzleStatus(p, set.kind);
+        const st = puzzleStatus(p, rule);
         const s = STATUS_STYLE[st];
         const isCurrent = i === currentIndex;
         return (
@@ -122,6 +128,8 @@ export default function WoodpeckerTrainer() {
   const [lastOutcome, setLastOutcome] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const retryRef = useRef(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -228,6 +236,34 @@ export default function WoodpeckerTrainer() {
     loadPuzzle(nextIndex(set, (currentIndex + 1) % set.puzzles.length));
   }, [store, set, currentIndex, loadPuzzle]);
 
+  const handleImportFile = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!store) return;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(reader.result));
+      } catch {
+        setImportMsg({ ok: false, text: "That file isn't valid JSON." });
+        return;
+      }
+      const label = file.name.replace(/\.json$/i, "").replace(/[_-]+/g, " ").trim();
+      const res = importOwnPuzzles(store, parsed, { label: label || undefined });
+      setStore({ ...store });
+      if (!res.set) {
+        setImportMsg({ ok: false, text: res.errors[0] ?? "Nothing importable in that file." });
+        return;
+      }
+      setImportMsg({
+        ok: true,
+        text: `Imported ${res.imported} puzzle${res.imported === 1 ? "" : "s"}${res.skipped ? ` (${res.skipped} skipped)` : ""}.`,
+      });
+      setSelectedId(res.set.id);
+      loadPuzzle(nextIndex(res.set));
+    };
+    reader.readAsText(file);
+  }, [store, loadPuzzle]);
+
   const startNextSet = useCallback(async (kind: SetKind) => {
     if (!store) return;
     setGenerating(true);
@@ -258,24 +294,34 @@ export default function WoodpeckerTrainer() {
 
   const speedSets = setsOfKind(store, "speed");
   const calcSets = setsOfKind(store, "calculation");
+  const ownSets = setsOfKind(store, "own");
   const sum = summarize(set);
   const pct = sum.total ? Math.round((sum.mastered / sum.total) * 100) : 0;
   const complete = sum.mastered === sum.total && sum.total > 0;
-  const legend = set.kind === "speed" ? SPEED_LEGEND : CALC_LEGEND;
+  const rule = setRule(set);
+  const legend = rule === "anySolve" ? CALC_LEGEND : SPEED_LEGEND;
   const today = solvedToday(store);
+  const setTitle = set.kind === "speed"
+    ? `Speed Set ${set.setNumber}`
+    : set.kind === "calculation"
+    ? `Calculation Set ${set.setNumber}`
+    : set.label ?? `My Games ${set.setNumber}`;
+  const accentFor = (k: SetKind) => k === "calculation" ? "#a78bfa" : k === "own" ? "#f59e0b" : "#4ade80";
 
   const tab = (s: WoodpeckerSet) => {
     const ss = summarize(s);
     const done = ss.mastered === ss.total;
     const active = s.id === set.id;
-    const label = s.kind === "speed" ? `Set ${s.setNumber}` : `Calc ${s.setNumber}`;
+    const label = s.kind === "speed" ? `Set ${s.setNumber}`
+      : s.kind === "calculation" ? `Calc ${s.setNumber}`
+      : `⚑ ${s.label ?? `My Games ${s.setNumber}`}`;
     return (
       <button
         key={s.id}
         onClick={() => selectSet(s.id)}
         style={{
           backgroundColor: active ? "#13132b" : "transparent",
-          border: `1px solid ${active ? (s.kind === "calculation" ? "#a78bfa" : "#4ade80") : "#2e3a5c"}`,
+          border: `1px solid ${active ? accentFor(s.kind) : "#2e3a5c"}`,
           color: active ? "#e2e8f0" : "#94a3b8",
           borderRadius: "999px",
           padding: "0.4rem 0.9rem",
@@ -303,22 +349,91 @@ export default function WoodpeckerTrainer() {
         {speedSets.map(tab)}
         <span style={{ width: "1px", height: "22px", backgroundColor: "#2e3a5c", margin: "0 0.25rem" }} />
         {calcSets.map(tab)}
+        {ownSets.length > 0 && <span style={{ width: "1px", height: "22px", backgroundColor: "#2e3a5c", margin: "0 0.25rem" }} />}
+        {ownSets.map(tab)}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          title="Import puzzles built from your own games (.json)"
+          style={{
+            backgroundColor: "transparent", border: "1px dashed #f59e0b", color: "#f59e0b",
+            borderRadius: "999px", padding: "0.4rem 0.9rem", fontSize: "0.8rem",
+            fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+          }}
+        >
+          + Import my games
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleImportFile(f);
+            e.target.value = "";
+          }}
+        />
       </div>
+
+      {importMsg && (
+        <div style={{
+          color: importMsg.ok ? "#4ade80" : "#fca5a5",
+          backgroundColor: importMsg.ok ? "#0a1f12" : "#1f0a0a",
+          border: `1px solid ${importMsg.ok ? "#1a4a2a" : "#4a1a1a"}`,
+          borderRadius: "10px", padding: "0.6rem 1rem", fontSize: "0.85rem",
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem",
+        }}>
+          <span>{importMsg.text}</span>
+          <button onClick={() => setImportMsg(null)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "1rem" }}>✕</button>
+        </div>
+      )}
 
       {/* Tracker card */}
       <div style={{ backgroundColor: "#13132b", border: "1px solid #2e3a5c", borderRadius: "12px", padding: "1.1rem 1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.6rem" }}>
           <div>
-            <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: "1.05rem" }}>
-              {set.kind === "speed" ? `Speed Set ${set.setNumber}` : `Calculation Set ${set.setNumber}`}
-            </span>
+            <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: "1.05rem" }}>{setTitle}</span>
             <span style={{ color: "#64748b", fontSize: "0.8rem", marginLeft: "0.6rem" }}>
               {set.ratingFloor}–{set.ratingCeiling}
-              {set.kind === "speed" ? " · master each in under 10s" : " · solve at your own pace"}
+              {rule === "under10s" ? " · master each in under 10s" : " · solve at your own pace"}
             </span>
           </div>
-          <div style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
-            Today: <strong style={{ color: "#e2e8f0" }}>{today}</strong> solved
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            {/* Mastery rule is a training-method choice — let it be changed per set */}
+            <div style={{ display: "inline-flex", border: "1px solid #2e3a5c", borderRadius: "999px", overflow: "hidden" }}>
+              {(["under10s", "anySolve"] as MasteryRule[]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => { setMasteryRule(store, set.id, r); setStore({ ...store }); }}
+                  style={{
+                    backgroundColor: rule === r ? "#1e293b" : "transparent",
+                    color: rule === r ? "#e2e8f0" : "#64748b",
+                    border: "none", padding: "0.25rem 0.65rem",
+                    fontSize: "0.72rem", fontWeight: rule === r ? 700 : 500, cursor: "pointer",
+                  }}
+                >
+                  {r === "under10s" ? "under 10s" : "any solve"}
+                </button>
+              ))}
+            </div>
+            <span style={{ color: "#94a3b8", fontSize: "0.8rem" }}>
+              Today: <strong style={{ color: "#e2e8f0" }}>{today}</strong> solved
+            </span>
+            {set.kind === "own" && (
+              <button
+                onClick={() => {
+                  if (!window.confirm(`Remove "${setTitle}" and its progress?`)) return;
+                  deleteSet(store, set.id);
+                  const next = defaultSet(store, "speed") ?? store.sets[0];
+                  setStore({ ...store });
+                  if (next) { setSelectedId(next.id); loadPuzzle(nextIndex(next)); }
+                }}
+                title="Remove this imported set"
+                style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: "0.9rem" }}
+              >
+                🗑
+              </button>
+            )}
           </div>
         </div>
 
@@ -384,7 +499,11 @@ export default function WoodpeckerTrainer() {
               <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: "1rem" }}>#{currentIndex + 1}</span>
               <span style={{ color: "#94a3b8", fontSize: "0.82rem" }}>{puzzle.rating} · {themeLabel(puzzle.theme)}</span>
               {puzzle.source === "own-game" && (
-                <span style={{ color: "#f59e0b", fontSize: "0.7rem", border: "1px solid #f59e0b", borderRadius: "999px", padding: "0.1rem 0.5rem", fontWeight: 700 }}>FROM YOUR GAME</span>
+                <span style={{ color: "#f59e0b", fontSize: "0.7rem", border: "1px solid #f59e0b", borderRadius: "999px", padding: "0.1rem 0.5rem", fontWeight: 700 }}>
+                  FROM YOUR GAME
+                  {puzzle.meta?.timeClass ? ` · ${puzzle.meta.timeClass}` : ""}
+                  {puzzle.meta?.moveNo ? ` · move ${puzzle.meta.moveNo}` : ""}
+                </span>
               )}
               {puzzle.bestTimeMs !== null && (
                 <span style={{ color: "#64748b", fontSize: "0.78rem" }}>best {fmtTime(puzzle.bestTimeMs)}</span>
@@ -421,6 +540,53 @@ export default function WoodpeckerTrainer() {
               setShowAnalysis((v) => !v);
             }}
           />
+
+          {/* What really happened in the game — only after the attempt resolves,
+              so the "best" move is never a spoiler. */}
+          {!solving && puzzle.meta && (puzzle.meta.youPlayed || puzzle.meta.best) && (
+            <div style={{ padding: "0.75rem 1.25rem 0" }}>
+              <div style={{
+                backgroundColor: "#1a1200", border: "1px solid #78350f",
+                borderRadius: "10px", padding: "0.75rem 1rem",
+                display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem 1.25rem",
+                fontSize: "0.82rem",
+              }}>
+                <span style={{ color: "#f59e0b", fontWeight: 800, fontSize: "0.7rem", letterSpacing: "0.07em", textTransform: "uppercase" }}>
+                  In your game
+                </span>
+                {puzzle.meta.youPlayed && (
+                  <span style={{ color: "#94a3b8" }}>
+                    You played <strong style={{ color: "#fca5a5" }}>{puzzle.meta.youPlayed}</strong>
+                  </span>
+                )}
+                {puzzle.meta.best && (
+                  <span style={{ color: "#94a3b8" }}>
+                    Best was <strong style={{ color: "#4ade80" }}>{puzzle.meta.best}</strong>
+                  </span>
+                )}
+                {typeof puzzle.meta.drop === "number" && (
+                  <span style={{ color: "#94a3b8" }}>
+                    Cost <strong style={{ color: "#f59e0b" }}>{puzzle.meta.drop.toFixed(1)}%</strong>
+                  </span>
+                )}
+                {puzzle.meta.refutation && (
+                  <span style={{ color: "#64748b", fontFamily: "monospace", fontSize: "0.78rem" }}>
+                    {puzzle.meta.refutation}
+                  </span>
+                )}
+                {puzzle.meta.gameUrl && (
+                  <a
+                    href={puzzle.meta.gameUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "#60a5fa", textDecoration: "none", marginLeft: "auto", whiteSpace: "nowrap" }}
+                  >
+                    View game →
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           {showAnalysis && (
             <div style={{ padding: "0.75rem 1.25rem 0" }}>
